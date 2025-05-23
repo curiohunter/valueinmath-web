@@ -1,0 +1,128 @@
+"use client"
+
+import type React from "react"
+
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useCallback, useEffect, useState } from "react"
+
+export function StudentsFilters() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [searchValue, setSearchValue] = useState("")
+
+  // Get current filter values from URL
+  const search = searchParams.get("search") || ""
+  const department = searchParams.get("department") || "all"
+  const status = searchParams.get("status") || "재원" // 기본값을 "재원"으로 변경
+
+  // 컴포넌트 마운트 시 검색어 상태 초기화
+  useEffect(() => {
+    setSearchValue(search)
+  }, [search])
+
+  // Create a new URLSearchParams and update the router
+  const createQueryString = useCallback(
+    (name: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (value) {
+        params.set(name, value)
+      } else {
+        params.delete(name)
+      }
+
+      return params.toString()
+    },
+    [searchParams],
+  )
+
+  // Handle filter changes
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchValue(e.target.value)
+  }
+
+  // 검색어 입력 후 엔터 키 처리
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      router.push(`${pathname}?${createQueryString("search", searchValue)}`)
+    }
+  }
+
+  // 검색 버튼 클릭 처리
+  const handleSearchClick = () => {
+    router.push(`${pathname}?${createQueryString("search", searchValue)}`)
+  }
+
+  const handleDepartmentChange = (value: string) => {
+    router.push(`${pathname}?${createQueryString("department", value)}`)
+  }
+
+  const handleStatusChange = (value: string) => {
+    router.push(`${pathname}?${createQueryString("status", value)}`)
+  }
+
+  return (
+    <div className="border-b border-t p-4 bg-background">
+      <div className="flex flex-col gap-4 md:flex-row">
+        <div className="flex-1 flex gap-2">
+          <Input
+            placeholder="이름, 학교, 연락처 검색..."
+            value={searchValue}
+            onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
+            className="max-w-sm"
+          />
+          <Button onClick={handleSearchClick} className="shrink-0">
+            검색
+          </Button>
+        </div>
+        <div className="flex gap-4">
+          <Select value={department} onValueChange={handleDepartmentChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="담당관 선택" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">모든 담당관</SelectItem>
+              <SelectItem value="고등관">고등관</SelectItem>
+              <SelectItem value="중등관">중등관</SelectItem>
+              <SelectItem value="영재관">영재관</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={status} onValueChange={handleStatusChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="상태 선택" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">모든 상태</SelectItem>
+              <SelectItem value="재원">재원</SelectItem>
+              <SelectItem value="퇴원">퇴원</SelectItem>
+              <SelectItem value="휴원">휴원</SelectItem>
+              <SelectItem value="미등록">미등록</SelectItem>
+              <SelectItem value="신규상담">신규상담</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Button 컴포넌트 추가
+function Button({
+  children,
+  onClick,
+  className = "",
+}: { children: React.ReactNode; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
