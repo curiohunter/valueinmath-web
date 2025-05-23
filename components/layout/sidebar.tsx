@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/use-toast"
 // 기존 import 문에 signOut 서버 액션 추가
 import { signOut } from "@/actions/auth-actions"
 
-export function Sidebar() {
+export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
@@ -89,6 +89,11 @@ export function Sidebar() {
       icon: Home,
     },
     {
+      title: "에이전트",
+      href: "/chat",
+      icon: Shield,
+    },
+    {
       title: "학생 관리",
       href: "/students",
       icon: Users,
@@ -160,7 +165,6 @@ export function Sidebar() {
         <nav className="space-y-1">
           {sidebarItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
-
             return (
               <Link
                 key={item.href}

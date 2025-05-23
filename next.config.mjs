@@ -9,6 +9,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/n8n/:path*',
+        destination: 'https://n8n.valueinmath.com/:path*',
+      },
+    ];
+  },
 }
 
 export default nextConfig
