@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCallback, useEffect, useState } from "react"
 
-export function StudentsFilters() {
+export function StudentsFilters({ onNewStudent }: { onNewStudent: () => void }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -76,6 +76,9 @@ export function StudentsFilters() {
           />
           <Button onClick={handleSearchClick} className="shrink-0">
             검색
+          </Button>
+          <Button onClick={onNewStudent} className="shrink-0 bg-primary text-primary-foreground">
+            + 신규 학생 등록
           </Button>
         </div>
         <div className="flex gap-4">

@@ -65,6 +65,80 @@ export type Database = {
           },
         ]
       }
+      class_students: {
+        Row: {
+          class_id: string | null
+          created_at: string | null
+          id: string
+          student_id: string | null
+        }
+        Insert: {
+          class_id?: string | null
+          created_at?: string | null
+          id?: string
+          student_id?: string | null
+        }
+        Update: {
+          class_id?: string | null
+          created_at?: string | null
+          id?: string
+          student_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_students_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "class_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classes: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          subject: string
+          teacher_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          subject: string
+          teacher_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          subject?: string
+          teacher_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classes_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           auth_id: string | null
@@ -243,6 +317,126 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      study_logs: {
+        Row: {
+          attendance_status: number | null
+          book1: string | null
+          book1log: string | null
+          book2: string | null
+          book2log: string | null
+          class_id: string | null
+          created_at: string | null
+          date: string
+          focus: number | null
+          homework: number | null
+          id: string
+          note: string | null
+          student_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attendance_status?: number | null
+          book1?: string | null
+          book1log?: string | null
+          book2?: string | null
+          book2log?: string | null
+          class_id?: string | null
+          created_at?: string | null
+          date: string
+          focus?: number | null
+          homework?: number | null
+          id?: string
+          note?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attendance_status?: number | null
+          book1?: string | null
+          book1log?: string | null
+          book2?: string | null
+          book2log?: string | null
+          class_id?: string | null
+          created_at?: string | null
+          date?: string
+          focus?: number | null
+          homework?: number | null
+          id?: string
+          note?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_logs_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_logs: {
+        Row: {
+          class_id: string | null
+          created_at: string | null
+          date: string
+          id: string
+          note: string | null
+          student_id: string | null
+          test: string | null
+          test_score: number | null
+          test_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          class_id?: string | null
+          created_at?: string | null
+          date: string
+          id?: string
+          note?: string | null
+          student_id?: string | null
+          test?: string | null
+          test_score?: number | null
+          test_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          class_id?: string | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+          student_id?: string | null
+          test?: string | null
+          test_score?: number | null
+          test_type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_logs_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -9,11 +9,11 @@ export default function MultiChatPage({ user }: { user: User | null }) {
   const [openNewApp, setOpenNewApp] = useState(false)
   return (
     <div className="space-y-6">
-      <ChatHeader onNewApp={() => setOpenNewApp(true)} />
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold tracking-tight">에이전트</h1>
+        <p className="text-muted-foreground">AI 챗봇/워크플로우와 대화할 수 있습니다.</p>
+      </div>
       <Card className="overflow-hidden">
-        <CardHeader className="bg-background">
-          <CardTitle>대화</CardTitle>
-        </CardHeader>
         <CardContent className="p-0">
           <MultiChat openNewApp={openNewApp} setOpenNewApp={setOpenNewApp} user={user} />
         </CardContent>

@@ -157,11 +157,11 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
   }
 
   return (
-    <div className="h-screen w-64 border-r bg-background flex flex-col">
-      <div className="p-6">
+    <div className="h-screen w-40 border-r bg-background flex flex-col">
+      <div className="p-4">
         <h1 className="text-xl font-bold">학원관리 시스템</h1>
       </div>
-      <div className="flex-1 px-3 py-2 overflow-y-auto">
+      <div className="flex-1 px-2 py-2 overflow-y-auto">
         <nav className="space-y-1">
           {sidebarItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -181,15 +181,15 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
           })}
         </nav>
       </div>
-      <div className="p-4 border-t">
+      <div className="p-2 border-t">
         <Button
           variant="outline"
-          className="w-full justify-start"
+          className="w-full justify-start text-xs py-2"
           size="sm"
           onClick={handleLogout}
           disabled={isSigningOut}
         >
-          <LogOut className="mr-2 h-4 w-4" />
+          <LogOut className="mr-2 h-3 w-3" />
           {isSigningOut ? "로그아웃 중..." : "로그아웃"}
         </Button>
       </div>

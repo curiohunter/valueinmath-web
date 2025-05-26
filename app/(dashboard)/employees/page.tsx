@@ -60,9 +60,6 @@ export default async function EmployeesPage() {
     <div className="space-y-6">
       <EmployeesHeader />
       <Card className="overflow-hidden">
-        <CardHeader className="bg-background">
-          <CardTitle>직원 목록</CardTitle>
-        </CardHeader>
         <EmployeesFilters />
         <CardContent className="p-0">
           <Suspense fallback={<TableSkeleton />}>
