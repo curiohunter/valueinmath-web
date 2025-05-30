@@ -255,6 +255,368 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_classes: {
+        Row: {
+          class_id: string
+          created_at: string | null
+          id: string
+          schedule_id: string
+        }
+        Insert: {
+          class_id: string
+          created_at?: string | null
+          id?: string
+          schedule_id: string
+        }
+        Update: {
+          class_id?: string
+          created_at?: string | null
+          id?: string
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_classes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_classes_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_employees: {
+        Row: {
+          created_at: string | null
+          employee_id: string
+          id: string
+          role: string | null
+          schedule_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          employee_id: string
+          id?: string
+          role?: string | null
+          schedule_id: string
+        }
+        Update: {
+          created_at?: string | null
+          employee_id?: string
+          id?: string
+          role?: string | null
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_employees_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_employees_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_follow_ups: {
+        Row: {
+          created_at: string | null
+          follow_up_schedule_id: string
+          id: string
+          parent_schedule_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          follow_up_schedule_id: string
+          id?: string
+          parent_schedule_id: string
+        }
+        Update: {
+          created_at?: string | null
+          follow_up_schedule_id?: string
+          id?: string
+          parent_schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_follow_ups_follow_up_schedule_id_fkey"
+            columns: ["follow_up_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_follow_ups_parent_schedule_id_fkey"
+            columns: ["parent_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_goal_connections: {
+        Row: {
+          created_at: string | null
+          goal_id: string
+          id: string
+          schedule_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          goal_id: string
+          id?: string
+          schedule_id: string
+        }
+        Update: {
+          created_at?: string | null
+          goal_id?: string
+          id?: string
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_goal_connections_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_goal_connections_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_goals: {
+        Row: {
+          created_at: string | null
+          end_date: string | null
+          goal_description: string | null
+          goal_title: string
+          id: string
+          is_achieved: boolean | null
+          schedule_id: string | null
+          start_date: string | null
+          success_criteria: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_date?: string | null
+          goal_description?: string | null
+          goal_title: string
+          id?: string
+          is_achieved?: boolean | null
+          schedule_id?: string | null
+          start_date?: string | null
+          success_criteria?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string | null
+          goal_description?: string | null
+          goal_title?: string
+          id?: string
+          is_achieved?: boolean | null
+          schedule_id?: string | null
+          start_date?: string | null
+          success_criteria?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_goals_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_moment_connections: {
+        Row: {
+          created_at: string | null
+          id: string
+          moment_id: string
+          schedule_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          moment_id: string
+          schedule_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          moment_id?: string
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_moment_connections_moment_id_fkey"
+            columns: ["moment_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_moments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_moment_connections_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_moments: {
+        Row: {
+          advantages: string | null
+          id: string
+          learned: string | null
+          moment_category: string | null
+          moment_date: string
+          problems: string | null
+          schedule_id: string | null
+          try: string | null
+          updated_at: string | null
+          written_at: string | null
+          written_by: string | null
+        }
+        Insert: {
+          advantages?: string | null
+          id?: string
+          learned?: string | null
+          moment_category?: string | null
+          moment_date?: string
+          problems?: string | null
+          schedule_id?: string | null
+          try?: string | null
+          updated_at?: string | null
+          written_at?: string | null
+          written_by?: string | null
+        }
+        Update: {
+          advantages?: string | null
+          id?: string
+          learned?: string | null
+          moment_category?: string | null
+          moment_date?: string
+          problems?: string | null
+          schedule_id?: string | null
+          try?: string | null
+          updated_at?: string | null
+          written_at?: string | null
+          written_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_moments_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_moments_written_by_fkey"
+            columns: ["written_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_students: {
+        Row: {
+          created_at: string | null
+          id: string
+          schedule_id: string
+          student_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          schedule_id: string
+          student_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          schedule_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_students_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedules: {
+        Row: {
+          created_at: string | null
+          department: string
+          description: string | null
+          end_datetime: string
+          id: string
+          schedule_type: string
+          start_datetime: string
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          department: string
+          description?: string | null
+          end_datetime: string
+          id?: string
+          schedule_type: string
+          start_datetime: string
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department?: string
+          description?: string | null
+          end_datetime?: string
+          id?: string
+          schedule_type?: string
+          start_datetime?: string
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       students: {
         Row: {
           created_at: string | null
