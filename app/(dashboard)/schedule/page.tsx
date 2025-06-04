@@ -1,93 +1,30 @@
-// app/schedules/page.tsx
-import { Suspense } from "react"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import ScheduleStats from "@/components/schedules/ScheduleStats"
-import ScheduleFilters from "@/components/schedules/ScheduleFilters"
-import ScheduleCalendar from "@/components/schedules/ScheduleCalendar"
-import ScheduleSidebar from "@/components/schedules/ScheduleSidebar"
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import N8nChatSidebar from "@/components/schedules/N8nChatSidebar";
+import GoogleCalendarEmbed from "@/components/schedules/GoogleCalendarEmbed";
+import { Suspense } from "react";
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
 export default async function SchedulesPage() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) {
-    throw new Error("로그인이 필요합니다.")
-  }
-
-  // 사용자의 직원 정보 확인
-  const { data: employee } = await supabase
-    .from("employees")
-    .select("position, department")
-    .eq("auth_id", session.user.id)
-    .single()
-
-  // 접근 권한 체크 (모든 직원이 일정 조회 가능하도록)
-  if (!employee) {
-    return (
-      <div className="space-y-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>접근 권한 없음</AlertTitle>
-          <AlertDescription>
-            직원 정보를 찾을 수 없습니다. 관리자에게 문의하세요.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
+  // 서버 컴포넌트에서 supabase user 정보 fetch
+  const supabase = createServerComponentClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <div className="space-y-6">
-      <ScheduleStats />
-      
-      <div className="flex gap-6">
-        {/* 메인 컨텐츠 */}
-        <div className="flex-1 space-y-4">
-          <Card>
-            <ScheduleFilters />
-            <CardContent className="p-0">
-              <Suspense fallback={<CalendarSkeleton />}>
-                <ScheduleCalendar />
-              </Suspense>
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* 우측 사이드바 */}
-        <div className="w-96">
-          <Suspense fallback={<SidebarSkeleton />}>
-            <ScheduleSidebar />
-          </Suspense>
-        </div>
+    <div className="flex gap-6">
+      {/* 메인: 구글 캘린더 embed */}
+      <div className="flex-1 flex items-center justify-center min-h-[600px]">
+        <GoogleCalendarEmbed
+          width="100%"
+          height="100%"
+          style={{ minHeight: '600px', height: '100%' }}
+        />
+      </div>
+      {/* 우측: n8n 챗봇 */}
+      <div className="w-96">
+        <Suspense fallback={null}>
+          <N8nChatSidebar user={user} />
+        </Suspense>
       </div>
     </div>
-  )
-}
-
-function CalendarSkeleton() {
-  return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-8 w-48" />
-      <div className="grid grid-cols-7 gap-2">
-        {Array.from({ length: 35 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function SidebarSkeleton() {
-  return (
-    <div className="space-y-4">
-      <Skeleton className="h-48 w-full" />
-      <Skeleton className="h-32 w-full" />
-    </div>
-  )
+  );
 }

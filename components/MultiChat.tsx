@@ -26,7 +26,7 @@ const dummyBots = [
   // 필요시 추가
 ]
 
-export default function MultiChat({ openNewApp, setOpenNewApp, user }: { openNewApp?: boolean, setOpenNewApp?: (v: boolean) => void, user: any }) {
+export default function MultiChat({ openNewApp, setOpenNewApp, user, singleAgentName }: { openNewApp?: boolean, setOpenNewApp?: (v: boolean) => void, user: any, singleAgentName?: string }) {
   // const session = useSession();
   // const user = session?.user;
   const [bots, setBots] = useState(dummyBots)
@@ -51,6 +51,175 @@ export default function MultiChat({ openNewApp, setOpenNewApp, user }: { openNew
   const [editAgentName, setEditAgentName] = useState("")
   const [editChatId, setEditChatId] = useState<string | null>(null)
   const [editChatName, setEditChatName] = useState("")
+
+  // singleAgentName이 있으면 해당 이름의 agent만 사용
+  const filteredAgents = singleAgentName
+    ? agents.filter(a => a.name === singleAgentName)
+    : agents;
+  const agent = filteredAgents[0];
+
+  // chats도 agent 기준으로 필터링
+  const filteredChats = agent ? chats.filter(c => c.agent_id === agent.id) : [];
+  const chat = filteredChats[0];
+
+  // 메시지 전송
+  const sendMessage = async () => {
+    if (!input.trim() || !selectedChat || !user) return
+    setLoading(true)
+    // 메시지 DB 저장
+    const { data: msgData } = await supabase.from('messages').insert([
+      {
+        chat_id: selectedChat.id,
+        user_id: user.id,
+        role: 'user',
+        content: input,
+      }
+    ]).select()
+    if (msgData && msgData.length > 0) {
+      setMessages(prev => [...prev, msgData[0]])
+    }
+    // n8n Webhook 호출 (선택된 agent의 webhook_url 사용)
+    let url = selectedAgent.webhook_url
+    if (url.startsWith("https://n8n.valueinmath.com/")) {
+      url = "/api/n8n/" + url.replace("https://n8n.valueinmath.com/", "")
+    }
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: input }),
+      })
+      const data = await res.json()
+      
+      let aiContent = ""
+      if (data.reply) {
+        aiContent = data.reply
+      } else if (data.output) {
+        aiContent = data.output
+      } else {
+        aiContent = JSON.stringify(data)
+      }
+
+      // AI 메시지 DB에 저장 후 즉시 UI 업데이트
+      const { data: aiMsgData } = await supabase.from('messages').insert([
+        {
+          chat_id: selectedChat.id,
+          user_id: null, // AI 메시지는 user_id 없이
+          role: 'ai',
+          content: aiContent,
+        }
+      ]).select()
+
+      if (aiMsgData && aiMsgData.length > 0) {
+        setMessages(prev => [...prev, aiMsgData[0]])
+      }
+    } catch (e) {
+      // 에러 메시지도 DB에 저장하고 UI 업데이트
+      const errorMsg = { 
+        chat_id: selectedChat.id,
+        user_id: null,
+        role: "ai", 
+        content: "오류가 발생했습니다." 
+      }
+      const { data: errorMsgData } = await supabase.from('messages').insert([errorMsg]).select()
+      if (errorMsgData && errorMsgData.length > 0) {
+        setMessages(prev => [...prev, errorMsgData[0]])
+      } else {
+        setMessages(prev => [...prev, errorMsg])
+      }
+    }
+    setInput("")
+    setLoading(false)
+  }
+
+  // singleAgentName이 있으면 UI(연결 버튼/모달, 리스트, 탭 등) 모두 숨기고 채팅창만 렌더링
+  if (singleAgentName) {
+    return (
+      <div className="h-full flex flex-col">
+        {/* agent가 없으면 안내 메시지 */}
+        {!agent ? (
+          <div className="flex-1 flex items-center justify-center text-gray-400">"{singleAgentName}" agent가 없습니다.</div>
+        ) : (
+          <div className="flex-1 flex flex-col bg-slate-50 min-h-0">
+            {/* 채팅 메시지 영역 */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+              {messages.map((m, i) => (
+                <div
+                  key={m.id || i}
+                  className={`flex items-start space-x-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  {m.role === "ai" && (
+                    <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0 mt-1">
+                      <span className="text-white text-sm font-medium">AI</span>
+                    </div>
+                  )}
+                  <div className={`max-w-[75%] ${m.role === "user" ? "order-2" : ""}`}>
+                    <div className={`text-xs text-slate-500 mb-1 ${m.role === "user" ? "text-right" : ""}`}>
+                      {m.role === "user" ? (user.email || "나") : agent?.name || "AI"}
+                    </div>
+                    <div
+                      className={`rounded-2xl px-4 py-3 break-words shadow-sm ${
+                        m.role === "user"
+                          ? "bg-blue-500 text-white rounded-br-md"
+                          : "bg-white text-slate-700 border border-slate-200 rounded-bl-md"
+                      }`}
+                    >
+                      <div className="text-sm leading-relaxed">
+                        <ReactMarkdown>{m.content}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                  {m.role === "user" && (
+                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 mt-1 order-3">
+                      <span className="text-white text-sm font-medium">
+                        {user.email ? user.email.charAt(0).toUpperCase() : "U"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {loading && (
+                <div className="flex items-start space-x-3 justify-start">
+                  <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center flex-shrink-0 mt-1">
+                    <span className="text-white text-sm font-medium">AI</span>
+                  </div>
+                  <div className="max-w-[75%]">
+                    <div className="text-xs text-slate-500 mb-1">{agent?.name || "AI"}</div>
+                    <div className="bg-white rounded-2xl rounded-bl-md px-4 py-3 shadow-sm border border-slate-200">
+                      <div className="text-sm text-slate-600">답변을 생성하고 있습니다...</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            {/* 입력창 */}
+            <div className="border-t border-slate-200 bg-white p-4 shrink-0">
+              <div className="flex items-end space-x-3 max-w-4xl mx-auto">
+                <div className="flex-1 relative">
+                  <Input
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                    className="min-h-[48px] resize-none border-2 border-slate-200 focus:border-blue-400 rounded-2xl px-4 py-3 transition-colors"
+                    disabled={loading}
+                    placeholder="메시지를 입력하세요..."
+                  />
+                </div>
+                <Button
+                  onClick={sendMessage}
+                  disabled={loading || !input.trim()}
+                  className="h-12 px-6 bg-blue-500 hover:bg-blue-600 rounded-2xl transition-all duration-200 shadow-sm"
+                >
+                  전송
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -135,76 +304,6 @@ export default function MultiChat({ openNewApp, setOpenNewApp, user }: { openNew
     await supabase.from('chats').delete().eq('id', chatId)
     setChats(chats.filter(c => c.id !== chatId))
     if (selectedChat?.id === chatId) setSelectedChat(null)
-  }
-
-  // 메시지 전송
-  const sendMessage = async () => {
-    if (!input.trim() || !selectedChat || !user) return
-    setLoading(true)
-    // 메시지 DB 저장
-    const { data: msgData } = await supabase.from('messages').insert([
-      {
-        chat_id: selectedChat.id,
-        user_id: user.id,
-        role: 'user',
-        content: input,
-      }
-    ]).select()
-    if (msgData && msgData.length > 0) {
-      setMessages(prev => [...prev, msgData[0]])
-    }
-    // n8n Webhook 호출 (선택된 agent의 webhook_url 사용)
-    let url = selectedAgent.webhook_url
-    if (url.startsWith("https://n8n.valueinmath.com/")) {
-      url = "/api/n8n/" + url.replace("https://n8n.valueinmath.com/", "")
-    }
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
-      })
-      const data = await res.json()
-      
-      let aiContent = ""
-      if (data.reply) {
-        aiContent = data.reply
-      } else if (data.output) {
-        aiContent = data.output
-      } else {
-        aiContent = JSON.stringify(data)
-      }
-
-      // AI 메시지 DB에 저장 후 즉시 UI 업데이트
-      const { data: aiMsgData } = await supabase.from('messages').insert([
-        {
-          chat_id: selectedChat.id,
-          user_id: null, // AI 메시지는 user_id 없이
-          role: 'ai',
-          content: aiContent,
-        }
-      ]).select()
-
-      if (aiMsgData && aiMsgData.length > 0) {
-        setMessages(prev => [...prev, aiMsgData[0]])
-      }
-    } catch (e) {
-      // 에러 메시지도 DB에 저장하고 UI 업데이트
-      const errorMsg = { 
-        chat_id: selectedChat.id,
-        user_id: null,
-        role: "ai", 
-        content: "오류가 발생했습니다." 
-      }
-      const { data: errorMsgData } = await supabase.from('messages').insert([errorMsg]).select()
-      if (errorMsgData && errorMsgData.length > 0) {
-        setMessages(prev => [...prev, errorMsgData[0]])
-      } else {
-        setMessages(prev => [...prev, errorMsg])
-      }
-    }
-    setInput("")
-    setLoading(false)
   }
 
   // 메시지 삭제

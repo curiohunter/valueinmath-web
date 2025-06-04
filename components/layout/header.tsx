@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, User } from "lucide-react"
+import { Bell, User, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -15,33 +15,54 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { getCurrentUser, withdrawUser } from "@/actions/auth-actions"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
+import GlobalChatButton from "@/components/chat/GlobalChatButton"
+import { Badge } from "@/components/ui/badge"
 
 export function Header() {
   const [profileOpen, setProfileOpen] = useState(false)
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    (async () => {
+      const { user } = await getCurrentUser()
+      setUser(user)
+    })()
+  }, [])
+
   return (
     <>
       <header className="border-b bg-background">
         <div className="flex h-16 items-center px-6">
           <div className="flex flex-1 items-center gap-4 md:gap-8">{/* 전체 검색 입력 필드 제거 */}</div>
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" className="relative">
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
+            >
               <Bell className="h-4 w-4" />
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-                3
-              </span>
             </Button>
+            <GlobalChatButton user={user} asHeaderIcon />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="rounded-full border-0">
-                  <User className="h-5 w-5" />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <User className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>내 계정</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setProfileOpen(true)}>프로필</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                  프로필
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => {/* TODO: 로그아웃 함수 연결 */}}>로그아웃</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {/* TODO: 로그아웃 함수 연결 */}}>
+                  로그아웃
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
