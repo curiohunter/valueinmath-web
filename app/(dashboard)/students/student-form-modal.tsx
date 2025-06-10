@@ -24,7 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { toast } from "@/components/ui/use-toast"
-import type { Student } from "@/types/student"
+import type { Student, StudentStatus, Department, SchoolType, LeadSource } from "@/types/student"
 import { createStudent, updateStudent } from "@/services/student-service"
 
 // 기본 폼 타입 정의
@@ -44,6 +44,10 @@ interface FormValues {
   first_contact_date: Date | null
   notes: string | null
 }
+
+// 타입 정의 추가
+type CreateStudentData = Omit<Student, "id" | "created_at" | "updated_at">
+type UpdateStudentData = Partial<Student>
 
 interface StudentFormModalProps {
   open: boolean
@@ -160,21 +164,33 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
 
     setIsSubmitting(true)
     try {
-      // 날짜를 ISO 문자열로 변환
-      const formattedValues = {
-        ...values,
+      // 날짜를 ISO 문자열로 변환하고 타입을 명시적으로 정의
+      const baseFormattedValues = {
+        name: values.name,
+        student_phone: values.student_phone,
+        parent_phone: values.parent_phone,
+        status: values.status as StudentStatus,
+        department: values.department as Department | null,
+        school: values.school,
+        school_type: values.school_type as SchoolType | null,
+        grade: values.grade,
+        has_sibling: values.has_sibling,
+        lead_source: values.lead_source as LeadSource | null,
         start_date: values.start_date ? values.start_date.toISOString().split("T")[0] : null,
         end_date: values.end_date ? values.end_date.toISOString().split("T")[0] : null,
         first_contact_date: values.first_contact_date ? values.first_contact_date.toISOString().split("T")[0] : null,
+        notes: values.notes,
       }
 
       let result
       if (student) {
-        // 기존 학생 정보 수정
-        result = await updateStudent(student.id, formattedValues)
+        // 기존 학생 정보 수정 - UpdateStudentData 타입으로 캐스팅
+        const updateData: UpdateStudentData = baseFormattedValues
+        result = await updateStudent(student.id, updateData)
       } else {
-        // 새 학생 등록
-        result = await createStudent(formattedValues)
+        // 새 학생 등록 - CreateStudentData 타입으로 캐스팅
+        const createData: CreateStudentData = baseFormattedValues
+        result = await createStudent(createData)
       }
 
       if (result.error) {

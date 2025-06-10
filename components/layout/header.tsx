@@ -18,13 +18,14 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import GlobalChatButton from "@/components/chat/GlobalChatButton"
 import { Badge } from "@/components/ui/badge"
 
-export function Header() {
+export function Header({ setChatOpen }: { setChatOpen: (open: boolean) => void }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
     (async () => {
       const { user } = await getCurrentUser()
+      console.log('Header: User 로드됨:', user)
       setUser(user)
     })()
   }, [])
@@ -42,7 +43,10 @@ export function Header() {
             >
               <Bell className="h-4 w-4" />
             </Button>
-            <GlobalChatButton user={user} asHeaderIcon />
+            <GlobalChatButton user={user} asHeaderIcon onClick={() => {
+              console.log('Header: 채팅 버튼 클릭됨!');
+              setChatOpen(true);
+            }} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 

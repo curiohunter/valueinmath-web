@@ -187,6 +187,62 @@ export type Database = {
         }
         Relationships: []
       }
+      entrance_tests: {
+        Row: {
+          consultation_id: string | null
+          created_at: string | null
+          id: number
+          notes: string | null
+          recommended_class: string | null
+          status: Database["public"]["Enums"]["test_status_enum"] | null
+          test_date: string | null
+          test_result: Database["public"]["Enums"]["test_result_enum"] | null
+          test1_level: Database["public"]["Enums"]["test_level_enum"] | null
+          test1_score: number | null
+          test2_level: Database["public"]["Enums"]["test_level_enum"] | null
+          test2_score: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          consultation_id?: string | null
+          created_at?: string | null
+          id?: number
+          notes?: string | null
+          recommended_class?: string | null
+          status?: Database["public"]["Enums"]["test_status_enum"] | null
+          test_date?: string | null
+          test_result?: Database["public"]["Enums"]["test_result_enum"] | null
+          test1_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test1_score?: number | null
+          test2_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test2_score?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          consultation_id?: string | null
+          created_at?: string | null
+          id?: number
+          notes?: string | null
+          recommended_class?: string | null
+          status?: Database["public"]["Enums"]["test_status_enum"] | null
+          test_date?: string | null
+          test_result?: Database["public"]["Enums"]["test_result_enum"] | null
+          test1_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test1_score?: number | null
+          test2_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test2_score?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entrance_tests_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       global_messages: {
         Row: {
           content: string
@@ -486,7 +542,28 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      test_level_enum:
+        | "초3-1"
+        | "초3-2"
+        | "초4-1"
+        | "초4-2"
+        | "초5-1"
+        | "초5-2"
+        | "초6-1"
+        | "초6-2"
+        | "중1-1"
+        | "중1-2"
+        | "중2-1"
+        | "중2-2"
+        | "중3-1"
+        | "중3-2"
+        | "공통수학1"
+        | "공통수학2"
+        | "대수"
+        | "미적분"
+        | "확통"
+      test_result_enum: "합격" | "불합격"
+      test_status_enum: "테스트예정" | "결과상담대기" | "결과상담완료"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -601,6 +678,30 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      test_level_enum: [
+        "초3-1",
+        "초3-2",
+        "초4-1",
+        "초4-2",
+        "초5-1",
+        "초5-2",
+        "초6-1",
+        "초6-2",
+        "중1-1",
+        "중1-2",
+        "중2-1",
+        "중2-2",
+        "중3-1",
+        "중3-2",
+        "공통수학1",
+        "공통수학2",
+        "대수",
+        "미적분",
+        "확통",
+      ],
+      test_result_enum: ["합격", "불합격"],
+      test_status_enum: ["테스트예정", "결과상담대기", "결과상담완료"],
+    },
   },
 } as const

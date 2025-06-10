@@ -1,4 +1,3 @@
-// components/chat/GlobalChatButton.tsx 수정
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send, Users } from "lucide-react";
@@ -15,11 +14,12 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 interface GlobalChatButtonProps {
   user?: User | null;
   asHeaderIcon?: boolean;
+  onClick?: () => void;
 }
 
 const supabase = createClientComponentClient();
 
-export default function GlobalChatButton({ user, asHeaderIcon }: GlobalChatButtonProps) {
+export default function GlobalChatButton({ user, asHeaderIcon, onClick }: GlobalChatButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [userMap, setUserMap] = useState<Record<string, { email?: string; name?: string }>>({});
@@ -219,171 +219,170 @@ export default function GlobalChatButton({ user, asHeaderIcon }: GlobalChatButto
     }
   };
 
-  if (!user) return null;
+  // user가 없어도 버튼은 보여주되, 클릭 시에만 체크
+  // if (!user) return null;
+
+  if (asHeaderIcon) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 rounded-full hover:bg-gray-100 transition-colors relative"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          console.log('GlobalChatButton clicked!', onClick)
+          console.log('User:', user)
+          if (!user) {
+            console.log('User가 없어서 채팅을 열 수 없습니다.');
+            alert('User가 없어서 채팅을 열 수 없습니다.');
+            return;
+          }
+          if (onClick) {
+            onClick()
+          } else {
+            console.log('onClick prop is not provided!')
+          }
+        }}
+        aria-label="채팅 열기"
+      >
+        <MessageCircle className="h-4 w-4" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
+            {unreadCount}
+          </span>
+        )}
+      </Button>
+    );
+  }
 
   return (
     <>
-      {asHeaderIcon ? (
+      <div className="fixed bottom-6 right-6 z-50">
         <Button
           onClick={() => setIsOpen(true)}
-          variant="ghost"
-          size="icon"
-          className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
+          size="lg"
+          className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 bg-blue-600 hover:bg-blue-700 relative"
         >
-          <MessageCircle className="h-4 w-4" />
+          <MessageCircle className="h-6 w-6" />
           {unreadCount > 0 && (
             <Badge 
-              variant="destructive"
-              className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs font-medium"
+              variant="destructive" 
+              className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs"
             >
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
         </Button>
-      ) : (
-        <div className="fixed bottom-6 right-6 z-50">
-          <Button
-            onClick={() => setIsOpen(true)}
-            size="lg"
-            className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 bg-blue-600 hover:bg-blue-700 relative"
-          >
-            <MessageCircle className="h-6 w-6" />
-            {unreadCount > 0 && (
-              <Badge 
-                variant="destructive" 
-                className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs"
-              >
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Badge>
-            )}
-          </Button>
-        </div>
-      )}
+      </div>
 
-      {/* 채팅 모달 - Dialog 기본 스타일 완전히 제거 */}
+      {/* 글로벌 채팅 모달 */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-[500px] p-0 border-none bg-transparent shadow-none [&>button]:hidden">
-          <Card className="w-full h-[600px] flex flex-col overflow-hidden shadow-lg">
-            {/* 헤더 */}
-            <CardHeader className="flex flex-row items-center justify-between p-4 border-b bg-blue-50 space-y-0">
-              <div className="flex items-center gap-3">
-                <MessageCircle className="h-5 w-5 text-blue-600" />
-                <h2 className="text-lg font-semibold">학원 채팅</h2>
-                <VisuallyHidden>
-                  <DialogTitle>학원 채팅</DialogTitle>
-                </VisuallyHidden>
-                <div className="flex items-center gap-1">
-                  <Users className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-600">{onlineUsers.length}</span>
+        <DialogContent className="max-w-2xl w-full h-[80vh] flex flex-col p-0">
+          <VisuallyHidden>
+            <DialogHeader>
+              <DialogTitle>전체 채팅</DialogTitle>
+            </DialogHeader>
+          </VisuallyHidden>
+          
+          {/* 헤더 */}
+          <Card className="border-0 border-b rounded-t-lg">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-full">
+                    <MessageCircle className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">학원 전체 채팅</h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Users className="h-4 w-4" />
+                      <span>{onlineUsers.length}명 온라인</span>
+                    </div>
+                  </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsOpen(false)}
+                  className="h-8 w-8 p-0 rounded-full hover:bg-gray-100"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              {/* X 버튼 - 카드 안에 포함 */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-                className="h-8 w-8 p-0 hover:bg-white/80 rounded-full"
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </CardHeader>
-            {/* 온라인 사용자 - 헤더 하단 */}
-            <div className="px-4 py-2 bg-blue-50 border-b">
-              <div className="flex gap-1 flex-wrap">
-                {onlineUsers.slice(0, 5).map((user, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {user.name || user.email?.split('@')[0]}
-                  </Badge>
-                ))}
-                {onlineUsers.length > 5 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{onlineUsers.length - 5}
-                  </Badge>
-                )}
-              </div>
-            </div>
-            {/* 메시지 영역 */}
-            <CardContent className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-              {messages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-8">
-                  <MessageCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-base font-medium">학원 전체 채팅방입니다</p>
-                  <p className="text-sm mt-1">자유롭게 소통해보세요!</p>
-                </div>
-              ) : (
-                messages.map((message, index) => {
-                  const isMyMessage = message.user_id === user.id;
-                  const displayName = isMyMessage 
-                    ? currentUserInfo.name || "나"
-                    : (userMap[message.user_id]?.name || "익명");
-                  return (
+          </Card>
+
+          {/* 메시지 영역 */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            {messages.map((message, index) => {
+              const isCurrentUser = message.user_id === user?.id;
+              const senderInfo = userMap[message.user_id];
+              const displayName = senderInfo?.name || message.user_id || '익명';
+
+              return (
+                <div
+                  key={message.id || index}
+                  className={`flex items-start gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className={`flex-1 max-w-[80%] ${isCurrentUser ? 'text-right' : ''}`}>
+                    <div className={`text-xs text-gray-500 mb-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
+                      {displayName} • {new Date(message.created_at).toLocaleTimeString()}
+                    </div>
                     <div
-                      key={message.id || index}
-                      className={`flex gap-3 ${
-                        isMyMessage ? "justify-end" : "justify-start"
+                      className={`inline-block p-3 rounded-lg break-words ${
+                        isCurrentUser
+                          ? 'bg-blue-500 text-white rounded-br-sm'
+                          : 'bg-white border border-gray-200 text-gray-700 rounded-bl-sm'
                       }`}
                     >
-                      {!isMyMessage && (
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 text-white text-sm font-medium">
-                          {displayName.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className={`max-w-[70%] ${isMyMessage ? "order-2" : ""}`}>
-                        <div className={`text-xs text-gray-500 mb-1 ${isMyMessage ? "text-right" : ""}`}>
-                          {displayName}
-                        </div>
-                        <div
-                          className={`rounded-2xl px-4 py-2 break-words shadow-sm ${
-                            isMyMessage
-                              ? "bg-blue-600 text-white rounded-br-md"
-                              : "bg-white text-gray-800 border border-gray-200 rounded-bl-md"
-                          }`}
-                        >
-                          <div className="text-sm leading-relaxed">
-                            <ReactMarkdown>{message.content}</ReactMarkdown>
-                          </div>
-                        </div>
-                      </div>
-                      {isMyMessage && (
-                        <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0 order-3 text-white text-sm font-medium">
-                          {currentUserInfo.name?.charAt(0).toUpperCase() || user.email?.charAt(0).toUpperCase() || "U"}
-                        </div>
-                      )}
+                      <div className="text-sm leading-relaxed">
+                      <ReactMarkdown>
+                      {message.content}
+                     </ReactMarkdown>
+  </div>
                     </div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </CardContent>
-            {/* 입력 영역 */}
-            <div className="border-t bg-white p-4">
-              <div className="relative">
-                <TextareaAutosize
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      if (e.nativeEvent.isComposing) return;
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  minRows={1}
-                  maxRows={4}
-                  placeholder="메시지를 입력하세요..."
-                  className="w-full resize-none border-2 border-gray-200 focus:border-blue-600 rounded-2xl px-4 py-3 pr-12 transition-colors text-sm leading-relaxed bg-white shadow-sm"
-                />
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* 입력 영역 */}
+          <Card className="border-0 border-t rounded-b-lg">
+            <CardContent className="p-4">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <TextareaAutosize
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="메시지를 입력하세요..."
+                    className="w-full resize-none border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    minRows={1}
+                    maxRows={4}
+                  />
+                </div>
                 <Button
                   onClick={sendMessage}
                   disabled={!input.trim()}
                   size="sm"
-                  className="absolute right-2 bottom-2 h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white transition-colors p-0 shadow-sm"
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
+            </CardContent>
           </Card>
         </DialogContent>
       </Dialog>

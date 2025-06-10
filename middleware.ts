@@ -30,13 +30,10 @@ export async function middleware(request: NextRequest) {
     "/admin",
   ]
 
-  // 1. 루트 경로 처리
+  // 1. 루트 경로 처리 - 랜딩페이지 표시
   if (path === "/") {
-    if (session) {
-      return NextResponse.redirect(new URL("/students", request.url))
-    } else {
-      return NextResponse.redirect(new URL("/login", request.url))
-    }
+    // 루트 경로에서는 랜딩페이지를 보여줌
+    return res
   }
 
   // 2. 인증이 필요한 경로에 접근하려는데 로그인되지 않은 경우
