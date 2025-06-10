@@ -99,6 +99,55 @@
 
 ---
 
+## 9. Supabase 클라이언트/서버 인증 컨텍스트 불일치 문제 🔒
+- **현상:**
+  - 서버 사이드에서는 데이터 조회 성공하지만 클라이언트 사이드에서는 빈 배열 반환
+  - RLS(Row Level Security) 정책이 클라이언트/서버에서 다르게 작동
+  - 관리자 권한이 있는데도 특정 테이블 조회가 실패
+- **원인:**
+  - `getSupabaseBrowserClient()`와 `createServerActionClient({ cookies })`의 인증 컨텍스트 차이
+  - Next.js App Router에서 클라이언트 사이드 Supabase 클라이언트가 서버 세션과 동기화되지 않음
+  - RLS 정책에서 `auth.uid()`가 클라이언트에서 제대로 인식되지 않음
+- **해결책:**
+  1. **즉시 해결**: `createClientComponentClient()` 사용
+     ```typescript
+     // 기존 (문제)
+     import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+     const supabase = getSupabaseBrowserClient()
+     
+     // 개선 (해결)
+     import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+     const supabase = createClientComponentClient()
+     ```
+  2. **임시 우회**: 서버 액션에서 데이터를 가져와 클라이언트에서 사용
+     ```typescript
+     // 서버에서 데이터 조회 후 클라이언트로 전달
+     const serverResult = await testGetPendingUsers()
+     if (serverResult.success) {
+       setPendingUsers(serverResult.pendingUsers)
+     }
+     ```
+  3. **장기적 개선**: API 라우트 사용
+     ```typescript
+     // app/api/admin/pending-users/route.ts
+     export async function GET() {
+       const supabase = createServerComponentClient({ cookies })
+       // 서버에서 권한 확인 + 데이터 조회
+       return NextResponse.json({ pendingUsers })
+     }
+     ```
+- **보안 분석:**
+  - ✅ **안전함**: 서버에서 RLS 정책 + 관리자 권한 검증 후 데이터 전달
+  - ✅ **민감정보 미포함**: 공개 가능한 정보만 조회 (id, email, name, status)
+  - ⚠️ **성능**: Server Action 호출로 약간의 지연 발생
+- **실무 팁:**
+  - Supabase + Next.js App Router 조합에서는 클라이언트 컴포넌트에서 `createClientComponentClient` 필수 사용
+  - RLS 정책 테스트는 서버/클라이언트 양쪽에서 모두 확인할 것
+  - 관리자 기능은 API 라우트로 구현하는 것이 보안상 더 안전
+  - 디버깅 시 서버/클라이언트 각각 로그를 출력해서 어느 쪽에서 문제인지 명확히 파악
+
+---
+
 ## 8. 실무 팁
 - 외부 라이브러리 import 경로, 대소문자, 오타 항상 확인
 - Next.js app router 환경에서는 외부 UI 라이브러리는 대부분 "use client" 필요
@@ -106,3 +155,4 @@
 - 자주 쓰는 해결법은 이렇게 파일로 정리해두고, 프로젝트 시작할 때 꼭 읽어보기
 - **사용자 피드백(토스트, 알림 등)은 개발 초기에 제대로 설정해야 나중에 고생하지 않음**
 - **플레이라이트 같은 E2E 테스트로 실제 사용자 플로우를 확인하면 숨어있는 UI/UX 문제를 빨리 발견할 수 있음**
+- **Supabase 인증 문제 발생 시 서버/클라이언트 양쪽 로그를 비교해서 근본 원인 파악할 것**

@@ -6,15 +6,15 @@ import { revalidatePath } from "next/cache"
 // 직원과 사용자 계정 연결
 export async function linkEmployeeToUser(employeeId: string, userId: string | null) {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // 직원 테이블 업데이트
     const { error } = await supabase.from("employees").update({ auth_id: userId }).eq("id", employeeId)
 
     if (error) throw error
 
-    // 캐시 무효화
-    revalidatePath("/admin/link-employees")
+    // 캐시 무효화 - 직원 관리 페이지로 변경
+    revalidatePath("/employees")
 
     return { success: true }
   } catch (error) {
@@ -26,7 +26,7 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
 // 관리자 권한 확인
 export async function checkAdminAccess() {
   try {
-    const supabase = createServerSupabaseClient()
+    const supabase = await createServerSupabaseClient()
 
     // 현재 로그인한 사용자 가져오기
     const {

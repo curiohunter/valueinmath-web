@@ -14,6 +14,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 // 회원가입 폼 스키마
 const signupSchema = z
   .object({
+    name: z.string().min(1, { message: "이름을 입력해주세요." }),
     email: z.string().email({ message: "유효한 이메일 주소를 입력해주세요." }),
     password: z.string().min(6, { message: "비밀번호는 최소 6자 이상이어야 합니다." }),
     confirmPassword: z.string().min(6, { message: "비밀번호는 최소 6자 이상이어야 합니다." }),
@@ -35,6 +36,7 @@ export function SignupForm() {
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
+      name: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -46,12 +48,16 @@ export function SignupForm() {
     try {
       setIsLoading(true)
 
-      // Supabase 회원가입
+      // Supabase 회원가입 (이메일 확인 비활성화)
       const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            name: values.name, // 이름 추가
+            email_confirm: false // 이메일 확인 비활성화
+          }
         },
       })
 
@@ -62,7 +68,7 @@ export function SignupForm() {
       // 회원가입 성공 메시지
       toast({
         title: "회원가입 성공",
-        description: "이메일 주소로 확인 링크가 전송되었습니다. 이메일을 확인해주세요.",
+        description: "회원가입이 완료되었습니다. 로그인해주세요.",
       })
 
       // 로그인 페이지로 이동
@@ -84,6 +90,20 @@ export function SignupForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>이름</FormLabel>
+              <FormControl>
+                <Input placeholder="홍길동" {...field} disabled={isLoading} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <FormField
           control={form.control}
           name="email"

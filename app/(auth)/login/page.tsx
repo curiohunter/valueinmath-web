@@ -5,22 +5,42 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { LoginForm } from "./login-form"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "로그인 | 학원관리 시스템",
   description: "학원관리 시스템에 로그인하세요",
 }
 
-export default async function LoginPage() {
+interface LoginPageProps {
+  searchParams: {
+    error?: string
+    redirect?: string
+  }
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   // 서버 컴포넌트에서 세션 확인
   const supabase = createServerComponentClient({ cookies })
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // 이미 로그인된 경우 학생 페이지로 리디렉션
+  // 이미 로그인된 경우 대시보드로 리디렉션
   if (session) {
-    redirect("/students")
+    // 프로필 정보에서 승인 상태 확인
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("approval_status")
+      .eq("id", session.user.id)
+      .single()
+
+    if (profile?.approval_status === "approved") {
+      redirect("/dashboard")
+    } else if (profile?.approval_status === "pending") {
+      redirect("/pending-approval")
+    }
   }
 
   return (
@@ -28,6 +48,15 @@ export default async function LoginPage() {
       <div className="flex justify-center mb-8">
         <h1 className="text-3xl font-bold">학원관리 시스템</h1>
       </div>
+      
+      {/* 에러 메시지 표시 */}
+      {searchParams.error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{searchParams.error}</AlertDescription>
+        </Alert>
+      )}
+      
       <Card>
         <CardHeader>
           <CardTitle>로그인</CardTitle>

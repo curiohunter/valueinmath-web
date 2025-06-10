@@ -17,6 +17,7 @@ import { getCurrentUser, withdrawUser } from "@/actions/auth-actions"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import GlobalChatButton from "@/components/chat/GlobalChatButton"
 import { Badge } from "@/components/ui/badge"
+import { NotificationBell } from "@/components/layout/notification-bell"
 
 export function Header({ setChatOpen }: { setChatOpen: (open: boolean) => void }) {
   const [profileOpen, setProfileOpen] = useState(false)
@@ -36,13 +37,7 @@ export function Header({ setChatOpen }: { setChatOpen: (open: boolean) => void }
         <div className="flex h-16 items-center px-6">
           <div className="flex flex-1 items-center gap-4 md:gap-8">{/* 전체 검색 입력 필드 제거 */}</div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
-            >
-              <Bell className="h-4 w-4" />
-            </Button>
+            <NotificationBell user={user} />
             <GlobalChatButton user={user} asHeaderIcon onClick={() => {
               console.log('Header: 채팅 버튼 클릭됨!');
               setChatOpen(true);

@@ -2,9 +2,10 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Shield } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Shield, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { useEffect, useState } from "react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/use-toast"
@@ -176,6 +177,13 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
               >
                 <item.icon className="h-4 w-4" />
                 <span className="flex-1">{item.title}</span>
+                {/* @ts-ignore - badge 속성이 있는 경우에만 Badge 표시 */}
+                {item.badge && (
+                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800">
+                    {/* @ts-ignore */}
+                    {item.badge}
+                  </Badge>
+                )}
               </Link>
             )
           })}

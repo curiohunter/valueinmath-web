@@ -36,7 +36,16 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  // 2. 인증이 필요한 경로에 접근하려는데 로그인되지 않은 경우
+  // 2. 승인 대기 페이지는 별도 처리 (무한 리디렉션 방지)
+  if (path === "/pending-approval") {
+    // 로그인하지 않은 경우에만 로그인 페이지로 리디렉션
+    if (!session) {
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
+    return res
+  }
+
+  // 3. 인증이 필요한 경로에 접근하려는데 로그인되지 않은 경우
   const isAuthRequired = authRequiredPaths.some((authPath) => path === authPath || path.startsWith(`${authPath}/`))
 
   if (isAuthRequired && !session) {
@@ -45,14 +54,53 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // 4. 로그인된 사용자의 승인 상태 확인
+  if (session && isAuthRequired) {
+    try {
+      // 프로필 정보에서 승인 상태 및 이름 확인
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("approval_status, name")
+        .eq("id", session.user.id)
+        .single()
+
+      // 이름이 없는 경우 프로필 완성 페이지로 (현재는 승인 대기 페이지로)
+      if (!profile?.name || profile.name.trim() === "") {
+        return NextResponse.redirect(new URL("/pending-approval", request.url))
+      }
+
+      // 승인 대기 중인 경우
+      if (profile?.approval_status === "pending") {
+        return NextResponse.redirect(new URL("/pending-approval", request.url))
+      }
+
+      // 거부된 경우
+      if (profile?.approval_status === "rejected") {
+        const redirectUrl = new URL("/login", request.url)
+        redirectUrl.searchParams.set("error", "계정이 거부되었습니다. 관리자에게 문의하세요.")
+        return NextResponse.redirect(redirectUrl)
+      }
+
+      // 승인되지 않은 상태이거나 프로필이 없는 경우
+      if (!profile || profile.approval_status !== "approved") {
+        return NextResponse.redirect(new URL("/pending-approval", request.url))
+      }
+    } catch (error) {
+      // 데이터베이스 오류 시 승인 대기 페이지로 이동
+      console.error("Profile check error:", error)
+      return NextResponse.redirect(new URL("/pending-approval", request.url))
+    }
+  }
+
   // 기본 응답
   return res
 }
 
-// 미들웨어가 실행될 경로 지정 - 인증이 필요한 경로와 루트 경로만 포함
+// 미들웨어가 실행될 경로 지정 - 승인 대기 페이지도 포함
 export const config = {
   matcher: [
     "/",
+    "/pending-approval",
     "/dashboard/:path*",
     "/students/:path*",
     "/employees/:path*",

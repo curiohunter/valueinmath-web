@@ -53,8 +53,8 @@ export function LoginForm() {
         description: "환영합니다! 학원관리 시스템에 로그인되었습니다.",
       })
 
-      // 강제 새로고침 - 세션 쿠키 동기화
-      window.location.replace("/students")
+      // 강제 새로고침 - 세션 쿠키 동기화 및 대시보드로 이동
+      window.location.replace("/dashboard")
     } catch (error: any) {
       console.error("Login error:", error)
 

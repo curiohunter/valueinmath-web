@@ -191,6 +191,7 @@ export type Database = {
         Row: {
           consultation_id: string | null
           created_at: string | null
+          google_calendar_id: string | null
           id: number
           notes: string | null
           recommended_class: string | null
@@ -206,6 +207,7 @@ export type Database = {
         Insert: {
           consultation_id?: string | null
           created_at?: string | null
+          google_calendar_id?: string | null
           id?: number
           notes?: string | null
           recommended_class?: string | null
@@ -221,6 +223,7 @@ export type Database = {
         Update: {
           consultation_id?: string | null
           created_at?: string | null
+          google_calendar_id?: string | null
           id?: number
           notes?: string | null
           recommended_class?: string | null

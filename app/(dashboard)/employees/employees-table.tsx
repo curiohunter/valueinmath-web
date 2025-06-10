@@ -202,7 +202,23 @@ export function EmployeesTable() {
   }
 
   // 드롭다운에는 연결되지 않은 계정만 표시
-  const unlinkedUsers = users.filter(user => !user.isLinked)
+  const unlinkedUsers = useMemo(() => {
+    // 이미 연결된 사용자 ID 목록 가져오기
+    const connectedUserIds = employees
+      .filter(emp => emp.auth_id)
+      .map(emp => emp.auth_id)
+    
+    console.log('현재 연결된 사용자 ID:', connectedUserIds)
+    
+    // 이미 연결된 사용자 제외 (현재 선택된 직원이 연결된 사용자는 포함)
+    const availableUsers = users.filter(user => 
+      !connectedUserIds.includes(user.id) || user.id === linkingEmployee?.auth_id
+    )
+    
+    console.log('사용 가능한 사용자:', availableUsers)
+    
+    return availableUsers
+  }, [users, employees, linkingEmployee?.auth_id])
 
   // 연결된 사용자 정보 가져오기 (전체 users 배열에서 찾음)
   const getLinkedUserInfo = (authId: string | null) => {

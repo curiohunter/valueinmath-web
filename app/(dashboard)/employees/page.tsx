@@ -59,6 +59,8 @@ export default async function EmployeesPage() {
   return (
     <div className="space-y-6">
       <EmployeesHeader />
+      
+      {/* 직원 관리 */}
       <Card className="overflow-hidden">
         <EmployeesFilters />
         <CardContent className="p-0">
