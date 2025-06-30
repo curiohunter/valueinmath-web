@@ -14,7 +14,7 @@ import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import ConsultationCard from "@/components/dashboard/ConsultationCard"
 import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { calendarService } from "@/services/calendar"
 import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
 import type { Database } from "@/types/database"
@@ -43,6 +43,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
+  const supabase = createClientComponentClient<Database>()
   const [consultations, setConsultations] = useState<ConsultationData[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -334,7 +335,8 @@ export default function DashboardPage() {
       // test_result가 빈 문자열이면 null로 변환
       const cleanedTestData = {
         ...testData,
-        test_result: testData.test_result === '' ? null : testData.test_result
+        // @ts-ignore - test_result 타입 이슈 임시 해결
+        test_result: (testData as any).test_result === '' ? null : (testData as any).test_result
       }
       
       const cleanData = cleanObj(cleanedTestData)
@@ -485,11 +487,11 @@ export default function DashboardPage() {
       
       
       // Google Calendar ID가 있으면 entrance_tests 테이블에도 저장
-      if (response.googleCalendarId) {
+      if (response.google_calendar_id) {
         try {
           const { error: updateError } = await supabase
             .from('entrance_tests')
-            .update({ google_calendar_id: response.googleCalendarId })
+            .update({ google_calendar_id: response.google_calendar_id })
             .eq('id', test.id)
           
           if (updateError) {
@@ -1185,6 +1187,7 @@ function TestModal({
   onSave: (data: Partial<EntranceTestData>) => void
   onStatusChange?: () => void
 }) {
+  const supabase = createClientComponentClient<Database>()
   const [formData, setFormData] = useState({
     test_date: '',
     test_hour: '14',

@@ -5,7 +5,7 @@ import { StudentsPageClient } from "@/app/(dashboard)/students/students-page-cli
 
 export default async function StudentsPage() {
   const cookieStore = await cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
   const {
     data: { session },
   } = await supabase.auth.getSession()

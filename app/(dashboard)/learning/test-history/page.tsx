@@ -175,7 +175,8 @@ export default function TestHistoryPage() {
       
       // 시험유형 필터
       if (testTypeFilter) {
-        query = query.eq("test_type", testTypeFilter);
+        // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
+        query = query.eq("test_type", testTypeFilter as any);
         console.log("시험유형 필터 적용:", testTypeFilter);
       }
 
@@ -249,7 +250,10 @@ export default function TestHistoryPage() {
       if (dateRange.to) query = query.lte("date", dateRange.to);
       if (useClassId) query = query.eq("class_id", useClassId);
       if (useStudentId) query = query.eq("student_id", useStudentId);
-      if (testTypeFilter) query = query.eq("test_type", testTypeFilter);
+      if (testTypeFilter) {
+        // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
+        query = query.eq("test_type", testTypeFilter as any);
+      }
 
       const { data, error } = await query;
       

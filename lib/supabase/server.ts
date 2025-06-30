@@ -1,5 +1,4 @@
-console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
-console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Removed build-time console logs for Next.js 15 compatibility
 
 import { cookies } from "next/headers"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
@@ -28,7 +27,16 @@ export function createActionSupabaseClient() {
   })
 }
 
-export const supabaseServer = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// 빌드 타임에 안전하게 처리
+export const createSupabaseServer = () => {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null
+  }
+  
+  return createClient(supabaseUrl, serviceRoleKey)
+}
+
+export const supabaseServer = createSupabaseServer()

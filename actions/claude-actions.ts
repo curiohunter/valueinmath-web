@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache"
 export async function deleteClaudeInsight(id: string) {
   try {
     const cookieStore = await cookies()
-    const supabase = createServerActionClient({ cookies: () => cookieStore })
+    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
 
     const {
       data: { session },

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Shield, Crown, Bot } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -94,11 +94,6 @@ export function Sidebar() {
       title: "대시보드",
       href: "/dashboard",
       icon: Home,
-    },
-    {
-      title: "에이전트",
-      href: "/chat",
-      icon: Shield,
     },
     {
       title: "AI insight",

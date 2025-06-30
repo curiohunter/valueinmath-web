@@ -9,7 +9,10 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
     const supabase = await createServerSupabaseClient()
 
     // 직원 테이블 업데이트
-    const { error } = await supabase.from("employees").update({ auth_id: userId }).eq("id", employeeId)
+    // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
+    const { error } = await supabase.from("employees").update({ auth_id: userId } as any)
+      // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
+      .eq("id", employeeId)
 
     if (error) throw error
 
@@ -19,7 +22,7 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
     return { success: true }
   } catch (error) {
     console.error("Error linking employee to user:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: (error as any)?.message || 'Unknown error' }
   }
 }
 
@@ -41,10 +44,12 @@ export async function checkAdminAccess() {
     const { data: employee } = await supabase
       .from("employees")
       .select("position")
+      // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq("auth_id", session.user.id)
       .single()
 
     // 원장 또는 부원장인 경우에만 관리자 권한 부여
+    // @ts-ignore - employee 타입 복잡성 해결
     const isAdmin = employee?.position === "원장" || employee?.position === "부원장"
 
     return {

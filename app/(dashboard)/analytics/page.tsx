@@ -5,7 +5,7 @@ import { AnalyticsPageClient } from "./analytics-page-client"
 
 export default async function AnalyticsPage() {
   const cookieStore = await cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
   const {
     data: { session },
   } = await supabase.auth.getSession()

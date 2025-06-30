@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react"
-import { createClient } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/database"
 import { toast } from "sonner"
 import { Card, CardHeader, CardContent } from "@/components/ui/card"
@@ -139,10 +139,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
       return
     }
     setLoading(true)
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = createClientComponentClient<Database>()
     const parsedFee = parseInt(monthlyFee.replace(/[^0-9]/g, '')) || 0
     
     if (mode === "create") {

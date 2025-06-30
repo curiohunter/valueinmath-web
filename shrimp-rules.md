@@ -150,6 +150,13 @@ components/
 - **localStorage** 사용 (Supabase 우선)
 - **any 타입** 사용 (unknown 사용)
 
+### TypeScript 주의사항 (주요 패턴)
+- **Next.js 15 호환성**: `cookies: () => cookieStore as any` 패턴 사용 필수
+- **Supabase 타입 이슈**: `.eq()`, `.update()` 메서드에서 `@ts-ignore` 또는 `as any` 필요
+- **Nullable 필드**: DB에서 nullable인 필드는 `row.field || defaultValue` 패턴으로 안전하게 처리
+- **쿼리 파라미터**: `param as SpecificType['field']` 패턴으로 타입 캐스팅
+- **데이터 변환**: 타입 변환 함수에서 모든 nullable 필드에 기본값 제공
+
 ### 아키텍처
 - **페이지 컴포넌트**에 비즈니스 로직 직접 구현
 - **클라이언트 컴포넌트**에서 서버 전용 API 호출

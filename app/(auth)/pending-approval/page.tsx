@@ -14,7 +14,9 @@ export const metadata: Metadata = {
 
 export default async function PendingApprovalPage() {
   const cookieStore = await cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = createServerComponentClient({ 
+    cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
+  })
   
   // 세션 확인
   const {

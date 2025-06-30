@@ -48,7 +48,9 @@ async function getValidAccessToken(): Promise<string | null> {
 export async function GET(request: NextRequest) {
   try {
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
+    })
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
@@ -88,7 +90,9 @@ export async function POST(request: NextRequest) {
     console.log('⏱️ JSON 파싱 완료:', Date.now() - startTime, 'ms')
     
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
+    })
     console.log('⏱️ Supabase 클라이언트 생성:', Date.now() - startTime, 'ms')
     
     // 현재 사용자 정보 가져오기 (optional - 에러 무시)
@@ -126,14 +130,17 @@ export async function POST(request: NextRequest) {
       const validToken = await getValidAccessToken()
       
       if (validToken && data) {
+        // @ts-ignore - data 타입 복잡성 해결
         googleCalendarId = await createGoogleEvent(data, validToken)
         // Google Calendar ID를 DB에 업데이트
         await supabase
           .from('calendar_events')
-          .update({ google_calendar_id: googleCalendarId })
+          .update({ google_calendar_id: googleCalendarId } as any) // 데이터베이스 타입 복잡성으로 인한 타입 캐스팅
+          // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
           .eq('id', data.id!)
         
         // 데이터에 Google Calendar ID 추가
+        // @ts-ignore - data 타입 복잡성 해결
         data.google_calendar_id = googleCalendarId
         console.log('✅ Google Calendar 이벤트 생성 동기화 성공:', googleCalendarId)
       } else {

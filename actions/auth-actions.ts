@@ -8,7 +8,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin"
 // 로그아웃 처리
 export async function signOut() {
   const cookieStore = await cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  const supabase = createServerActionClient({ cookies: () => cookieStore as any })
 
   const { error } = await supabase.auth.signOut()
 
@@ -25,7 +25,7 @@ export async function signOut() {
 // 사용자 정보 가져오기
 export async function getCurrentUser() {
   const cookieStore = await cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  const supabase = createServerActionClient({ cookies: () => cookieStore as any })
 
   const {
     data: { session },
@@ -53,7 +53,7 @@ export async function updateUserProfile(profileData: {
   department?: string
 }) {
   const cookieStore = await cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  const supabase = createServerActionClient({ cookies: () => cookieStore as any })
 
   const {
     data: { session },
@@ -78,7 +78,8 @@ export async function updateUserProfile(profileData: {
 // 직원과 사용자 계정 연결
 export async function linkEmployeeToUser(employeeId: string, userId: string | null) {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
     console.log('🔄 linkEmployeeToUser 시작:', { employeeId, userId })
 
     // 1. 기존 연결 해제: 이전에 이 직원과 연결된 사용자가 있다면 해제
@@ -205,7 +206,8 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
 // 사용자 목록 가져오기 (auth.users와 profiles 테이블 조인)
 export async function listUsers() {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const cookieStore = await cookies()
+    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
 
     // 전체 유저 목록 가져오기 (관리자 권한 필요)
     const { data: { users }, error } = await supabase.auth.admin.listUsers()

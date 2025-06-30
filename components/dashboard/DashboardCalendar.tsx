@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useRouter } from 'next/navigation'
 import { calendarService } from '@/services/calendar'
 import type { CalendarEvent } from '@/types/calendar'
 
@@ -12,8 +11,50 @@ interface DashboardCalendarProps {
   className?: string
 }
 
-export interface DashboardCalendarRef {
-  refreshEvents: () => Promise<void>
+// 주차별 날짜 계산 헬퍼 함수 (월요일 시작)
+const getWeekRange = (baseDate: Date) => {
+  const startOfWeek = new Date(baseDate)
+  
+  // 월요일을 기준으로 주차 계산 (0=일요일, 1=월요일)
+  const dayOfWeek = startOfWeek.getDay()
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // 일요일이면 -6, 아니면 1-dayOfWeek
+  
+  startOfWeek.setDate(startOfWeek.getDate() + mondayOffset)
+  startOfWeek.setHours(0, 0, 0, 0) // 시간을 00:00:00으로 설정
+  
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6) // 월요일부터 일요일까지
+  endOfWeek.setHours(23, 59, 59, 999) // 시간을 23:59:59로 설정
+  
+  return {
+    start: startOfWeek,
+    end: endOfWeek,
+    startString: startOfWeek.toISOString().split('T')[0],
+    endString: endOfWeek.toISOString().split('T')[0]
+  }
+}
+
+// 주차 레이블 생성
+const getWeekLabel = (startDate: Date, endDate: Date) => {
+  const now = new Date()
+  const currentWeek = getWeekRange(now)
+  
+  const isCurrentWeek = startDate.getTime() === currentWeek.start.getTime()
+  
+  if (isCurrentWeek) {
+    return '이번주'
+  }
+  
+  const startMonth = startDate.getMonth() + 1
+  const startDay = startDate.getDate()
+  const endMonth = endDate.getMonth() + 1
+  const endDay = endDate.getDate()
+  
+  if (startMonth === endMonth) {
+    return `${startMonth}월 ${startDay}일~${endDay}일`
+  } else {
+    return `${startMonth}월 ${startDay}일~${endMonth}월 ${endDay}일`
+  }
 }
 
 
@@ -42,23 +83,27 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0) // 0 = 이번주, -1 = 저번주, 1 = 다음주
   
-  // 이번 주 범위 계산 (API 호출용)
-  const now = new Date()
-  const weekStart = new Date(now)
-  const weekEnd = new Date(now)
-  weekEnd.setDate(weekEnd.getDate() + 6)
-  
-  const weekStartString = weekStart.toISOString().split('T')[0]
-  const weekEndString = weekEnd.toISOString().split('T')[0]
+  // 현재 선택된 주차 범위 계산
+  const currentWeekRange = useMemo(() => {
+    const now = new Date()
+    const targetDate = new Date(now)
+    targetDate.setDate(now.getDate() + (currentWeekOffset * 7))
+    return getWeekRange(targetDate)
+  }, [currentWeekOffset])
   
   // 이벤트 데이터 로딩
   const loadEvents = async () => {
     try {
       setLoading(true)
       setError(null)
-      const eventData = await calendarService.getEvents(weekStartString, weekEndString)
+      
+      const eventData = await calendarService.getEventsByDateRange(
+        currentWeekRange.startString, 
+        currentWeekRange.endString
+      )
+      
       setEvents(eventData)
     } catch (err) {
       console.error('Failed to load events:', err)
@@ -70,7 +115,7 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
 
   useEffect(() => {
     loadEvents()
-  }, [weekStartString, weekEndString])
+  }, [currentWeekRange.startString, currentWeekRange.endString])
 
   // 외부에서 새로고침 이벤트 수신
   useEffect(() => {
@@ -81,26 +126,46 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
 
     window.addEventListener('refreshCalendar', handleRefresh)
     return () => window.removeEventListener('refreshCalendar', handleRefresh)
-  }, [weekStartString, weekEndString])
+  }, [currentWeekRange.startString, currentWeekRange.endString])
+
+  // 주차 네비게이션
+  const goToPreviousWeek = () => {
+    setCurrentWeekOffset(prev => prev - 1)
+  }
+
+  const goToNextWeek = () => {
+    setCurrentWeekOffset(prev => prev + 1)
+  }
+
+  const goToCurrentWeek = () => {
+    setCurrentWeekOffset(0)
+  }
   
   // 시간 포맷팅 (HH:MM)
   const formatEventTime = (timeString: string) => {
     return timeString.split('T')[1]?.slice(0, 5) || ''
   }
   
-  // 이번 주 이벤트 필터링 (오늘부터 7일간)
+  // 선택된 주차의 이벤트 필터링 및 정렬
   const { displayEvents, remainingCount } = useMemo(() => {
     const now = new Date()
-    const weekStart = new Date(now)
-    const weekEnd = new Date(now)
-    weekEnd.setDate(weekEnd.getDate() + 6) // 오늘부터 6일 후까지
+    const todayStr = now.toISOString().split('T')[0]
     
+    // 이미 API에서 해당 주차 데이터만 가져오므로 추가 필터링 불필요
     const allWeekEvents = events
-      .filter(event => {
-        const eventDate = new Date(event.start_time)
-        return eventDate >= weekStart && eventDate <= weekEnd
+      .map(event => ({
+        ...event,
+        isToday: event.start_time.split('T')[0] === todayStr,
+        eventDate: new Date(event.start_time)
+      }))
+      .sort((a, b) => {
+        // 우선순위 정렬: 오늘 일정을 최우선으로 표시
+        if (a.isToday && !b.isToday) return -1
+        if (!a.isToday && b.isToday) return 1
+        
+        // 둘 다 오늘이거나 둘 다 오늘이 아닌 경우 시간순 정렬
+        return a.start_time.localeCompare(b.start_time)
       })
-      .sort((a, b) => a.start_time.localeCompare(b.start_time))
     
     const displayEvents = allWeekEvents.slice(0, 15) // 최대 15개까지만 표시
     const remainingCount = allWeekEvents.length - 15
@@ -117,16 +182,41 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            이번 주 일정
+            {getWeekLabel(currentWeekRange.start, currentWeekRange.end)} 일정
           </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push('/calendar')}
-            className="text-xs"
-          >
-            전체 보기
-          </Button>
+          
+          {/* 주차 네비게이션 */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPreviousWeek}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            {/* 이번주로 돌아가기 버튼 (현재 이번주가 아닐 때만 표시) */}
+            {currentWeekOffset !== 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToCurrentWeek}
+                className="text-xs px-2 h-8"
+              >
+                이번주
+              </Button>
+            )}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextWeek}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       
@@ -150,12 +240,12 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
           <div className="space-y-3">
             {displayEvents.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                이번 주 일정이 없습니다.
+                {getWeekLabel(currentWeekRange.start, currentWeekRange.end)} 일정이 없습니다.
               </div>
             ) : (
               <>
                 {displayEvents.map((event, index) => {
-                const eventColor = getEventColor(event.event_type)
+                const eventColor = getEventColor(event.event_type || '')
                 const eventCategory = eventCategories.find(cat => cat.value === event.event_type)
                 // UTC 기준으로 날짜 비교 (시간대 변환 무시)
                 const eventDateStr = event.start_time.split('T')[0] // YYYY-MM-DD만 추출
@@ -179,7 +269,9 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
                 return (
                   <div
                     key={event.id || index}
-                    className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                    className={`flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors ${
+                      isToday ? 'ring-2 ring-blue-200 bg-blue-50/50' : ''
+                    }`}
                   >
                     {/* 이벤트 색상 인디케이터 */}
                     <div
@@ -189,10 +281,14 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
                     
                     {/* 시간 정보 */}
                     <div className="flex flex-col items-center min-w-[60px] text-center">
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      <span className={`text-xs font-medium uppercase tracking-wide ${
+                        isToday ? 'text-blue-600 font-bold' : 'text-muted-foreground'
+                      }`}>
                         {dateLabel}
                       </span>
-                      <span className="text-lg font-bold text-foreground">
+                      <span className={`text-lg font-bold ${
+                        isToday ? 'text-blue-600' : 'text-foreground'
+                      }`}>
                         {formatEventTime(event.start_time)}
                       </span>
                     </div>
@@ -227,16 +323,12 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
                 )
                 })}
                 
-                {/* "+N개 더 보기" 버튼 */}
+                {/* 더 많은 일정이 있는 경우 알림 */}
                 {remainingCount > 0 && (
-                  <div className="pt-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => router.push('/calendar')}
-                      className="w-full text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    >
-                      +{remainingCount}개 더 보기
-                    </Button>
+                  <div className="pt-2 text-center">
+                    <span className="text-sm text-muted-foreground">
+                      +{remainingCount}개의 일정이 더 있습니다
+                    </span>
                   </div>
                 )}
               </>

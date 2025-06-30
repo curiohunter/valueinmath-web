@@ -28,3 +28,4 @@ pnpm-debug.log*
 # MCP Taskmaster 데이터
 .taskmaster-data/
 .cursor/
+.vercel

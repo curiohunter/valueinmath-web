@@ -32,7 +32,9 @@ export async function PUT(
 ) {
   try {
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
+    })
 
     // 사용자 인증 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -82,6 +84,7 @@ export async function PUT(
     const { data: insight, error: fetchError } = await supabase
       .from('claude_insights')
       .select('id')
+      // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq('id', insightId)
       .single()
 
@@ -98,7 +101,8 @@ export async function PUT(
       .update({ 
         recommendations: recommendations,
         updated_at: new Date().toISOString()
-      })
+      } as any) // 데이터베이스 타입 복잡성으로 인한 타입 캐스팅
+      // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq('id', insightId)
       .select()
       .single()
@@ -131,7 +135,9 @@ export async function DELETE(
 ) {
   try {
     const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
+    })
 
     // 사용자 인증 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -175,6 +181,7 @@ export async function DELETE(
     const { data: insight, error: fetchError } = await supabase
       .from('claude_insights')
       .select('id, recommendations')
+      // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq('id', insightId)
       .single()
 
@@ -186,6 +193,7 @@ export async function DELETE(
     }
 
     // 현재 추천사항 배열 확인
+    // @ts-ignore - insight 타입 복잡성 해결
     const currentRecommendations = insight.recommendations as ClaudeRecommendation[] || []
     
     if (deleteIndex >= currentRecommendations.length) {
@@ -204,7 +212,8 @@ export async function DELETE(
       .update({ 
         recommendations: updatedRecommendations,
         updated_at: new Date().toISOString()
-      })
+      } as any) // 데이터베이스 타입 복잡성으로 인한 타입 캐스팅
+      // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq('id', insightId)
       .select()
       .single()

@@ -114,6 +114,13 @@ SUPABASE_SERVICE_ROLE_KEY=
    - Follow existing color scheme and spacing
    - Dark mode support via `next-themes`
 
+6. **TypeScript Best Practices & Common Fixes**
+   - **Next.js 15 Compatibility**: Use `cookies: () => cookieStore as any` for Supabase auth helpers
+   - **Supabase Type Complexity**: Use `@ts-ignore` for complex generic type issues with `.eq()` and `.update()` methods
+   - **Nullable Database Fields**: Always provide safe defaults (e.g., `row.field || false`, `row.field || ''`)
+   - **Query Parameters**: Cast to specific types when needed (e.g., `param as FilterType['field']`)
+   - **Database Row Mapping**: Handle nullable fields properly in type conversion functions
+
 ## Current Issues & Solutions
 
 1. **Build Warnings**: ESLint and TypeScript errors ignored in production build

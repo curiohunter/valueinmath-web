@@ -20,7 +20,7 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const supabase = createClientComponentClient()
+  const supabase = createClientComponentClient<Database>()
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}

@@ -7,7 +7,9 @@ export async function POST(request: Request) {
   try {
     // 인증 확인
     const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ cookies: () => cookieStore })
+    const supabase = createServerComponentClient({ 
+      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
+    })
     const { data: { session } } = await supabase.auth.getSession()
     
     if (!session) {

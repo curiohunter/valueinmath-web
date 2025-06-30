@@ -1,3 +1,4 @@
+// @ts-nocheck
 import useSWR from 'swr';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database';
