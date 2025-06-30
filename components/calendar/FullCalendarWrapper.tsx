@@ -223,6 +223,65 @@ const vercelCalendarStyles = `
     background-color: hsl(var(--primary/90));
     transform: scale(1.1);
   }
+
+  /* More Events 모달 스타일링 - 투명 배경 문제 해결 */
+  .fc-more-popover {
+    background-color: hsl(var(--background)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05) !important;
+    z-index: 50 !important;
+  }
+  
+  .fc-more-popover .fc-popover-header {
+    background-color: hsl(var(--muted/50)) !important;
+    border-bottom: 1px solid hsl(var(--border)) !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+  }
+  
+  .fc-more-popover .fc-popover-title {
+    color: hsl(var(--foreground)) !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    margin: 0 !important;
+  }
+  
+  .fc-more-popover .fc-popover-body {
+    background-color: hsl(var(--background)) !important;
+    padding: 0.5rem !important;
+    max-height: 200px !important;
+    overflow-y: auto !important;
+  }
+  
+  .fc-more-popover .fc-event {
+    margin: 2px 0 !important;
+    padding: 4px 8px !important;
+    border-radius: 0.25rem !important;
+    font-size: 0.75rem !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+  }
+  
+  .fc-more-popover .fc-event:hover {
+    opacity: 0.8 !important;
+    transform: translateX(2px) !important;
+  }
+  
+  .fc-more-popover .fc-popover-close {
+    color: hsl(var(--muted-foreground)) !important;
+    font-size: 1.25rem !important;
+    line-height: 1 !important;
+    padding: 0.25rem !important;
+    margin: -0.25rem !important;
+    border-radius: 0.25rem !important;
+    transition: all 0.15s ease !important;
+  }
+  
+  .fc-more-popover .fc-popover-close:hover {
+    background-color: hsl(var(--muted)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
 `
 
 export default function FullCalendarWrapper() {

@@ -11,37 +11,36 @@ interface DashboardCalendarProps {
   className?: string
 }
 
-// 주차별 날짜 계산 헬퍼 함수 (월요일 시작)
-const getWeekRange = (baseDate: Date) => {
-  const startOfWeek = new Date(baseDate)
+// 날짜 범위 계산 헬퍼 함수 (오늘 기준 1주일)
+const getDateRange = (baseDate: Date, offsetDays: number = 0) => {
+  const targetDate = new Date(baseDate)
+  targetDate.setDate(baseDate.getDate() + offsetDays)
   
-  // 월요일을 기준으로 주차 계산 (0=일요일, 1=월요일)
-  const dayOfWeek = startOfWeek.getDay()
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // 일요일이면 -6, 아니면 1-dayOfWeek
+  // 오늘부터 6일 후까지 (총 7일)
+  const startDate = new Date(targetDate)
+  startDate.setHours(0, 0, 0, 0)
   
-  startOfWeek.setDate(startOfWeek.getDate() + mondayOffset)
-  startOfWeek.setHours(0, 0, 0, 0) // 시간을 00:00:00으로 설정
-  
-  const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 6) // 월요일부터 일요일까지
-  endOfWeek.setHours(23, 59, 59, 999) // 시간을 23:59:59로 설정
+  const endDate = new Date(targetDate)
+  endDate.setDate(startDate.getDate() + 6)
+  endDate.setHours(23, 59, 59, 999)
   
   return {
-    start: startOfWeek,
-    end: endOfWeek,
-    startString: startOfWeek.toISOString().split('T')[0],
-    endString: endOfWeek.toISOString().split('T')[0]
+    start: startDate,
+    end: endDate,
+    startString: startDate.toISOString().split('T')[0],
+    endString: endDate.toISOString().split('T')[0]
   }
 }
 
-// 주차 레이블 생성
-const getWeekLabel = (startDate: Date, endDate: Date) => {
+// 날짜 범위 레이블 생성
+const getDateRangeLabel = (startDate: Date, endDate: Date) => {
   const now = new Date()
-  const currentWeek = getWeekRange(now)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const rangeStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
   
-  const isCurrentWeek = startDate.getTime() === currentWeek.start.getTime()
+  const isCurrentRange = today.getTime() === rangeStart.getTime()
   
-  if (isCurrentWeek) {
+  if (isCurrentRange) {
     return '이번주'
   }
   
@@ -83,15 +82,13 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentWeekOffset, setCurrentWeekOffset] = useState(0) // 0 = 이번주, -1 = 저번주, 1 = 다음주
+  const [currentDateOffset, setCurrentDateOffset] = useState(0) // 0 = 오늘부터, -7 = 7일 전부터, 7 = 7일 후부터
   
-  // 현재 선택된 주차 범위 계산
-  const currentWeekRange = useMemo(() => {
+  // 현재 선택된 날짜 범위 계산
+  const currentDateRange = useMemo(() => {
     const now = new Date()
-    const targetDate = new Date(now)
-    targetDate.setDate(now.getDate() + (currentWeekOffset * 7))
-    return getWeekRange(targetDate)
-  }, [currentWeekOffset])
+    return getDateRange(now, currentDateOffset)
+  }, [currentDateOffset])
   
   // 이벤트 데이터 로딩
   const loadEvents = async () => {
@@ -100,8 +97,8 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
       setError(null)
       
       const eventData = await calendarService.getEventsByDateRange(
-        currentWeekRange.startString, 
-        currentWeekRange.endString
+        currentDateRange.startString, 
+        currentDateRange.endString
       )
       
       setEvents(eventData)
@@ -115,7 +112,7 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
 
   useEffect(() => {
     loadEvents()
-  }, [currentWeekRange.startString, currentWeekRange.endString])
+  }, [currentDateRange.startString, currentDateRange.endString])
 
   // 외부에서 새로고침 이벤트 수신
   useEffect(() => {
@@ -126,19 +123,19 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
 
     window.addEventListener('refreshCalendar', handleRefresh)
     return () => window.removeEventListener('refreshCalendar', handleRefresh)
-  }, [currentWeekRange.startString, currentWeekRange.endString])
+  }, [currentDateRange.startString, currentDateRange.endString])
 
-  // 주차 네비게이션
+  // 날짜 네비게이션
   const goToPreviousWeek = () => {
-    setCurrentWeekOffset(prev => prev - 1)
+    setCurrentDateOffset(prev => prev - 7)
   }
 
   const goToNextWeek = () => {
-    setCurrentWeekOffset(prev => prev + 1)
+    setCurrentDateOffset(prev => prev + 7)
   }
 
   const goToCurrentWeek = () => {
-    setCurrentWeekOffset(0)
+    setCurrentDateOffset(0)
   }
   
   // 시간 포맷팅 (HH:MM)
@@ -146,37 +143,39 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
     return timeString.split('T')[1]?.slice(0, 5) || ''
   }
   
-  // 선택된 주차의 이벤트 필터링 및 정렬
-  const { displayEvents, remainingCount } = useMemo(() => {
-    // 한국 시간 기준으로 오늘 날짜 계산 (YYYY-MM-DD 형식)
-    const today = new Date()
-    const todayStr = today.getFullYear() + '-' + 
-                    String(today.getMonth() + 1).padStart(2, '0') + '-' + 
-                    String(today.getDate()).padStart(2, '0')
+  // 구글 캘린더 스타일로 날짜별 그룹핑된 이벤트 생성
+  const groupedEventsByDate = useMemo(() => {
+    // 날짜별로 이벤트 그룹핑
+    const grouped = new Map<string, CalendarEvent[]>()
     
-    // 이미 API에서 해당 주차 데이터만 가져오므로 추가 필터링 불필요
-    const allWeekEvents = events
-      .map(event => ({
-        ...event,
-        isToday: event.start_time.split('T')[0] === todayStr,
-        eventDate: new Date(event.start_time)
-      }))
-      .sort((a, b) => {
-        // 우선순위 정렬: 오늘 일정을 최우선으로 표시
-        if (a.isToday && !b.isToday) return -1
-        if (!a.isToday && b.isToday) return 1
-        
-        // 둘 다 오늘이거나 둘 다 오늘이 아닌 경우 시간순 정렬
-        return a.start_time.localeCompare(b.start_time)
-      })
+    events.forEach(event => {
+      const dateStr = event.start_time.split('T')[0]
+      if (!grouped.has(dateStr)) {
+        grouped.set(dateStr, [])
+      }
+      grouped.get(dateStr)!.push(event)
+    })
     
-    const displayEvents = allWeekEvents.slice(0, 15) // 최대 15개까지만 표시
-    const remainingCount = allWeekEvents.length - 15
+    // 날짜 순으로 정렬하고 구글 캘린더 스타일로 구성
+    const sortedDates = Array.from(grouped.keys()).sort()
     
-    return {
-      displayEvents,
-      remainingCount: remainingCount > 0 ? remainingCount : 0
-    }
+    return sortedDates.map(dateStr => {
+      const date = new Date(dateStr + 'T00:00:00')
+      const dayEvents = grouped.get(dateStr)!.sort((a, b) => 
+        a.start_time.localeCompare(b.start_time)
+      )
+      
+      return {
+        date: dateStr,
+        dateObj: date,
+        dayLabel: date.toLocaleDateString('ko-KR', { 
+          month: 'short', 
+          day: 'numeric',
+          weekday: 'short'
+        }),
+        events: dayEvents
+      }
+    })
   }, [events])
 
   return (
@@ -185,10 +184,10 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            {getWeekLabel(currentWeekRange.start, currentWeekRange.end)} 일정
+            {getDateRangeLabel(currentDateRange.start, currentDateRange.end)} 일정
           </CardTitle>
           
-          {/* 주차 네비게이션 */}
+          {/* 날짜 네비게이션 */}
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
@@ -199,15 +198,15 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
               <ChevronLeft className="h-4 w-4" />
             </Button>
             
-            {/* 이번주로 돌아가기 버튼 (현재 이번주가 아닐 때만 표시) */}
-            {currentWeekOffset !== 0 && (
+            {/* 오늘로 돌아가기 버튼 (현재 범위가 아닐 때만 표시) */}
+            {currentDateOffset !== 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={goToCurrentWeek}
                 className="text-xs px-2 h-8"
               >
-                이번주
+                오늘
               </Button>
             )}
             
@@ -238,100 +237,98 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
           </div>
         )}
         
-        {/* 일정 리스트 */}
+        {/* 구글 캘린더 스타일 일정 리스트 */}
         {!loading && !error && (
-          <div className="space-y-3">
-            {displayEvents.length === 0 ? (
+          <div className="space-y-4">
+            {groupedEventsByDate.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {getWeekLabel(currentWeekRange.start, currentWeekRange.end)} 일정이 없습니다.
+                {getDateRangeLabel(currentDateRange.start, currentDateRange.end)} 일정이 없습니다.
               </div>
             ) : (
               <>
-                {displayEvents.map((event, index) => {
-                const eventColor = getEventColor(event.event_type || '')
-                const eventCategory = eventCategories.find(cat => cat.value === event.event_type)
-                // 로컬 시간 기준으로 날짜 비교 (KST)
-                const eventDateStr = event.start_time.split('T')[0] // YYYY-MM-DD만 추출
-                const today = new Date()
-                const todayStr = today.getFullYear() + '-' + 
-                                String(today.getMonth() + 1).padStart(2, '0') + '-' + 
-                                String(today.getDate()).padStart(2, '0')
-                
-                const isToday = eventDateStr === todayStr
-                
-                const eventDate = new Date(event.start_time)
-                
-                const dateLabel = eventDate.toLocaleDateString('ko-KR', { 
-                  month: 'short', 
-                  day: 'numeric',
-                  weekday: 'short'
-                })
-                
-                return (
-                  <div
-                    key={event.id || index}
-                    className={`flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors ${
-                      isToday ? 'ring-2 ring-blue-200 bg-blue-50/50' : ''
-                    }`}
-                  >
-                    {/* 이벤트 색상 인디케이터 */}
-                    <div
-                      className="w-1 h-16 rounded-full flex-shrink-0 mt-0.5"
-                      style={{ backgroundColor: eventColor }}
-                    />
-                    
-                    {/* 시간 정보 */}
-                    <div className="flex flex-col items-center min-w-[60px] text-center">
-                      <span className={`text-xs font-medium uppercase tracking-wide ${
-                        isToday ? 'text-blue-600 font-bold' : 'text-muted-foreground'
+                {groupedEventsByDate.map((dayGroup, dayIndex) => {
+                  const today = new Date()
+                  const todayStr = today.getFullYear() + '-' + 
+                                  String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                                  String(today.getDate()).padStart(2, '0')
+                  const isToday = dayGroup.date === todayStr
+                  
+                  return (
+                    <div key={dayGroup.date} className="space-y-2">
+                      {/* 날짜 헤더 */}
+                      <div className={`flex items-center gap-3 pb-2 border-b ${
+                        isToday ? 'border-blue-200' : 'border-border'
                       }`}>
-                        {dateLabel}
-                      </span>
-                      <span className={`text-lg font-bold ${
-                        isToday ? 'text-blue-600' : 'text-foreground'
-                      }`}>
-                        {formatEventTime(event.start_time)}
-                      </span>
-                    </div>
-                    
-                    {/* 이벤트 내용 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold text-foreground truncate">
-                          {event.title}
-                        </h4>
-                        <span 
-                          className="text-xs px-2 py-1 rounded-full text-white flex-shrink-0"
-                          style={{ backgroundColor: eventColor }}
-                        >
-                          {eventCategory?.label || event.event_type}
-                        </span>
+                        <div className={`text-lg font-bold ${
+                          isToday ? 'text-blue-600' : 'text-foreground'
+                        }`}>
+                          {dayGroup.dateObj.getDate()}
+                        </div>
+                        <div className="flex-1">
+                          <div className={`text-sm font-medium ${
+                            isToday ? 'text-blue-600' : 'text-foreground'
+                          }`}>
+                            {dayGroup.dayLabel}
+                          </div>
+                          {isToday && (
+                            <div className="text-xs text-blue-500 font-medium">오늘</div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {dayGroup.events.length}개 일정
+                        </div>
                       </div>
                       
-                      {event.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {event.description}
-                        </p>
-                      )}
-                      
-                      {event.location && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          📍 {event.location}
-                        </p>
-                      )}
+                      {/* 해당 날짜의 이벤트들 */}
+                      <div className="space-y-1 ml-6">
+                        {dayGroup.events.map((event, eventIndex) => {
+                          const eventColor = getEventColor(event.event_type || '')
+                          const eventCategory = eventCategories.find(cat => cat.value === event.event_type)
+                          
+                          return (
+                            <div
+                              key={event.id || `${dayIndex}-${eventIndex}`}
+                              className={`flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer ${
+                                isToday ? 'bg-blue-50/30' : ''
+                              }`}
+                            >
+                              {/* 이벤트 색상 도트 */}
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: eventColor }}
+                              />
+                              
+                              {/* 시간 */}
+                              <div className="text-sm font-medium text-muted-foreground min-w-[60px]">
+                                {formatEventTime(event.start_time)}
+                              </div>
+                              
+                              {/* 이벤트 제목 */}
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-foreground truncate">
+                                  {event.title}
+                                </div>
+                                {event.description && (
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {event.description}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* 카테고리 뱃지 */}
+                              <div 
+                                className="text-xs px-2 py-1 rounded-full text-white flex-shrink-0"
+                                style={{ backgroundColor: eventColor }}
+                              >
+                                {eventCategory?.label || event.event_type}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )
+                  )
                 })}
-                
-                {/* 더 많은 일정이 있는 경우 알림 */}
-                {remainingCount > 0 && (
-                  <div className="pt-2 text-center">
-                    <span className="text-sm text-muted-foreground">
-                      +{remainingCount}개의 일정이 더 있습니다
-                    </span>
-                  </div>
-                )}
               </>
             )}
           </div>
