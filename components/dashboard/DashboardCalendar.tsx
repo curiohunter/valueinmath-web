@@ -149,7 +149,8 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
   // 선택된 주차의 이벤트 필터링 및 정렬
   const { displayEvents, remainingCount } = useMemo(() => {
     const now = new Date()
-    const todayStr = now.toISOString().split('T')[0]
+    // 한국 시간(KST)으로 오늘 날짜 계산
+    const todayStr = new Date(now.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0]
     
     // 이미 API에서 해당 주차 데이터만 가져오므로 추가 필터링 불필요
     const allWeekEvents = events
