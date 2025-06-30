@@ -8,9 +8,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2 } from "lucide-react"
+import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
+import ConsultationCard from "@/components/dashboard/ConsultationCard"
+import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { calendarService } from "@/services/calendar"
+import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
 import type { Database } from "@/types/database"
 
 type Student = Database['public']['Tables']['students']['Row']
@@ -39,6 +45,7 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [consultations, setConsultations] = useState<ConsultationData[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats>({
     activeStudents: 0,
     activeStudentsChange: "+0%",
@@ -55,19 +62,30 @@ export default function DashboardPage() {
   const [editingTest, setEditingTest] = useState<EntranceTestData | null>(null)
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
+  const [expandedConsultations, setExpandedConsultations] = useState<Set<string>>(new Set())
+  const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set())
+
+  // UTC로 저장된 datetime을 한국시간으로 정확히 변환하여 표시하는 헬퍼 함수
+  const formatKoreanDateTime = (utcDateString: string): string => {
+    const utcDate = new Date(utcDateString)
+    // timeZone 옵션을 사용하여 올바른 한국시간 표시
+    return utcDate.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+  }
+
+  // UTC로 저장된 datetime을 datetime-local input 형식으로 변환하는 헬퍼 함수
+  const formatKoreanDateTimeForInput = (utcDateString: string | null): string => {
+    if (!utcDateString) return ''
+    const utcDate = new Date(utcDateString)
+    const koreanTime = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000))
+    return koreanTime.toISOString().slice(0, 16)
+  }
 
   // 통계 데이터 로딩
   const loadStats = async () => {
     try {
-      const now = new Date()
-      const currentYear = now.getFullYear()
-      const currentMonth = now.getMonth() + 1
-      const monthStart = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`
-      const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1
-      const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear
-      const monthEnd = `${nextYear}-${nextMonth.toString().padStart(2, '0')}-01`
+      // 한국시간 기준 월간 범위 계산
+      const { start: monthStart, end: monthEnd } = getKoreanMonthRange()
 
-      console.log('날짜 범위:', { monthStart, monthEnd })
 
       // 재원생 수
       const { data: activeStudents } = await supabase
@@ -82,7 +100,6 @@ export default function DashboardPage() {
         .gte('first_contact_date', monthStart)
         .lt('first_contact_date', monthEnd)
 
-      console.log('이번달 신규상담:', consultationsData)
 
       // 이번달 입학테스트 (test_date 기준) - 수정됨
       const { data: testsData } = await supabase
@@ -91,7 +108,6 @@ export default function DashboardPage() {
         .gte('test_date', monthStart)
         .lt('test_date', monthEnd)
 
-      console.log('이번달 입학테스트:', testsData)
 
       // 이번달 신규등원 (start_date 기준)
       const { data: newEnrollments } = await supabase
@@ -101,13 +117,22 @@ export default function DashboardPage() {
         .lt('start_date', monthEnd)
         .eq('status', '재원')
 
-      // 이번달 퇴원 (end_date 기준)
-      const { data: withdrawals } = await supabase
+      // 이번달 퇴원 (end_date 기준) - 한국시간 범위 적용
+      const { data: withdrawals, error: withdrawalError } = await supabase
         .from('students')
         .select('*')
         .gte('end_date', monthStart)
         .lt('end_date', monthEnd)
         .eq('status', '퇴원')
+
+      if (withdrawalError) {
+        console.error('퇴원 쿼리 에러:', withdrawalError)
+      }
+
+      // 퇴원 학생들의 상세 정보 로그
+      if (withdrawals && withdrawals.length > 0) {
+        // 퇴원 학생 데이터 처리 (로그 제거됨)
+      }
 
       // 부서별 상담 분류
       const consultationsByDept: { [key: string]: number } = {}
@@ -153,7 +178,6 @@ export default function DashboardPage() {
         .limit(10)
 
       if (error) throw error
-      console.log('신규상담 데이터:', data)
       setConsultations(data || [])
     } catch (error) {
       console.error('신규상담 데이터 로딩 오류:', error)
@@ -186,7 +210,6 @@ export default function DashboardPage() {
         student_name: (test.students as any)?.name || '이름 없음'
       })).slice(0, 10) || [] // 최대 10개만 표시
 
-      console.log('입학테스트 데이터 (신규상담만):', testsWithNames)
       setEntranceTests(testsWithNames)
     } catch (error) {
       console.error('입학테스트 데이터 로딩 오류:', error)
@@ -206,20 +229,21 @@ export default function DashboardPage() {
 
       if (error) throw error
       
-      // 데이터 새로고침
-      loadEntranceTests()
-      loadStats()
-      
-      // 상담 상태는 그대로 두기 (신규상담 유지)
-      loadConsultations()
+      // 입학테스트 생성 후 필요한 데이터만 새로고침
+      await loadStats() // 통계 업데이트
+      await loadEntranceTests() // 테스트 목록 업데이트
     } catch (error) {
       console.error('입학테스트 생성 오류:', error)
     }
   }
 
   function cleanObj<T extends object>(obj: T): T {
-    // undefined 속성 제거
-    return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined)) as T
+    // undefined 속성 제거 및 빈 문자열을 null로 변환
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, v === '' ? null : v])
+    ) as T
   }
 
   const handleConsultationSave = async (consultationData: Partial<ConsultationData>) => {
@@ -254,19 +278,20 @@ export default function DashboardPage() {
         if (error) throw error
       }
       
-      // 모든 데이터 새로고침 (상태 변경 시 입학테스트 목록도 업데이트)
-      await Promise.all([
-        loadConsultations(),
-        loadStats(),
-        loadEntranceTests() // 입학테스트 목록도 새로고침
-      ])
+      // 상담 저장 후 필요한 데이터만 새로고침
+      await loadStats() // 통계만 업데이트
+      await loadConsultations() // 상담 목록 업데이트
+      
+      // 상태가 신규상담에서 다른 상태로 변경된 경우에만 입학테스트 목록 업데이트
+      if (originalStatus === '신규상담' && newStatus !== '신규상담') {
+        await loadEntranceTests()
+      }
       
       setIsConsultationModalOpen(false)
       setEditingConsultation(null)
       
       // 상태 변경 알림 (신규상담 -> 다른 상태로 변경 시)
       if (originalStatus === '신규상담' && newStatus !== '신규상담') {
-        console.log(`학생 상태 변경: ${originalStatus} -> ${newStatus}, 입학테스트 목록에서 제거됨`)
       }
     } catch (error) {
       console.error('신규상담 저장 오류:', error)
@@ -281,8 +306,8 @@ export default function DashboardPage() {
         .delete()
         .eq('id', id)
       if (error) throw error
-      loadConsultations()
-      loadStats()
+      await loadStats() // 통계 업데이트
+      await loadConsultations() // 상담 목록 업데이트
     } catch (error) {
       console.error('신규상담 삭제 오류:', error)
     }
@@ -296,8 +321,8 @@ export default function DashboardPage() {
         .delete()
         .eq('id', id)
       if (error) throw error
-      loadEntranceTests()
-      loadStats()
+      await loadStats() // 통계 업데이트
+      await loadEntranceTests() // 테스트 목록 업데이트
     } catch (error) {
       console.error('입학테스트 삭제 오류:', error)
     }
@@ -305,11 +330,14 @@ export default function DashboardPage() {
 
   const handleTestSave = async (testData: Partial<EntranceTestData>) => {
     try {
-      console.log('저장할 데이터:', testData)
-      console.log('편집 중인 테스트:', editingTest)
       
-      const cleanData = cleanObj(testData)
-      console.log('정리된 데이터:', cleanData)
+      // test_result가 빈 문자열이면 null로 변환
+      const cleanedTestData = {
+        ...testData,
+        test_result: testData.test_result === '' ? null : testData.test_result
+      }
+      
+      const cleanData = cleanObj(cleanedTestData)
       
       if (editingTest) {
         const { data, error } = await supabase
@@ -318,7 +346,6 @@ export default function DashboardPage() {
           .eq('id', editingTest.id)
           .select()
         
-        console.log('Supabase 응답:', { data, error })
         
         if (error) {
           console.error('Supabase 에러 상세:', {
@@ -330,8 +357,8 @@ export default function DashboardPage() {
           throw error
         }
         
-        loadEntranceTests()
-        loadStats()
+        await loadStats() // 통계만 업데이트
+        await loadEntranceTests() // 테스트 목록 업데이트
         setIsTestModalOpen(false)
         setEditingTest(null)
       }
@@ -341,41 +368,245 @@ export default function DashboardPage() {
     }
   }
 
+  // 캘린더 일정 등록
+  const handleCreateCalendarEvent = async (test: EntranceTestData) => {
+    
+    if (!test.test_date) {
+      alert('테스트 정보가 없습니다.')
+      return
+    }
+    
+    try {
+      // 기존 Google Calendar 일정이 있는지 확인
+      if (test.google_calendar_id) {
+        // 기존 일정 업데이트
+        const updateConfirm = confirm('이미 등록된 일정이 있습니다. 기존 일정을 업데이트하시겠습니까?')
+        if (!updateConfirm) {
+          return
+        }
+        
+        // 먼저 기존 calendar_events에서 해당 Google Calendar ID를 가진 이벤트 찾기
+        const { data: existingCalendarEvent } = await supabase
+          .from('calendar_events')
+          .select('id')
+          .eq('google_calendar_id', test.google_calendar_id)
+          .single()
+        
+        if (existingCalendarEvent) {
+          // 업데이트할 이벤트 데이터 준비
+          const studentName = test.student_name || '학생'
+          const subjects = []
+          if (test.test1_level) subjects.push(test.test1_level)
+          if (test.test2_level) subjects.push(test.test2_level)
+          
+          const title = `${studentName} ${subjects.join(', ')}`
+          
+          // 시간 형식을 통일하여 처리 (한국시간으로 저장)
+          let startTime = test.test_date
+          if (startTime.includes('+')) {
+            startTime = test.test_date
+          } else {
+            startTime = test.test_date.slice(0, 19)
+          }
+          
+          // 2시간 후 종료시간 계산
+          const startDate = new Date(startTime)
+          const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
+          const endTime = endDate.toISOString().slice(0, 19)
+          
+          const updateData = {
+            title,
+            start_time: startTime,
+            end_time: endTime,
+            description: `입학테스트 - ${studentName}`
+          }
+          
+          
+          // calendarService를 사용하여 이벤트 업데이트
+          await calendarService.updateEvent(existingCalendarEvent.id, updateData)
+          
+          alert('캘린더 일정이 업데이트되었습니다.')
+          
+          // 통계만 업데이트 (일정 업데이트 후)
+          await loadStats()
+          window.dispatchEvent(new CustomEvent('refreshCalendar'))
+          
+          return
+        }
+      }
+      
+      // 중복 등록 방지 - 이미 등록된 일정이 있는지 확인 (Google Calendar ID가 없는 경우)
+      const { data: existingEvents } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .eq('event_type', 'entrance_test')
+        .ilike('description', `%${test.student_name || '학생'}%`)
+        .gte('start_time', test.test_date.slice(0, 10)) // 같은 날짜
+        .lt('start_time', test.test_date.slice(0, 10) + 'T23:59:59')
+      
+      if (existingEvents && existingEvents.length > 0) {
+        alert('해당 학생의 입학테스트 일정이 이미 등록되어 있습니다.')
+        return
+      }
+
+      const studentName = test.student_name || '학생'
+      const subjects = []
+      if (test.test1_level) subjects.push(test.test1_level)
+      if (test.test2_level) subjects.push(test.test2_level)
+      
+      const title = `${studentName} ${subjects.join(', ')}`
+      
+      // 시간 형식을 통일하여 처리 (한국시간으로 저장)
+      let startTime = test.test_date
+      if (startTime.includes('+')) {
+        // 이미 시간대가 있는 경우 그대로 사용
+        startTime = test.test_date
+      } else {
+        // 시간대가 없는 경우 한국시간으로 처리
+        startTime = test.test_date.slice(0, 19)
+      }
+      
+      // 2시간 후 종료시간 계산
+      const startDate = new Date(startTime)
+      const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
+      const endTime = endDate.toISOString().slice(0, 19)
+      
+      const eventData = {
+        title,
+        start_time: startTime,
+        end_time: endTime,
+        event_type: 'entrance_test',
+        description: `입학테스트 - ${studentName}`
+      }
+      
+      
+      // calendarService를 사용하여 Google Calendar 연동 포함한 이벤트 생성
+      const response = await calendarService.createEvent(eventData)
+      
+      
+      // Google Calendar ID가 있으면 entrance_tests 테이블에도 저장
+      if (response.googleCalendarId) {
+        try {
+          const { error: updateError } = await supabase
+            .from('entrance_tests')
+            .update({ google_calendar_id: response.googleCalendarId })
+            .eq('id', test.id)
+          
+          if (updateError) {
+            console.error('entrance_tests 테이블 Google Calendar ID 업데이트 실패:', updateError)
+          } else {
+          }
+        } catch (error) {
+          console.error('entrance_tests 테이블 업데이트 중 오류:', error)
+        }
+      }
+      
+      alert('캘린더에 일정이 등록되었습니다.')
+      
+      // 통계만 업데이트 (캘린더 일정 등록 후)
+      await loadStats()
+      
+      // 캘린더 컴포넌트에 새로고침 이벤트 전송
+      window.dispatchEvent(new CustomEvent('refreshCalendar'))
+      
+    } catch (error) {
+      console.error('캘린더 등록 오류:', error)
+      alert('캘린더 등록 중 오류가 발생했습니다.')
+    }
+  }
+  
+  // 등록 결정
+  const handleEnrollmentDecision = async (testId: number, status: '재원' | '미등록') => {
+    try {
+      // 입학테스트에서 consultation_id 찾기
+      const { data: testData, error: testError } = await supabase
+        .from('entrance_tests')
+        .select('consultation_id')
+        .eq('id', testId)
+        .single()
+      
+      if (testError || !testData?.consultation_id) {
+        alert('학생 정보를 찾을 수 없습니다.')
+        return
+      }
+      
+      const { error } = await supabase
+        .from('students')
+        .update({ status })
+        .eq('id', testData.consultation_id)
+      
+      if (error) throw error
+      
+      alert(`학생 상태가 '${status}'로 변경되었습니다.`)
+      await loadStats() // 통계 업데이트
+      await loadConsultations() // 상담 목록 업데이트
+    } catch (error) {
+      console.error('상태 변경 오류:', error)
+      alert('상태 변경 중 오류가 발생했습니다.')
+    }
+  }
+
+  // 사용자 인증 상태 초기화
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.user) {
+          setCurrentUser(session.user)
+        } else {
+        }
+      } catch (error) {
+        console.error('인증 초기화 오류:', error)
+      }
+    }
+    
+    initAuth()
+    
+    // 인증 상태 변경 리스너
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setCurrentUser(session.user)
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null)
+      }
+    })
+    
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // 모든 데이터 새로고침 함수
+  const refreshAllData = async () => {
+    await Promise.all([
+      loadStats(),
+      loadConsultations(),
+      loadEntranceTests()
+    ])
+  }
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
-      await Promise.all([
-        loadStats(),
-        loadConsultations(),
-        loadEntranceTests()
-      ])
+      await refreshAllData()
       setLoading(false)
     }
     
     loadData()
-    
-    // 실시간 데이터 동기화를 위한 인터벌 (30초마다)
-    const interval = setInterval(() => {
-      console.log('대시보드 데이터 자동 새로고침')
-      Promise.all([
-        loadStats(),
-        loadConsultations(),
-        loadEntranceTests()
-      ])
-    }, 30000)
-    
-    return () => clearInterval(interval)
   }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "테스트고민": case "prospect": return "bg-yellow-100 text-yellow-800"
-      case "테스트예정": return "bg-blue-100 text-blue-800"
-      case "테스트완료": case "결과상담대기": return "bg-green-100 text-green-800"
-      case "상담대기": case "상담중": return "bg-orange-100 text-orange-800"
+      case "테스트고민": case "prospect": return "bg-amber-100 text-amber-800"
+      case "테스트예정": return "bg-sky-100 text-sky-800"
+      case "테스트완료": case "결과상담대기": return "bg-amber-100 text-amber-800"
+      case "결과상담완료": return "bg-emerald-100 text-emerald-800"
+      case "상담대기": case "상담중": return "bg-violet-100 text-violet-800"
       case "상담후고민": return "bg-purple-100 text-purple-800"
-      case "재원결정": case "재원": return "bg-green-100 text-green-800"
-      case "미등록결정": case "퇴원": return "bg-red-100 text-red-800"
+      case "재원결정": case "재원": return "bg-emerald-100 text-emerald-800"
+      case "미등록결정": case "퇴원": return "bg-gray-100 text-gray-800"
+      case "휴원": return "bg-amber-100 text-amber-800"
+      case "미등록": return "bg-slate-100 text-slate-800"
+      case "신규상담": return "bg-violet-100 text-violet-800"
       default: return "bg-gray-100 text-gray-800"
     }
   }
@@ -394,7 +625,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* 상단 5개 카드 - 수정된 그리드 */}
-      <div className="grid gap-3 grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {/* 재원생 */}
         <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -459,14 +690,14 @@ export default function DashboardPage() {
       </div>
 
       {/* 중간 영역: 신규상담 + 입학테스트 관리 */}
-      <div className="grid gap-4 grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
         {/* 왼쪽: 신규상담 목록 */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>신규상담 관리</CardTitle>
-                <CardDescription>상담 진행 중인 학생들을 관리합니다</CardDescription>
+                <CardTitle className="text-base">신규상담 관리</CardTitle>
+                <CardDescription className="text-xs">상담 진행 중인 학생들을 관리합니다</CardDescription>
               </div>
               <Button
                 onClick={() => {
@@ -474,66 +705,41 @@ export default function DashboardPage() {
                   setIsConsultationModalOpen(true)
                 }}
                 size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-foreground"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                신규 학생 등록
+                <Plus className="h-4 w-4 mr-1" />
+                신규 등록
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="pt-3">
+            <div className="space-y-2">
               {consultations.map((consultation) => (
-                <div key={consultation.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{consultation.name}</span>
-                      <Badge className={getStatusColor(consultation.status)}>
-                        {consultation.status}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      📞 {consultation.parent_phone}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      🏫 {consultation.school} · {consultation.grade}학년
-                    </div>
-                    {consultation.notes && (
-                      <div className="text-sm text-blue-600">
-                        💡 {consultation.notes}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-2 ml-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingConsultation(consultation)
-                        setIsConsultationModalOpen(true)
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleConsultationDelete(consultation.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleCreateTest(consultation.id)}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                <ConsultationCard
+                  key={consultation.id}
+                  student={consultation}
+                  isExpanded={expandedConsultations.has(consultation.id)}
+                  onToggle={() => {
+                    const newExpanded = new Set(expandedConsultations)
+                    if (newExpanded.has(consultation.id)) {
+                      newExpanded.delete(consultation.id)
+                    } else {
+                      newExpanded.add(consultation.id)
+                    }
+                    setExpandedConsultations(newExpanded)
+                  }}
+                  onEdit={() => {
+                    setEditingConsultation(consultation)
+                    setIsConsultationModalOpen(true)
+                  }}
+                  onDelete={() => handleConsultationDelete(consultation.id)}
+                  onCreateTest={handleCreateTest}
+                />
               ))}
               
               {consultations.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-6 text-sm text-muted-foreground">
                   신규상담 데이터가 없습니다
                 </div>
               )}
@@ -543,81 +749,39 @@ export default function DashboardPage() {
 
         {/* 오른쪽: 입학테스트 상세정보 */}
         <Card>
-          <CardHeader>
-            <CardTitle>입학테스트 관리</CardTitle>
-            <CardDescription>입학테스트 일정 및 결과를 관리합니다</CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">입학테스트 관리</CardTitle>
+            <CardDescription className="text-xs">입학테스트 일정 및 결과를 관리합니다</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          <CardContent className="pt-3">
+            <div className="space-y-2">
               {entranceTests.map((test) => (
-                <div key={test.id} className="p-3 border rounded-lg">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{test.student_name}</span>
-                      <div className="flex gap-2">
-                        <Badge className={getStatusColor(test.status || '')}>
-                          {test.status}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingTest(test)
-                            setIsTestModalOpen(true)
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleTestDelete(test.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    {test.test_date && (
-                      <div className="text-sm text-muted-foreground">
-                        📅 {new Date(test.test_date).toLocaleString('ko-KR')}
-                      </div>
-                    )}
-                    
-                    {test.test1_level && (
-                      <div className="text-sm text-muted-foreground">
-                        📚 테스트 과목: {test.test1_level}
-                        {test.test2_level && `, ${test.test2_level}`}
-                      </div>
-                    )}
-                    
-                    {(test.test1_score !== null || test.test2_score !== null) && (
-                      <div className="text-sm text-muted-foreground">
-                        📊 점수: 
-                        {test.test1_score !== null && ` 1차: ${test.test1_score}점`}
-                        {test.test2_score !== null && ` 2차: ${test.test2_score}점`}
-                      </div>
-                    )}
-                    
-                    {test.test_result && (
-                      <div className="text-sm">
-                        🎯 결과: <Badge variant={test.test_result === '합격' ? 'default' : 'destructive'}>
-                          {test.test_result}
-                        </Badge>
-                      </div>
-                    )}
-                    
-                    {test.recommended_class && (
-                      <div className="text-sm text-blue-600">
-                        💡 추천반: {test.recommended_class}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <EntranceTestCard
+                  key={test.id}
+                  entranceTest={test}
+                  isExpanded={expandedTests.has(test.id.toString())}
+                  onToggle={() => {
+                    const newExpanded = new Set(expandedTests)
+                    const testId = test.id.toString()
+                    if (newExpanded.has(testId)) {
+                      newExpanded.delete(testId)
+                    } else {
+                      newExpanded.add(testId)
+                    }
+                    setExpandedTests(newExpanded)
+                  }}
+                  onEdit={() => {
+                    setEditingTest(test)
+                    setIsTestModalOpen(true)
+                  }}
+                  onDelete={() => handleTestDelete(test.id)}
+                  onCreateCalendarEvent={handleCreateCalendarEvent}
+                  onEnrollmentDecision={handleEnrollmentDecision}
+                />
               ))}
               
               {entranceTests.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-6 text-sm text-muted-foreground">
                   신규상담에서 + 버튼을 눌러 입학테스트를 등록해주세요
                 </div>
               )}
@@ -626,28 +790,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 하단: 구글 캘린더 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            학원 일정
-          </CardTitle>
-          <CardDescription>구글 캘린더 연동 - 일정 보기</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="w-full h-[600px] border rounded-lg overflow-hidden">
-            <iframe
-              src="https://calendar.google.com/calendar/embed?height=600&wkst=1&bgcolor=%23ffffff&ctz=Asia%2FSeoul&src=c_6edb93aebb85915e7af73ada65813638d47da235dc6a0a758ebb596357fb9a64%40group.calendar.google.com&color=%23039BE5&mode=AGENDA"
-              width="100%"
-              height="600"
-              frameBorder="0"
-              scrolling="no"
-              className="rounded-lg"
-            />
-          </div>
-        </CardContent>
-      </Card>
+      {/* 하단: 학원 일정 캘린더 */}
+      <DashboardCalendar />
 
       {/* 신규상담 편집 모달 */}
       <ConsultationModal
@@ -663,6 +807,10 @@ export default function DashboardPage() {
         onOpenChange={setIsTestModalOpen}
         test={editingTest}
         onSave={handleTestSave}
+        onStatusChange={() => {
+          loadConsultations()
+          loadStats()
+        }}
       />
     </div>
   )
@@ -696,7 +844,7 @@ function ConsultationModal({
     has_sibling: false,
     start_date: '',
     end_date: '',
-    first_contact_date: new Date().toISOString().split('T')[0],
+    first_contact_date: getKoreanDateString(),
     notes: ''
   })
 
@@ -733,7 +881,7 @@ function ConsultationModal({
         has_sibling: false,
         start_date: '',
         end_date: '',
-        first_contact_date: new Date().toISOString().split('T')[0],
+        first_contact_date: getKoreanDateString(),
         notes: ''
       })
       setEndDateError(null)
@@ -758,6 +906,11 @@ function ConsultationModal({
 
     setIsSubmitting(true)
     try {
+      // 퇴원 처리 시 날짜 저장 로그 추가
+      if (formData.status === '퇴원' && formData.end_date) {
+        // 퇴원 처리 로직 (로그 제거됨)
+      }
+
       // 데이터 처리
       const submitData = {
         name: formData.name,
@@ -1023,15 +1176,19 @@ function TestModal({
   open,
   onOpenChange,
   test,
-  onSave
+  onSave,
+  onStatusChange
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   test: EntranceTestData | null
   onSave: (data: Partial<EntranceTestData>) => void
+  onStatusChange?: () => void
 }) {
   const [formData, setFormData] = useState({
     test_date: '',
+    test_hour: '14',
+    test_minute: '00',
     test1_level: '',
     test2_level: '',
     test1_score: '',
@@ -1041,10 +1198,36 @@ function TestModal({
     recommended_class: '',
     notes: ''
   })
+  
+  const [classes, setClasses] = useState<{id: string, name: string}[]>([])
+  
+  // 시간 옵션 생성
+  const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'))
+  const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'))
+  
+  // 클래스 목록 가져오기
+  useEffect(() => {
+    const loadClasses = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('classes')
+          .select('id, name')
+          .order('name')
+        
+        if (error) throw error
+        setClasses(data || [])
+      } catch (error) {
+        console.error('클래스 목록 로딩 오류:', error)
+      }
+    }
+    
+    if (open) {
+      loadClasses()
+    }
+  }, [open])
 
   useEffect(() => {
     if (test) {
-      console.log('편집할 테스트 데이터:', test)
       
       // test_result 값 매칭 로직 수정
       let testResultValue = 'pending' // 기본값
@@ -1062,23 +1245,57 @@ function TestModal({
         test2LevelValue = test.test2_level
       }
       
+      // 날짜와 시간 분리
+      let testDate = ''
+      let testHour = '14'
+      let testMinute = '00'
+      
+      if (test.test_date) {
+        // 한국시간으로 직접 파싱
+        const dateStr = test.test_date.slice(0, 19) // YYYY-MM-DDTHH:mm:ss 부분만
+        testDate = dateStr.slice(0, 10) // YYYY-MM-DD
+        testHour = dateStr.slice(11, 13) // HH
+        testMinute = dateStr.slice(14, 16) // mm
+        
+        // 5분 단위로 반올림
+        const roundedMinute = Math.round(parseInt(testMinute) / 5) * 5
+        testMinute = roundedMinute.toString().padStart(2, '0')
+        if (testMinute === '60') {
+          testMinute = '00'
+          testHour = (parseInt(testHour) + 1).toString().padStart(2, '0')
+        }
+      }
+      
       setFormData({
-        test_date: test.test_date ? new Date(test.test_date).toISOString().slice(0, 16) : '',
+        test_date: testDate,
+        test_hour: testHour,
+        test_minute: testMinute,
         test1_level: test.test1_level || '',
         test2_level: test2LevelValue,
-        test1_score: test.test1_score?.toString() || '',
-        test2_score: test.test2_score?.toString() || '',
+        test1_score: test.test1_score !== null ? test.test1_score.toString() : '',
+        test2_score: test.test2_score !== null ? test.test2_score.toString() : '',
         status: test.status || '테스트예정',
         test_result: testResultValue,
         recommended_class: test.recommended_class || '',
         notes: test.notes || ''
       })
+    } else if (open && !test) {
+      // 새 테스트 생성 시 기본값 설정
+      const today = new Date()
+      const defaultDate = today.toISOString().slice(0, 10)
       
-      console.log('설정된 formData:', {
-        test_result: testResultValue,
-        test2_level: test2LevelValue,
-        original_test_result: test.test_result,
-        original_test2_level: test.test2_level
+      setFormData({
+        test_date: defaultDate,
+        test_hour: '14',
+        test_minute: '00',
+        test1_level: '',
+        test2_level: '',
+        test1_score: '',
+        test2_score: '',
+        status: '테스트예정',
+        test_result: '',
+        recommended_class: '',
+        notes: ''
       })
     }
   }, [test, open])
@@ -1088,10 +1305,10 @@ function TestModal({
     
     // test2_level과 test_result에서 특수 값 처리
     const processedTest2Level = formData.test2_level === 'none' ? null : formData.test2_level
-    const processedTestResult = formData.test_result === 'pending' ? null : formData.test_result
+    const processedTestResult = formData.test_result === 'pending' || formData.test_result === '' ? null : formData.test_result
     
     const submitData: any = {
-      test_date: formData.test_date ? formData.test_date : null,
+      test_date: formData.test_date ? `${formData.test_date}T${formData.test_hour}:${formData.test_minute}:00` : null,
       test1_level: formData.test1_level || null,
       test2_level: processedTest2Level,
       test1_score: formData.test1_score ? parseInt(formData.test1_score) : null,
@@ -1102,7 +1319,6 @@ function TestModal({
       notes: formData.notes || null
     }
     
-    console.log('폼에서 전달할 데이터:', submitData)
     onSave(submitData)
   }
 
@@ -1111,6 +1327,76 @@ function TestModal({
     '초6-1', '초6-2', '중1-1', '중1-2', '중2-1', '중2-2', 
     '중3-1', '중3-2', '공통수학1', '공통수학2', '대수', '미적분', '확통'
   ]
+  
+  // 캘린더 일정 등록
+  const handleCreateCalendarEvent = async () => {
+    if (!test || !formData.test_date) {
+      alert('테스트 정보가 없습니다.')
+      return
+    }
+    
+    try {
+      const studentName = test.student_name || '학생'
+      const subjects = []
+      if (formData.test1_level) subjects.push(formData.test1_level)
+      if (formData.test2_level && formData.test2_level !== 'none') subjects.push(formData.test2_level)
+      
+      const title = `${studentName} ${subjects.join(', ')}`
+      const startTime = `${formData.test_date}T${formData.test_hour}:${formData.test_minute}:00`
+      
+      // 2시간 후 종료시간 계산
+      const endHour = (parseInt(formData.test_hour) + 2).toString().padStart(2, '0')
+      const endTime = `${formData.test_date}T${endHour}:${formData.test_minute}:00`
+      
+      // 현재 사용자 정보 가져오기
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const { error } = await supabase
+        .from('calendar_events')
+        .insert({
+          title,
+          start_time: startTime,
+          end_time: endTime,
+          event_type: 'entrance_test',
+          description: `입학테스트 - ${studentName}`,
+          created_by: user?.id
+        })
+      
+      if (error) throw error
+      
+      alert('캘린더에 일정이 등록되었습니다.')
+    } catch (error) {
+      console.error('캘린더 등록 오류:', error)
+      alert('캘린더 등록 중 오류가 발생했습니다.')
+    }
+  }
+  
+  // 등록 결정
+  const handleEnrollmentDecision = async (status: '재원' | '미등록') => {
+    if (!test?.consultation_id) {
+      alert('학생 정보가 없습니다.')
+      return
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({ status })
+        .eq('id', test.consultation_id)
+      
+      if (error) throw error
+      
+      alert(`학생 상태가 '${status}'로 변경되었습니다.`)
+      // 상담 목록 새로고침을 위해 부모 컴포넌트에 알림
+      onOpenChange(false)
+      if (onStatusChange) {
+        onStatusChange()
+      }
+    } catch (error) {
+      console.error('상태 변경 오류:', error)
+      alert('상태 변경 중 오류가 발생했습니다.')
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1123,14 +1409,45 @@ function TestModal({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="test_date">테스트 일시</Label>
-              <Input
-                id="test_date"
-                type="datetime-local"
-                value={formData.test_date}
-                onChange={(e) => setFormData({ ...formData, test_date: e.target.value })}
-              />
+            <div className="col-span-2">
+              <Label>테스트 일시</Label>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="col-span-2">
+                  <Input
+                    type="date"
+                    value={formData.test_date}
+                    onChange={(e) => setFormData({ ...formData, test_date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Select value={formData.test_hour} onValueChange={(value) => setFormData({ ...formData, test_hour: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOUR_OPTIONS.map((hour) => (
+                        <SelectItem key={hour} value={hour}>
+                          {hour}시
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Select value={formData.test_minute} onValueChange={(value) => setFormData({ ...formData, test_minute: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MINUTE_OPTIONS.map((minute) => (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}분
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
             <div>
               <Label htmlFor="status">테스트 상태</Label>
@@ -1211,12 +1528,17 @@ function TestModal({
             </div>
             <div>
               <Label htmlFor="recommended_class">추천반</Label>
-              <Input
-                id="recommended_class"
-                value={formData.recommended_class}
-                onChange={(e) => setFormData({ ...formData, recommended_class: e.target.value })}
-                placeholder="추천반 입력"
-              />
+              <Select value={formData.recommended_class || 'none'} onValueChange={(value) => setFormData({ ...formData, recommended_class: value === 'none' ? '' : value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="추천반 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">없음</SelectItem>
+                  {classes.map(cls => (
+                    <SelectItem key={cls.id} value={cls.name}>{cls.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div>

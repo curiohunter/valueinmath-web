@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Shield, Crown } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Shield, Crown, Bot } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/use-toast"
 // 기존 import 문에 signOut 서버 액션 추가
 import { signOut } from "@/actions/auth-actions"
 
-export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
+export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
@@ -38,11 +38,17 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
           return
         }
 
-        const { data: employee } = await supabase
+        const { data: employee, error } = await supabase
           .from("employees")
           .select("position")
           .eq("auth_id", session.user.id)
-          .single()
+          .maybeSingle()
+
+        if (error) {
+          console.error("Error checking admin status:", error)
+          setIsAdmin(false)
+          return
+        }
 
         setIsAdmin(employee?.position === "원장" || employee?.position === "부원장")
       } catch (error) {
@@ -95,6 +101,11 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
       icon: Shield,
     },
     {
+      title: "AI insight",
+      href: "/agent",
+      icon: Bot,
+    },
+    {
       title: "학생 관리",
       href: "/students",
       icon: Users,
@@ -124,6 +135,11 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
       href: "/settings",
       icon: Settings,
     },
+  ]
+
+  // 관리자 전용 메뉴
+  const adminItems: any[] = [
+    // AI 설정 제거됨
   ]
 
   // 로그아웃 처리 함수를 다음과 같이 변경
@@ -187,6 +203,32 @@ export function Sidebar({ onAgentClick }: { onAgentClick?: () => void }) {
               </Link>
             )
           })}
+          
+          {/* 관리자 전용 메뉴 */}
+          {isAdmin && !isLoading && (
+            <>
+              <div className="px-3 py-2">
+                <div className="h-px bg-border"></div>
+              </div>
+              {adminItems.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="flex-1">{item.title}</span>
+                    <Crown className="h-3 w-3 text-amber-500" />
+                  </Link>
+                )
+              })}
+            </>
+          )}
         </nav>
       </div>
       <div className="p-2 border-t">

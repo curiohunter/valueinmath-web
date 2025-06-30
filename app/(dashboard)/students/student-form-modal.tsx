@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { toast } from "@/components/ui/use-toast"
+import { getKoreanDateString } from "@/lib/utils"
 import type { Student, StudentStatus, Department, SchoolType, LeadSource } from "@/types/student"
 import { createStudent, updateStudent } from "@/services/student-service"
 
@@ -156,6 +157,26 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
 
   // 폼 제출 처리
   const onSubmit = async (values: FormValues) => {
+    // 최초 상담일 필수 검증
+    if (!values.first_contact_date) {
+      toast({
+        title: "입력 오류",
+        description: "최초 상담일은 필수로 입력해야 합니다.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // 재원 상태일 때 시작일 필수 검증
+    if (values.status === "재원" && !values.start_date) {
+      toast({
+        title: "입력 오류", 
+        description: "재원 상태인 경우 시작일을 입력해야 합니다.",
+        variant: "destructive",
+      })
+      return
+    }
+
     // 퇴원 상태일 때 종료일 필수 검증
     if (values.status === "퇴원" && !values.end_date) {
       setEndDateError("퇴원 상태인 경우 종료일을 입력해야 합니다")
@@ -165,6 +186,16 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
     setIsSubmitting(true)
     try {
       // 날짜를 ISO 문자열로 변환하고 타입을 명시적으로 정의
+      // 날짜 변환 로깅 (디버깅용)
+      if (values.end_date && values.status === "퇴원") {
+        console.log('퇴원일 처리:', {
+          originalDate: values.end_date,
+          koreanDateString: getKoreanDateString(values.end_date),
+          oldMethod: values.end_date.toISOString().split("T")[0],
+          studentName: values.name
+        })
+      }
+
       const baseFormattedValues = {
         name: values.name,
         student_phone: values.student_phone,
@@ -176,9 +207,9 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
         grade: values.grade,
         has_sibling: values.has_sibling,
         lead_source: values.lead_source as LeadSource | null,
-        start_date: values.start_date ? values.start_date.toISOString().split("T")[0] : null,
-        end_date: values.end_date ? values.end_date.toISOString().split("T")[0] : null,
-        first_contact_date: values.first_contact_date ? values.first_contact_date.toISOString().split("T")[0] : null,
+        start_date: values.start_date ? getKoreanDateString(values.start_date) : null,
+        end_date: values.end_date ? getKoreanDateString(values.end_date) : null,
+        first_contact_date: values.first_contact_date ? getKoreanDateString(values.first_contact_date) : null,
         notes: values.notes,
       }
 
@@ -514,9 +545,9 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
                 <h3 className="text-lg font-medium">날짜 정보</h3>
 
                 {/* 날짜 선택 컴포넌트 사용 */}
-                {renderDatePicker("시작일", "start_date")}
+                {renderDatePicker("시작일", "start_date", status === "재원")}
                 {renderDatePicker("종료일", "end_date", status === "퇴원")}
-                {renderDatePicker("최초 상담일", "first_contact_date")}
+                {renderDatePicker("최초 상담일", "first_contact_date", true)}
               </div>
 
               {/* 메모 */}

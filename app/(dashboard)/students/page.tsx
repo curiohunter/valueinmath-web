@@ -4,7 +4,8 @@ import { redirect } from "next/navigation"
 import { StudentsPageClient } from "@/app/(dashboard)/students/students-page-client"
 
 export default async function StudentsPage() {
-  const supabase = createServerComponentClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createServerComponentClient({ cookies: () => cookieStore })
   const {
     data: { session },
   } = await supabase.auth.getSession()

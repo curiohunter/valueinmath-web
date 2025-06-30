@@ -11,7 +11,7 @@ export default function LearningTabs() {
         href="/learning"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname.startsWith("/learning") && !pathname.startsWith("/learning-history")
+          pathname === "/learning"
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}
@@ -19,10 +19,10 @@ export default function LearningTabs() {
         학습 관리
       </Link>
       <Link
-        href="/test-logs"
+        href="/learning/test-logs"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname.startsWith("/test-logs")
+          pathname.startsWith("/learning/test-logs")
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}
@@ -30,10 +30,10 @@ export default function LearningTabs() {
         테스트 관리
       </Link>
       <Link
-        href="/learning-history"
+        href="/learning/learning-history"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname.startsWith("/learning-history")
+          pathname.startsWith("/learning/learning-history")
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}
@@ -41,10 +41,10 @@ export default function LearningTabs() {
         학습 이력
       </Link>
       <Link
-        href="/test-history"
+        href="/learning/test-history"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname.startsWith("/test-history")
+          pathname.startsWith("/learning/test-history")
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}

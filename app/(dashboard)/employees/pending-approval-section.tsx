@@ -5,16 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { UserCheck, UserX, Clock, Bell } from "lucide-react"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 interface PendingUser {
   id: string
-  email: string
-  name: string
-  approval_status: string
-  created_at: string
+  email: string | null
+  name: string | null
+  approval_status: string | null
+  created_at: string | null
 }
 
 export function PendingApprovalSection() {
@@ -55,7 +55,7 @@ export function PendingApprovalSection() {
         if (error) {
           console.error("Error fetching pending users:", error)
         } else {
-          setPendingUsers(pendingUsersData || [])
+          setPendingUsers((pendingUsersData || []) as PendingUser[])
         }
       } catch (error) {
         console.error("Error loading data:", error)
@@ -81,16 +81,15 @@ export function PendingApprovalSection() {
           table: "profiles",
         },
         (payload) => {
-          if (payload.new.approval_status === "pending") {
+          const newUser = payload.new as PendingUser
+          if (newUser.approval_status === "pending") {
             // 새로운 승인 요청 알림
-            toast({
-              title: "🔔 새로운 회원가입!",
-              description: `${payload.new.email}님이 회원가입했습니다. 승인이 필요합니다.`,
+            toast.info(`🔔 ${newUser.email}님이 회원가입했습니다. 승인이 필요합니다.`, {
               duration: 10000, // 10초간 표시
             })
 
             // 목록에 추가
-            setPendingUsers(prev => [payload.new as PendingUser, ...prev])
+            setPendingUsers(prev => [newUser, ...prev])
           }
         }
       )
@@ -102,11 +101,12 @@ export function PendingApprovalSection() {
           table: "profiles",
         },
         (payload) => {
+          const updatedUser = payload.new as PendingUser
           // 승인 상태 변경 시 목록 업데이트
           setPendingUsers(prev => 
             prev.map(user => 
-              user.id === payload.new.id 
-                ? { ...user, approval_status: payload.new.approval_status }
+              user.id === updatedUser.id 
+                ? { ...user, approval_status: updatedUser.approval_status }
                 : user
             )
           )
@@ -129,20 +129,13 @@ export function PendingApprovalSection() {
 
       if (error) throw error
 
-      toast({
-        title: "✅ 승인 완료",
-        description: "사용자가 성공적으로 승인되었습니다.",
-      })
+      toast.success("사용자가 성공적으로 승인되었습니다.")
 
       // 승인된 사용자를 목록에서 제거
       setPendingUsers(prev => prev.filter(user => user.id !== userId))
     } catch (error) {
       console.error("Error approving user:", error)
-      toast({
-        title: "승인 실패",
-        description: "사용자 승인 중 오류가 발생했습니다.",
-        variant: "destructive",
-      })
+      toast.error("사용자 승인 중 오류가 발생했습니다.")
     }
   }
 
@@ -156,10 +149,7 @@ export function PendingApprovalSection() {
 
       if (error) throw error
 
-      toast({
-        title: "❌ 거부 완료",
-        description: "사용자가 거부되었습니다.",
-      })
+      toast.info("사용자가 거부되었습니다.")
 
       // 상태 업데이트
       setPendingUsers(prev => 
@@ -171,11 +161,7 @@ export function PendingApprovalSection() {
       )
     } catch (error) {
       console.error("Error rejecting user:", error)
-      toast({
-        title: "거부 실패",
-        description: "사용자 거부 중 오류가 발생했습니다.",
-        variant: "destructive",
-      })
+      toast.error("사용자 거부 중 오류가 발생했습니다.")
     }
   }
 
@@ -189,10 +175,7 @@ export function PendingApprovalSection() {
 
       if (error) throw error
 
-      toast({
-        title: "🔄 재검토 요청",
-        description: "사용자가 승인 대기 상태로 변경되었습니다.",
-      })
+      toast.info("사용자가 승인 대기 상태로 변경되었습니다.")
 
       // 상태 업데이트
       setPendingUsers(prev => 
@@ -204,11 +187,7 @@ export function PendingApprovalSection() {
       )
     } catch (error) {
       console.error("Error re-approving user:", error)
-      toast({
-        title: "재검토 실패",
-        description: "재검토 요청 중 오류가 발생했습니다.",
-        variant: "destructive",
-      })
+      toast.error("재검토 요청 중 오류가 발생했습니다.")
     }
   }
 
@@ -286,17 +265,17 @@ export function PendingApprovalSection() {
             <TableBody>
               {pendingUsers.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.email}</TableCell>
+                  <TableCell className="font-medium">{user.email || "이메일 없음"}</TableCell>
                   <TableCell>{user.name || "이름 없음"}</TableCell>
-                  <TableCell>{getStatusBadge(user.approval_status)}</TableCell>
+                  <TableCell>{getStatusBadge(user.approval_status || "")}</TableCell>
                   <TableCell>
-                    {new Date(user.created_at).toLocaleDateString("ko-KR", {
+                    {user.created_at ? new Date(user.created_at).toLocaleDateString("ko-KR", {
                       year: "numeric",
                       month: "2-digit",
                       day: "2-digit",
                       hour: "2-digit",
                       minute: "2-digit",
-                    })}
+                    }) : "날짜 없음"}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">

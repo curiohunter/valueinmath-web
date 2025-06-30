@@ -7,8 +7,8 @@ import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
 
 // 서버 컴포넌트에서 사용할 Supabase 클라이언트
-export function createServerSupabaseClient() {
-  const cookieStore = cookies()
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies()
   return createServerComponentClient<Database>({ cookies: () => cookieStore })
 }
 

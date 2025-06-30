@@ -19,15 +19,37 @@ export default function StudentClassTabs() {
         학생 관리
       </Link>
       <Link
-        href="/classes"
+        href="/students/classes"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname.startsWith("/classes")
+          pathname.startsWith("/students/classes")
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}
       >
         반 관리
+      </Link>
+      <Link
+        href="/students/tuition"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname === "/students/tuition"
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        학원비
+      </Link>
+      <Link
+        href="/students/tuition-history"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname === "/students/tuition-history"
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        학원비 이력
       </Link>
     </div>
   );

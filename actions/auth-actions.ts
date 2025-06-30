@@ -7,7 +7,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin"
 
 // 로그아웃 처리
 export async function signOut() {
-  const supabase = createServerActionClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createServerActionClient({ cookies: () => cookieStore })
 
   const { error } = await supabase.auth.signOut()
 
@@ -23,7 +24,8 @@ export async function signOut() {
 
 // 사용자 정보 가져오기
 export async function getCurrentUser() {
-  const supabase = createServerActionClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createServerActionClient({ cookies: () => cookieStore })
 
   const {
     data: { session },
@@ -50,7 +52,8 @@ export async function updateUserProfile(profileData: {
   position?: string
   department?: string
 }) {
-  const supabase = createServerActionClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createServerActionClient({ cookies: () => cookieStore })
 
   const {
     data: { session },
@@ -102,6 +105,18 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
         console.error('❌ 기존 프로필 업데이트 오류:', profileUpdateError)
       } else {
         console.log('✅ 기존 프로필 업데이트 성공')
+      }
+
+      // pending_registrations 테이블도 pending으로 되돌리기
+      const { error: pendingUpdateError } = await supabase.from("pending_registrations").update({
+        status: "pending",
+        updated_at: new Date().toISOString()
+      }).eq("user_id", currentEmployee.auth_id)
+      
+      if (pendingUpdateError) {
+        console.error('❌ 대기 등록 상태 업데이트 오류:', pendingUpdateError)
+      } else {
+        console.log('✅ 대기 등록 상태 업데이트 성공')
       }
     }
 
@@ -160,6 +175,18 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
           throw profileError
         }
         console.log('✅ 프로필 업데이트 성공')
+
+        // pending_registrations 테이블도 approved로 업데이트
+        const { error: pendingUpdateError } = await supabase.from("pending_registrations").update({
+          status: "approved",
+          updated_at: new Date().toISOString()
+        }).eq("user_id", userId)
+        
+        if (pendingUpdateError) {
+          console.error('❌ 대기 등록 상태 업데이트 오류:', pendingUpdateError)
+        } else {
+          console.log('✅ 대기 등록 상태 업데이트 성공')
+        }
       }
     }
 

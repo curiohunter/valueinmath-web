@@ -1,11 +1,9 @@
 import { Metadata } from 'next'
 import { HeroSection } from '@/components/landing/hero-section'
-import { AboutSection } from '@/components/landing/about-section'
-import { ProgramsSection } from '@/components/landing/programs-section'
-import { TeachersSection } from '@/components/landing/teachers-section'
 import { FeaturesSection } from '@/components/landing/features-section'
-import { LocationSection } from '@/components/landing/location-section'
+import { StatsSection } from '@/components/landing/stats-section'
 import { CTASection } from '@/components/landing/cta-section'
+import { Header } from '@/components/landing/header'
 import { Footer } from '@/components/landing/footer'
 
 export const metadata: Metadata = {
@@ -48,7 +46,7 @@ export const metadata: Metadata = {
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen">
+    <div className="bg-white dark:bg-black min-h-screen">
       {/* Structured Data for SEO */}
       <script
         type="application/ld+json"
@@ -86,14 +84,14 @@ export default function LandingPage() {
         }}
       />
       
-      <HeroSection />
-      <AboutSection />
-      <ProgramsSection />
-      <TeachersSection />
-      <FeaturesSection />
-      <LocationSection />
-      <CTASection />
+      <Header />
+      <main>
+        <HeroSection />
+        <FeaturesSection />
+        <StatsSection />
+        <CTASection />
+      </main>
       <Footer />
-    </main>
+    </div>
   )
 }

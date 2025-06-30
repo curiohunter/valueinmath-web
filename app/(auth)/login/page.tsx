@@ -1,12 +1,10 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { redirect } from "next/navigation"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import { LoginForm } from "./login-form"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, ArrowLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 export const metadata: Metadata = {
   title: "로그인 | 학원관리 시스템",
@@ -14,46 +12,36 @@ export const metadata: Metadata = {
 }
 
 interface LoginPageProps {
-  searchParams: {
+  searchParams: Promise<{
     error?: string
     redirect?: string
-  }
+  }>
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  // 서버 컴포넌트에서 세션 확인
-  const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  // 이미 로그인된 경우 대시보드로 리디렉션
-  if (session) {
-    // 프로필 정보에서 승인 상태 확인
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("approval_status")
-      .eq("id", session.user.id)
-      .single()
-
-    if (profile?.approval_status === "approved") {
-      redirect("/dashboard")
-    } else if (profile?.approval_status === "pending") {
-      redirect("/pending-approval")
-    }
-  }
+  // Next.js 15: searchParams 비동기 처리
+  const params = await searchParams
 
   return (
     <>
-      <div className="flex justify-center mb-8">
+      <div className="flex justify-center mb-6">
         <h1 className="text-3xl font-bold">학원관리 시스템</h1>
+      </div>
+
+      <div className="flex justify-center mb-8">
+        <Button variant="ghost" asChild>
+          <Link href="/" className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            홈으로 돌아가기
+          </Link>
+        </Button>
       </div>
       
       {/* 에러 메시지 표시 */}
-      {searchParams.error && (
+      {params.error && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{searchParams.error}</AlertDescription>
+          <AlertDescription>{params.error}</AlertDescription>
         </Alert>
       )}
       

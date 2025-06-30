@@ -22,9 +22,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import type { Employee } from "@/types/employee"
+import type { Database } from "@/types/database"
 import { createEmployee, updateEmployee } from "@/services/employee-service"
+
+type EmployeeInsert = Database["public"]["Tables"]["employees"]["Insert"]
+type EmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"]
 
 // 기본 폼 타입 정의
 interface FormValues {
@@ -125,20 +129,25 @@ export function EmployeeFormModal({ open, onOpenChange, employee, onSuccess }: E
       const today = new Date().toISOString().split("T")[0]
 
       // Convert dates to ISO strings for API
-      const formattedValues = {
-        ...values,
+      const formattedValues: EmployeeInsert | EmployeeUpdate = {
+        name: values.name,
+        phone: values.phone || null,
+        position: values.position || null,
+        status: values.status,
+        department: values.department || null,
         hire_date: values.hire_date?.toISOString().split("T")[0] || null,
         resign_date: values.resign_date?.toISOString().split("T")[0] || null,
         last_updated_date: today,
+        notes: values.notes || null,
       }
 
       let result
       if (employee) {
         // Update existing employee
-        result = await updateEmployee(employee.id, formattedValues)
+        result = await updateEmployee(employee.id, formattedValues as Partial<Employee>)
       } else {
         // Create new employee
-        result = await createEmployee(formattedValues)
+        result = await createEmployee(formattedValues as Omit<Employee, "id" | "created_at" | "updated_at">)
       }
 
       if (result.error) {
@@ -146,10 +155,7 @@ export function EmployeeFormModal({ open, onOpenChange, employee, onSuccess }: E
       }
 
       // 성공 메시지 표시
-      toast({
-        title: employee ? "직원 정보 수정 완료" : "직원 등록 완료",
-        description: employee ? "직원 정보가 성공적으로 수정되었습니다." : "새로운 직원이 등록되었습니다.",
-      })
+      toast.success(employee ? "직원 정보가 성공적으로 수정되었습니다." : "새로운 직원이 등록되었습니다.")
 
       // 라우터 리프레시
       router.refresh()
@@ -159,11 +165,7 @@ export function EmployeeFormModal({ open, onOpenChange, employee, onSuccess }: E
       if (onSuccess) onSuccess()
     } catch (error) {
       console.error("Error submitting form:", error)
-      toast({
-        title: "오류 발생",
-        description: "직원 정보 저장 중 오류가 발생했습니다. 다시 시도해주세요.",
-        variant: "destructive",
-      })
+      toast.error("직원 정보 저장 중 오류가 발생했습니다. 다시 시도해주세요.")
     } finally {
       setIsSubmitting(false)
     }

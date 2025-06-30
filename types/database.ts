@@ -33,6 +33,143 @@ export type Database = {
         }
         Relationships: []
       }
+      claude_insights: {
+        Row: {
+          analysis_type: Database["public"]["Enums"]["claude_analysis_type"]
+          confidence_score: number | null
+          content: string
+          created_at: string | null
+          data_period: Json | null
+          id: string
+          metadata: Json | null
+          recommendations: Json | null
+          status: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          analysis_type: Database["public"]["Enums"]["claude_analysis_type"]
+          confidence_score?: number | null
+          content: string
+          created_at?: string | null
+          data_period?: Json | null
+          id?: string
+          metadata?: Json | null
+          recommendations?: Json | null
+          status?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          analysis_type?: Database["public"]["Enums"]["claude_analysis_type"]
+          confidence_score?: number | null
+          content?: string
+          created_at?: string | null
+          data_period?: Json | null
+          id?: string
+          metadata?: Json | null
+          recommendations?: Json | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      claude_reports: {
+        Row: {
+          charts_data: Json | null
+          created_at: string | null
+          file_attachments: Json | null
+          full_content: string
+          id: string
+          insight_id: string | null
+          report_type: Database["public"]["Enums"]["claude_report_type"]
+          status: string | null
+          summary: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          charts_data?: Json | null
+          created_at?: string | null
+          file_attachments?: Json | null
+          full_content: string
+          id?: string
+          insight_id?: string | null
+          report_type: Database["public"]["Enums"]["claude_report_type"]
+          status?: string | null
+          summary?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          charts_data?: Json | null
+          created_at?: string | null
+          file_attachments?: Json | null
+          full_content?: string
+          id?: string
+          insight_id?: string | null
+          report_type?: Database["public"]["Enums"]["claude_report_type"]
+          status?: string | null
+          summary?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claude_reports_insight_id_fkey"
+            columns: ["insight_id"]
+            isOneToOne: false
+            referencedRelation: "claude_insights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_events: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_time: string
+          event_type: Database["public"]["Enums"]["event_type_enum"] | null
+          google_calendar_id: string | null
+          id: string
+          location: string | null
+          start_time: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time: string
+          event_type?: Database["public"]["Enums"]["event_type_enum"] | null
+          google_calendar_id?: string | null
+          id?: string
+          location?: string | null
+          start_time: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time?: string
+          event_type?: Database["public"]["Enums"]["event_type_enum"] | null
+          google_calendar_id?: string | null
+          id?: string
+          location?: string | null
+          start_time?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       chats: {
         Row: {
           agent_id: string | null
@@ -106,6 +243,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          monthly_fee: number | null
           name: string
           subject: string
           teacher_id: string | null
@@ -115,6 +253,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          monthly_fee?: number | null
           name: string
           subject: string
           teacher_id?: string | null
@@ -124,6 +263,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          monthly_fee?: number | null
           name?: string
           subject?: string
           teacher_id?: string | null
@@ -246,6 +386,38 @@ export type Database = {
           },
         ]
       }
+      event_participants: {
+        Row: {
+          created_at: string | null
+          event_id: string | null
+          id: string
+          participant_id: string
+          participant_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+          participant_id: string
+          participant_type: string
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+          participant_id?: string
+          participant_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_participants_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       global_messages: {
         Row: {
           content: string
@@ -310,6 +482,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          approval_status: string | null
           avatar_url: string | null
           created_at: string | null
           department: string | null
@@ -320,6 +493,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          approval_status?: string | null
           avatar_url?: string | null
           created_at?: string | null
           department?: string | null
@@ -330,6 +504,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          approval_status?: string | null
           avatar_url?: string | null
           created_at?: string | null
           department?: string | null
@@ -354,7 +529,6 @@ export type Database = {
           name: string
           notes: string | null
           parent_phone: string | null
-          registration_date: string | null
           school: string | null
           school_type: string | null
           start_date: string | null
@@ -374,7 +548,6 @@ export type Database = {
           name: string
           notes?: string | null
           parent_phone?: string | null
-          registration_date?: string | null
           school?: string | null
           school_type?: string | null
           start_date?: string | null
@@ -394,7 +567,6 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_phone?: string | null
-          registration_date?: string | null
           school?: string | null
           school_type?: string | null
           start_date?: string | null
@@ -480,7 +652,7 @@ export type Database = {
           student_id: string | null
           test: string | null
           test_score: number | null
-          test_type: string | null
+          test_type: Database["public"]["Enums"]["test_type_enum"] | null
           updated_at: string | null
         }
         Insert: {
@@ -492,7 +664,7 @@ export type Database = {
           student_id?: string | null
           test?: string | null
           test_score?: number | null
-          test_type?: string | null
+          test_type?: Database["public"]["Enums"]["test_type_enum"] | null
           updated_at?: string | null
         }
         Update: {
@@ -504,7 +676,7 @@ export type Database = {
           student_id?: string | null
           test?: string | null
           test_score?: number | null
-          test_type?: string | null
+          test_type?: Database["public"]["Enums"]["test_type_enum"] | null
           updated_at?: string | null
         }
         Relationships: [
@@ -517,6 +689,69 @@ export type Database = {
           },
           {
             foreignKeyName: "test_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tuition_fees: {
+        Row: {
+          amount: number
+          class_id: string | null
+          class_type: string | null
+          created_at: string | null
+          id: string
+          is_sibling: boolean | null
+          month: number
+          note: string | null
+          payment_date: string | null
+          payment_status: string | null
+          student_id: string | null
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          amount: number
+          class_id?: string | null
+          class_type?: string | null
+          created_at?: string | null
+          id?: string
+          is_sibling?: boolean | null
+          month: number
+          note?: string | null
+          payment_date?: string | null
+          payment_status?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          amount?: number
+          class_id?: string | null
+          class_type?: string | null
+          created_at?: string | null
+          id?: string
+          is_sibling?: boolean | null
+          month?: number
+          note?: string | null
+          payment_date?: string | null
+          payment_status?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tuition_fees_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tuition_fees_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
@@ -545,6 +780,21 @@ export type Database = {
       }
     }
     Enums: {
+      claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"
+      claude_report_type: "monthly" | "quarterly" | "yearly" | "custom"
+      event_type_enum:
+        | "notice"
+        | "work"
+        | "makeup"
+        | "absence"
+        | "entrance_test"
+        | "new_consultation"
+        | "new_enrollment"
+        | "regular_consultation"
+        | "school_exam"
+        | "last_minute_makeup"
+        | "holiday"
+        | "project"
       test_level_enum:
         | "초3-1"
         | "초3-2"
@@ -567,6 +817,17 @@ export type Database = {
         | "확통"
       test_result_enum: "합격" | "불합격"
       test_status_enum: "테스트예정" | "결과상담대기" | "결과상담완료"
+      test_type_enum:
+        | "과정총괄테스트"
+        | "내용암기테스트"
+        | "단원테스트"
+        | "모의고사"
+        | "서술형평가"
+        | "수학경시대회"
+        | "오답테스트"
+        | "내신기출유사"
+        | "내신기출"
+        | "학교시험점수"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -682,6 +943,22 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      claude_analysis_type: ["trend", "financial", "marketing", "student_mgmt"],
+      claude_report_type: ["monthly", "quarterly", "yearly", "custom"],
+      event_type_enum: [
+        "notice",
+        "work",
+        "makeup",
+        "absence",
+        "entrance_test",
+        "new_consultation",
+        "new_enrollment",
+        "regular_consultation",
+        "school_exam",
+        "last_minute_makeup",
+        "holiday",
+        "project",
+      ],
       test_level_enum: [
         "초3-1",
         "초3-2",
@@ -705,6 +982,18 @@ export const Constants = {
       ],
       test_result_enum: ["합격", "불합격"],
       test_status_enum: ["테스트예정", "결과상담대기", "결과상담완료"],
+      test_type_enum: [
+        "과정총괄테스트",
+        "내용암기테스트",
+        "단원테스트",
+        "모의고사",
+        "서술형평가",
+        "수학경시대회",
+        "오답테스트",
+        "내신기출유사",
+        "내신기출",
+        "학교시험점수",
+      ],
     },
   },
 } as const

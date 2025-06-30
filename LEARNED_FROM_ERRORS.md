@@ -148,6 +148,47 @@
 
 ---
 
+## 10. React 입력 폼 성능 문제 - useState vs react-hook-form 🚀
+- **현상:**
+  - 텍스트 입력 시 타이핑이 느리고 버벅거림
+  - 입력할 때마다 전체 컴포넌트가 리렌더링되는 느낌
+  - 다른 비슷한 모달(예: 학생정보 입력)은 빠른데 특정 모달만 느림
+- **원인:**
+  - `useState`로 직접 상태 관리 시 매번 전체 폼이 리렌더링됨
+  - 복잡한 폼(시간 선택, 카테고리 등 여러 필드)에서 한 필드 변경 시 다른 필드들도 영향받음
+  - useMemo, useCallback 등의 최적화로도 근본적 해결 어려움
+- **해결:**
+  ```tsx
+  // 기존 (느림)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [formData, setFormData] = useState({...})
+  
+  // 개선 (빠름)
+  const form = useForm<FormValues>({
+    defaultValues: { title: '', description: '', ... }
+  })
+  
+  <FormField
+    control={form.control}
+    name="title"
+    render={({ field }) => (
+      <Input {...field} placeholder="제목 입력" />
+    )}
+  />
+  ```
+- **성능 차이 이유:**
+  - **react-hook-form**: 각 필드가 독립적으로 관리되어 해당 필드만 리렌더링
+  - **useState**: 상태 변경 시 전체 컴포넌트 리렌더링 발생
+  - **내장 최적화**: react-hook-form은 성능에 특화되어 설계됨
+- **실무 팁:**
+  - 3개 이상의 입력 필드가 있는 폼은 react-hook-form 사용 권장
+  - shadcn/ui Form 컴포넌트와 조합하면 일관된 디자인 + 성능 확보
+  - 기존 useState 폼을 react-hook-form으로 전환하면 즉시 성능 향상 체감 가능
+  - 학생정보, 직원정보 등 다른 모달이 빠른 이유는 이미 react-hook-form 사용하고 있기 때문
+
+---
+
 ## 8. 실무 팁
 - 외부 라이브러리 import 경로, 대소문자, 오타 항상 확인
 - Next.js app router 환경에서는 외부 UI 라이브러리는 대부분 "use client" 필요

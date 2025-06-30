@@ -457,6 +457,6 @@ const sidebarItems = [
 -  supabase gen types typescript --project-id <프로젝트ID> --schema public > types/database.ts
 
 ## 깃허브 커밋
-  git add .
-  git commit -m \"작업 내용\"
-  git push`
+git add .
+git commit -m "작업내역"                                       
+git push  

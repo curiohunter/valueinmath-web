@@ -17,16 +17,26 @@ import { getCurrentUser, withdrawUser } from "@/actions/auth-actions"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import GlobalChatButton from "@/components/chat/GlobalChatButton"
 import { Badge } from "@/components/ui/badge"
-import { NotificationBell } from "@/components/layout/notification-bell"
+import { NotificationButton } from "./notification-button"
 
-export function Header({ setChatOpen }: { setChatOpen: (open: boolean) => void }) {
+export function Header({ 
+  setChatOpen, 
+  chatOpen, 
+  chatMinimized, 
+  setChatMinimized 
+}: { 
+  setChatOpen?: (open: boolean) => void;
+  chatOpen?: boolean;
+  chatMinimized?: boolean;
+  setChatMinimized?: (minimized: boolean) => void;
+}) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
+  
 
   useEffect(() => {
     (async () => {
       const { user } = await getCurrentUser()
-      console.log('Header: User 로드됨:', user)
       setUser(user)
     })()
   }, [])
@@ -37,11 +47,16 @@ export function Header({ setChatOpen }: { setChatOpen: (open: boolean) => void }
         <div className="flex h-16 items-center px-6">
           <div className="flex flex-1 items-center gap-4 md:gap-8">{/* 전체 검색 입력 필드 제거 */}</div>
           <div className="flex items-center gap-2">
-            <NotificationBell user={user} />
-            <GlobalChatButton user={user} asHeaderIcon onClick={() => {
-              console.log('Header: 채팅 버튼 클릭됨!');
-              setChatOpen(true);
-            }} />
+            <NotificationButton />
+            <GlobalChatButton 
+              user={user} 
+              asHeaderIcon 
+              chatOpen={chatOpen}
+              setChatOpen={setChatOpen}
+              chatMinimized={chatMinimized}
+              setChatMinimized={setChatMinimized}
+              onClick={() => setChatOpen?.(true)} 
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 

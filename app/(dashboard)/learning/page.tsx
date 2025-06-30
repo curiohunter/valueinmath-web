@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { supabaseClient } from "@/lib/supabase/client";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { HelpCircle, Trash2 } from "lucide-react";
+import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -58,6 +59,7 @@ export default function LearningPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [classStudents, setClassStudents] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
@@ -68,26 +70,39 @@ export default function LearningPage() {
   const [modalField, setModalField] = useState<"book1" | "book1log" | "book2" | "book2log" | null>(null);
   const [modalValue, setModalValue] = useState("");
   const modalInputRef = useRef<HTMLInputElement>(null);
+  
+  // 반만들기 모달 상태
+  const [classModalOpen, setClassModalOpen] = useState(false);
+  
+  // 반만들기 완료 후 데이터 새로고침
+  const handleClassModalClose = () => {
+    setClassModalOpen(false);
+    // 데이터 새로고침
+    fetchData();
+  };
+  
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: classData } = await supabaseClient.from("classes").select("id, name");
+      const { data: classStudentData } = await supabaseClient.from("class_students").select("class_id, student_id");
+      const { data: studentData } = await supabaseClient.from("students").select("id, name, status, grade, school_type");
+      const { data: teacherData } = await supabaseClient.from("employees").select("id, name");
+      setClasses(classData || []);
+      setClassStudents(classStudentData || []);
+      setStudents(studentData || []);
+      setTeachers(teacherData || []);
+      // 첫 반 자동 선택
+      if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
+    } catch (e) {
+      setError("데이터를 불러오는 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data: classData } = await supabaseClient.from("classes").select("id, name");
-        const { data: classStudentData } = await supabaseClient.from("class_students").select("class_id, student_id");
-        const { data: studentData } = await supabaseClient.from("students").select("id, name, status");
-        setClasses(classData || []);
-        setClassStudents(classStudentData || []);
-        setStudents(studentData || []);
-        // 첫 반 자동 선택
-        if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
-      } catch (e) {
-        setError("데이터를 불러오는 중 오류가 발생했습니다.");
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchData();
   }, []);
 
@@ -247,7 +262,7 @@ export default function LearningPage() {
         <div className="flex gap-6">
           {/* 왼쪽: 날짜/일괄적용 + 반별 아코디언 (축소, 스타일 통일) */}
           <div className="w-52 max-h-[600px] flex-shrink-0 bg-white rounded-xl shadow p-2 overflow-y-auto">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="space-y-2 mb-2">
               <input
                 type="date"
                 className="input input-bordered w-full text-sm px-2 py-1"
@@ -256,11 +271,11 @@ export default function LearningPage() {
               />
               <Button
                 size="sm"
-                variant="outline"
-                className="w-8 h-8 p-0 flex items-center justify-center"
-                onClick={handleApplyAllDate}
+                variant="default"
+                className="w-full text-sm"
+                onClick={() => setClassModalOpen(true)}
               >
-                <span className="text-lg text-blue-400">+</span>
+                반 만들기
               </Button>
             </div>
             <div className="space-y-2 mt-2">
@@ -541,6 +556,15 @@ export default function LearningPage() {
             </div>
           </div>
         )}
+        
+        {/* 반만들기 모달 */}
+        <ClassFormModal
+          open={classModalOpen}
+          onClose={handleClassModalClose}
+          teachers={teachers}
+          students={students}
+          mode="create"
+        />
       </div>
     </TooltipProvider>
   );
