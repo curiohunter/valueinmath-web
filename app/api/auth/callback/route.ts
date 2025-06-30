@@ -23,10 +23,15 @@ export async function GET(request: NextRequest) {
         const user = data.session.user
         
         // Service role로 확실하게 프로필 조회
-        const serviceSupabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        )
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+        
+        if (!supabaseUrl || !serviceRoleKey) {
+          console.error('Missing Supabase environment variables:', { supabaseUrl: !!supabaseUrl, serviceRoleKey: !!serviceRoleKey })
+          return NextResponse.redirect(new URL("/login?error=서버 설정 오류", requestUrl.origin))
+        }
+        
+        const serviceSupabase = createClient(supabaseUrl, serviceRoleKey)
         
         const { data: existingProfile, error: profileError } = await serviceSupabase
           .from("profiles")
@@ -58,6 +63,7 @@ export async function GET(request: NextRequest) {
         
         return response
       } else {
+        console.error('Code exchange failed:', error)
         return NextResponse.redirect(new URL("/login?error=인증 코드 교환에 실패했습니다", requestUrl.origin))
       }
     }
