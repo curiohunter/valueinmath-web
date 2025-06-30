@@ -148,9 +148,11 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
   
   // 선택된 주차의 이벤트 필터링 및 정렬
   const { displayEvents, remainingCount } = useMemo(() => {
-    const now = new Date()
-    // 한국 시간(KST)으로 오늘 날짜 계산
-    const todayStr = new Date(now.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0]
+    // 한국 시간 기준으로 오늘 날짜 계산 (YYYY-MM-DD 형식)
+    const today = new Date()
+    const todayStr = today.getFullYear() + '-' + 
+                    String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                    String(today.getDate()).padStart(2, '0')
     
     // 이미 API에서 해당 주차 데이터만 가져오므로 추가 필터링 불필요
     const allWeekEvents = events
@@ -248,24 +250,22 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
                 {displayEvents.map((event, index) => {
                 const eventColor = getEventColor(event.event_type || '')
                 const eventCategory = eventCategories.find(cat => cat.value === event.event_type)
-                // UTC 기준으로 날짜 비교 (시간대 변환 무시)
+                // 로컬 시간 기준으로 날짜 비교 (KST)
                 const eventDateStr = event.start_time.split('T')[0] // YYYY-MM-DD만 추출
-                const todayStr = new Date().toISOString().split('T')[0]
-                const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+                const today = new Date()
+                const todayStr = today.getFullYear() + '-' + 
+                                String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                                String(today.getDate()).padStart(2, '0')
                 
                 const isToday = eventDateStr === todayStr
-                const isTomorrow = eventDateStr === tomorrowStr
                 
                 const eventDate = new Date(event.start_time)
                 
-                let dateLabel = eventDate.toLocaleDateString('ko-KR', { 
+                const dateLabel = eventDate.toLocaleDateString('ko-KR', { 
                   month: 'short', 
                   day: 'numeric',
                   weekday: 'short'
                 })
-                
-                if (isToday) dateLabel = '오늘'
-                else if (isTomorrow) dateLabel = '내일'
                 
                 return (
                   <div
