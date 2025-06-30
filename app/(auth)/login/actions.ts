@@ -31,7 +31,7 @@ export async function signInWithGoogle() {
     cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
   })
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://valueinmath.vercel.app'
   console.log('Google login - Site URL:', siteUrl)
 
   const { data, error } = await supabase.auth.signInWithOAuth({
