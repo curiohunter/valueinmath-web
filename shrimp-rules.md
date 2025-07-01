@@ -14,9 +14,10 @@
 ### 핵심 기능
 - 학생/직원 관리 시스템
 - 수업 및 출결 관리
-- 실시간 채팅 (글로벌/AI 에이전트)
-- 일정 관리 (FullCalendar 마이그레이션 중)
+- 실시간 채팅 (글로벌 챗 유지, /chat 페이지 제거됨)
+- ✅ 일정 관리 (FullCalendar 마이그레이션 완료)
 - 관리자 승인 기반 사용자 시스템
+- ✅ Google OAuth 로그인 (Production 설정 완료)
 
 ## 파일 수정 우선순위
 
@@ -88,10 +89,14 @@ components/
 
 ## 현재 진행 중인 마이그레이션
 
-### FullCalendar 전환 (진행중)
-- **제거 대상**: `N8nChatSidebar.tsx`, `GoogleCalendarEmbed.tsx`
-- **추가 예정**: FullCalendar 기반 새 컴포넌트
-- **주의사항**: n8n 웹훅 관련 코드 재사용 금지
+### ✅ FullCalendar 전환 (완료 - 2025-07-01)
+- **제거됨**: `N8nChatSidebar.tsx`, `GoogleCalendarEmbed.tsx`
+- **완성됨**: `FullCalendarWrapper.tsx`, `DashboardCalendar.tsx`
+- **특징**: 
+  - Google Calendar 스타일 UI
+  - 날짜별 그룹핑 표시
+  - KST 타임존 완벽 지원
+  - 48개 구글 캘린더 이벤트 임포트 완료
 
 ### SaaS 멀티테넌시 준비
 - **현재**: 단일 학원 (밸류인수학학원)
@@ -101,7 +106,15 @@ components/
 ### 데이터베이스 단순화
 - **제거 예정**: 복잡한 agents, chats, messages 구조
 - **유지**: 기존 데이터 마이그레이션 필요
+- **추가됨**: `calendar_events` 테이블 (Google Calendar 연동)
 - **참고**: PROJECT_STATUS.md 확인
+
+### 배포 및 보안 주의사항 (중요!)
+- **GitHub Public Repository**: 민감한 정보 제거 필수
+  - User IDs, API Keys 절대 포함 금지
+  - 개인정보 관련 데이터 제거
+- **Vercel 자동배포**: Public 리포지토리에서만 작동
+- **Google OAuth**: Production redirect URI 설정 완료
 
 ## 작업 시나리오별 가이드
 
@@ -142,13 +155,16 @@ components/
 - **profiles.is_approved** 체크 없이 사용자 승인
 - **RLS 정책** 우회하는 직접 SQL 실행
 - **미들웨어 보호** 제거 또는 우회
+- **User UUID** 등 민감한 ID 값 공개 리포지토리 노출
+- **개인정보** (이메일, 전화번호 등) 하드코딩
 
 ### 코드 품질
-- **n8n 레거시 코드** 재사용 (마이그레이션 중)
-- **agents/chats/messages** 테이블 의존 신규 개발
+- ✅ **n8n 레거시 코드** 모두 제거 완료
+- ✅ **agents/chats/messages** 테이블 제거 (글로벌 챗 기능만 유지)
 - **영어 UI 텍스트** 사용 (한국어만 허용)
 - **localStorage** 사용 (Supabase 우선)
 - **any 타입** 사용 (unknown 사용)
+- **shadcn/ui toast 사용 금지** (Sonner toast가 더 안정적)
 
 ### TypeScript 주의사항 (주요 패턴)
 - **Next.js 15 호환성**: `cookies: () => cookieStore as any` 패턴 사용 필수
@@ -196,6 +212,7 @@ components/
 - [ ] 다크모드 정상 작동
 - [ ] RLS 정책 준수
 - [ ] SWR 훅 에러 처리
+- [ ] 민감한 정보(UUID, API Key) 미포함 확인
 
 ### 기능 추가 시
 - [ ] types/ 파일 업데이트
@@ -210,3 +227,25 @@ components/
 - [ ] PROJECT_STATUS.md 업데이트
 - [ ] 데이터베이스 마이그레이션 완료
 - [ ] Supabase 타입 최신화
+
+## 최근 해결된 주요 이슈 (2025-07-01)
+
+### 1. Google Calendar 형식 변환
+- **문제**: `2025-07-02T10:00:00+09:00` → `2025-07-02 10:00:00+09`
+- **해결**: `.replace('T', ' ').replace('+09:00', '+09')`
+
+### 2. FullCalendar More Events 투명 모달
+- **문제**: 배경이 투명해서 글씨가 안 보임
+- **해결**: `.fc-more-popover` 스타일에 흰색 배경 추가
+
+### 3. 대시보드 캘린더 Timezone 
+- **문제**: UTC 기준으로 계산해서 날짜가 틀어짐
+- **해결**: 로컬 시간 기준으로 변경
+
+### 4. Vercel 자동배포 안됨
+- **문제**: Private 리포지토리는 webhook 생성 안됨
+- **해결**: Public 리포지토리로 전환
+
+### 5. Google OAuth Redirect
+- **문제**: Production에서 localhost로 리다이렉트
+- **해결**: NEXT_PUBLIC_SITE_URL 환경변수 추가

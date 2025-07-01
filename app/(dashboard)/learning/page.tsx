@@ -190,7 +190,7 @@ export default function LearningPage() {
         .from("study_logs")
         .upsert(
           rows.map(r => ({
-            class_id: r.classId,
+            class_id: r.classId || null,
             student_id: r.studentId,
             date: r.date,
             attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
@@ -202,7 +202,7 @@ export default function LearningPage() {
             book2log: r.book2log,
             note: r.note,
           })),
-          { onConflict: "class_id,student_id,date" }
+          { onConflict: "student_id,date" }
         );
       if (error) throw error;
       alert("저장되었습니다.");

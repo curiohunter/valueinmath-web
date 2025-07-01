@@ -144,6 +144,9 @@ export default function LearningHistoryPage() {
         console.log("학생 필터 적용:", filteredStudentId, studentMap[filteredStudentId]);
       }
 
+      // 날짜순 정렬 추가 (오래된 것이 위로)
+      query = query.order("date", { ascending: true });
+      
       const { data, error } = await query;
       
       console.log("쿼리 결과:", { data, error, count: data?.length });
@@ -244,9 +247,71 @@ export default function LearningHistoryPage() {
     setDateRange({ from: ymd(yesterday), to: ymd(yesterday) });
   }
 
-  const pageSize = 12;
+  // 반별로 데이터 그룹화 및 페이지네이션
+  const groupedData = data.reduce((groups: { [className: string]: any[] }, item) => {
+    const className = classMap[item.class_id] || item.class_id || '클래스 없음';
+    if (!groups[className]) {
+      groups[className] = [];
+    }
+    groups[className].push(item);
+    return groups;
+  }, {});
+  
+  // 각 그룹의 날짜 범위 계산
+  const groupsWithDateRange = Object.entries(groupedData).map(([className, items]) => {
+    const dates = items.map(item => item.date).filter(Boolean).sort();
+    const startDate = dates[0];
+    const endDate = dates[dates.length - 1];
+    return {
+      className,
+      items,
+      startDate,
+      endDate,
+      displayName: startDate && endDate && startDate !== endDate 
+        ? `${className} [${startDate}] → [${endDate}]`
+        : startDate 
+        ? `${className} [${startDate}]`
+        : className
+    };
+  }).sort((a, b) => {
+    // 시작 날짜로 그룹 정렬 (오래된 것이 위로)
+    if (a.startDate && b.startDate) {
+      return a.startDate.localeCompare(b.startDate);
+    }
+    return a.className.localeCompare(b.className);
+  });
+  
+  const pageSize = 50; // 그룹화로 인해 더 많이 표시
   const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
   const paginatedData = data.slice((page-1)*pageSize, page*pageSize);
+  
+  // 페이지네이션된 데이터를 반별로 그룹화
+  const paginatedGroupedData = paginatedData.reduce((groups: { [className: string]: any[] }, item) => {
+    const className = classMap[item.class_id] || item.class_id || '클래스 없음';
+    if (!groups[className]) {
+      groups[className] = [];
+    }
+    groups[className].push(item);
+    return groups;
+  }, {});
+  
+  // 그룹 정보와 함께 데이터 준비
+  const groupsToDisplay = Object.entries(paginatedGroupedData).map(([className, items]) => {
+    const dates = items.map(item => item.date).filter(Boolean).sort();
+    const startDate = dates[0];
+    const endDate = dates[dates.length - 1];
+    const displayName = startDate && endDate && startDate !== endDate 
+      ? `${className} [${startDate}] → [${endDate}]`
+      : startDate 
+      ? `${className} [${startDate}]`
+      : className;
+    return { className, items, displayName, startDate };
+  }).sort((a, b) => {
+    if (a.startDate && b.startDate) {
+      return a.startDate.localeCompare(b.startDate);
+    }
+    return a.className.localeCompare(b.className);
+  });
 
   function handleCellClick(title: string, content: string) {
     setModalTitle(title);
@@ -277,9 +342,11 @@ export default function LearningHistoryPage() {
           book2log: edited.book2log,
           note: edited.note,
         })
-        .eq("class_id", edited.class_id)
-        .eq("student_id", edited.student_id)
-        .eq("date", edited.originalDate || edited.date);
+        .match({
+          class_id: edited.class_id,
+          student_id: edited.student_id,
+          date: edited.originalDate || edited.date
+        });
       if (error) throw error;
       toast({ title: "수정 완료", description: "기록이 성공적으로 수정되었습니다." });
       setIsEditModalOpen(false);
@@ -299,9 +366,11 @@ export default function LearningHistoryPage() {
       const { error } = await supabaseClient
         .from("study_logs")
         .delete()
-        .eq("class_id", row.class_id)
-        .eq("student_id", row.student_id)
-        .eq("date", row.date);
+        .match({
+          class_id: row.class_id,
+          student_id: row.student_id,
+          date: row.date
+        });
       if (error) throw error;
       toast({ title: "삭제 완료", description: "기록이 성공적으로 삭제되었습니다." });
       setIsEditModalOpen(false);
@@ -463,89 +532,108 @@ export default function LearningHistoryPage() {
                       </td>
                     </tr>
                   ) : (
-                    paginatedData.map((row, i) => (
-                      <tr key={i} className="hover:bg-blue-50/50 transition-colors duration-150">
-                        <td className="px-4 py-3 text-sm text-gray-800 font-medium">
-                          {classMap[row.class_id] || row.class_id}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-800 font-medium">
-                          {studentMap[row.student_id] || row.student_id}
-                        </td>
-                        <td className="px-4 py-3 text-center text-sm text-gray-600 font-mono">
-                          {row.date?.replace(/^2025-/, '') || row.date}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 ${scoreColor(parseInt(row.attendance_status) || 0)}`}>
-                            {row.attendance_status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 ${scoreColor(parseInt(row.homework) || 0)}`}>
-                            {row.homework}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 ${scoreColor(parseInt(row.focus) || 0)}`}>
-                            {row.focus}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline font-medium max-w-[240px] truncate"
-                            onClick={() => handleCellClick("교재1", row.book1)}>
-                          {row.book1 || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline max-w-[180px] truncate"
-                            onClick={() => handleCellClick("진도1", row.book1log)}>
-                          {row.book1log || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline font-medium max-w-[240px] truncate"
-                            onClick={() => handleCellClick("교재2", row.book2)}>
-                          {row.book2 || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline max-w-[180px] truncate"
-                            onClick={() => handleCellClick("진도2", row.book2log)}>
-                          {row.book2log || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 cursor-pointer hover:text-gray-800 hover:bg-gray-50 rounded max-w-[120px] truncate"
-                            onClick={() => handleCellClick("특이사항", row.note)}>
-                          {row.note ? (
-                            <div className="truncate" title={row.note}>
-                              {row.note}
+                    groupsToDisplay.map((group, groupIndex) => (
+                      <React.Fragment key={group.className}>
+                        {/* 반별 그룹 헤더 */}
+                        <tr className="bg-gradient-to-r from-green-50 to-emerald-50 border-t-2 border-green-200">
+                          <td colSpan={11} className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-sm font-semibold text-green-800">
+                                {group.displayName}
+                              </span>
+                              <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                                {group.items.length}건
+                              </span>
                             </div>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(row)}>
-                              <Edit className="h-4 w-4" />
-                              <span className="sr-only">수정</span>
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                  <span className="sr-only">삭제</span>
+                          </td>
+                        </tr>
+                        {/* 그룹 내 데이터 */}
+                        {group.items.map((row, i) => (
+                          <tr key={`${group.className}-${i}`} className="hover:bg-blue-50/50 transition-colors duration-150">
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-800 font-medium">
+                              {studentMap[row.student_id] || row.student_id}
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm text-gray-600 font-mono">
+                              {row.date?.replace(/^2025-/, '') || row.date}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 ${scoreColor(parseInt(row.attendance_status) || 0)}`}>
+                                {row.attendance_status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 ${scoreColor(parseInt(row.homework) || 0)}`}>
+                                {row.homework}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 ${scoreColor(parseInt(row.focus) || 0)}`}>
+                                {row.focus}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline font-medium max-w-[240px] truncate"
+                                onClick={() => handleCellClick("교재1", row.book1)}>
+                              {row.book1 || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline max-w-[180px] truncate"
+                                onClick={() => handleCellClick("진도1", row.book1log)}>
+                              {row.book1log || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline font-medium max-w-[240px] truncate"
+                                onClick={() => handleCellClick("교재2", row.book2)}>
+                              {row.book2 || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline max-w-[180px] truncate"
+                                onClick={() => handleCellClick("진도2", row.book2log)}>
+                              {row.book2log || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600 cursor-pointer hover:text-gray-800 hover:bg-gray-50 rounded max-w-[120px] truncate"
+                                onClick={() => handleCellClick("특이사항", row.note)}>
+                              {row.note ? (
+                                <div className="truncate" title={row.note}>
+                                  {row.note}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex justify-center gap-2">
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(row)}>
+                                  <Edit className="h-4 w-4" />
+                                  <span className="sr-only">수정</span>
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>기록 삭제</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    정말로 이 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>취소</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDelete(row.class_id + row.student_id + row.date, row)} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                    {isDeleting ? "삭제 중..." : "삭제"}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </td>
-                      </tr>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                      <span className="sr-only">삭제</span>
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>기록 삭제</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        정말로 이 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>취소</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDelete(row.class_id + row.student_id + row.date, row)} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                        {isDeleting ? "삭제 중..." : "삭제"}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>

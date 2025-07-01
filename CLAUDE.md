@@ -58,10 +58,12 @@ This is a Next.js 15 academy management system built with:
 
 ## Important Context
 
-### Current Development Focus
-- Migrating from n8n chat-based calendar to FullCalendar
-- Preparing for SaaS multi-tenancy transformation
-- Database schema simplification in progress
+### Current Development Focus (Updated 2025-07-01)
+- ✅ **Calendar System Completed**: Successfully migrated from n8n to FullCalendar with Google Calendar integration
+- ✅ **Google OAuth Integration**: Production deployment with proper redirect URIs configured
+- ✅ **Vercel Auto-deployment**: GitHub integration working (requires public repository)
+- 🚧 **SaaS Multi-tenancy**: Preparing for transformation
+- 🚧 **Database Schema**: Simplification in progress
 
 ### Database Schema Key Tables
 - `profiles` - User profiles with approval system
@@ -69,6 +71,11 @@ This is a Next.js 15 academy management system built with:
 - `employees` - Employee management with auth linking
 - `classes` - Class/course information
 - `class_students` - Many-to-many relationship
+- `calendar_events` - **NEW**: Calendar events with Google Calendar integration
+  - 48 imported Google Calendar events (시험, 보강, 직보, 근무 등)
+  - `created_by` field for user tracking (UUID references profiles table)
+  - `google_calendar_id` for Google integration
+  - Event types: school_exam, makeup, last_minute_makeup, work, absence, entrance_test, notice
 - Chat system tables (agents, chats, messages) - scheduled for refactoring
 
 ### Environment Variables Required
@@ -76,7 +83,14 @@ This is a Next.js 15 academy management system built with:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
 ```
+
+### Production Deployment Setup (Vercel)
+- **Domain**: https://valueinmath.vercel.app
+- **GitHub Integration**: Requires **public repository** for auto-deployment webhooks
+- **Google OAuth Redirect**: Updated from localhost to production URL
+- **Email Unification**: All services use ian_park@valueinmath.com
 
 ### Path Aliases
 - `@/*` maps to root directory (configured in tsconfig.json)
@@ -124,8 +138,32 @@ SUPABASE_SERVICE_ROLE_KEY=
 ## Current Issues & Solutions
 
 1. **Build Warnings**: ESLint and TypeScript errors ignored in production build
-2. **Calendar Migration**: Moving from n8n webhook-based to direct Google Calendar API
+2. ✅ **Calendar Migration**: Successfully completed - FullCalendar with 48 Google events imported
 3. **Multi-tenancy**: Single-tenant currently, SaaS migration planned
+
+## Recent Major Changes (2025-07-01)
+
+### 1. Calendar System Overhaul
+- **FullCalendar Integration**: Replaced n8n webhook system
+- **Dashboard Calendar**: Google Calendar style UI with date grouping
+- **Timezone Fix**: All dates properly handled in KST
+- **More Events Modal**: Fixed transparent background issue
+- **Event Categories**: 시험, 보강, 직보, 근무, 결석, 입학테스트, 공지사항
+
+### 2. Global Chat System
+- **Preserved Architecture**: Kept working global chat (GlobalChatButton + GlobalChatPanel)
+- **Removed /chat Page**: Eliminated dedicated chat page while keeping functionality
+- **Real-time Updates**: Supabase real-time subscriptions working
+
+### 3. Google OAuth Production Setup
+- **Redirect URI**: Changed from localhost to https://valueinmath.vercel.app
+- **Environment Variables**: Added NEXT_PUBLIC_SITE_URL
+- **Google Cloud Console**: Updated authorized redirect URIs
+
+### 4. Vercel Deployment Insights
+- **Private Repository Issue**: Webhooks don't work with private GitHub repos
+- **Solution**: Changed to public repository for auto-deployment
+- **Important**: Remove sensitive data (user IDs, API keys) before going public
 
 ## Testing
 

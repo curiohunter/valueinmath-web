@@ -136,7 +136,7 @@ export default function TestLogsPage() {
         .from("test_logs")
         .upsert(
           rows.map(r => ({
-            class_id: r.classId,
+            class_id: r.classId || null,
             student_id: r.studentId,
             date: r.date,
             test: r.test,
@@ -144,7 +144,7 @@ export default function TestLogsPage() {
             test_score: r.test_score !== '' ? Number(r.test_score) : null,
             note: r.note,
           })),
-          { onConflict: "class_id,student_id,date,test" }
+          { onConflict: "student_id,date,test" }
         );
       if (error) throw error;
       alert("저장되었습니다.");
