@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { User } from "@supabase/supabase-js"
+import type { Database } from "@/types/database"
 
 interface RegistrationFormProps {
   user: User
@@ -53,7 +54,7 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
         .from('pending_registrations')
         .insert({
           user_id: user.id,
-          email: user.email,
+          email: user.email || "",
           name: name.trim(),
           role,
           student_name: role === "parent" ? studentName.trim() : null

@@ -17,7 +17,7 @@ import { getCurrentUser, withdrawUser } from "@/actions/auth-actions"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import GlobalChatButton from "@/components/chat/GlobalChatButton"
 import { Badge } from "@/components/ui/badge"
-import { NotificationButton } from "./notification-button"
+import { NotificationBell } from "./notification-bell"
 
 export function Header({ 
   setChatOpen, 
@@ -47,7 +47,7 @@ export function Header({
         <div className="flex h-16 items-center px-6">
           <div className="flex flex-1 items-center gap-4 md:gap-8">{/* 전체 검색 입력 필드 제거 */}</div>
           <div className="flex items-center gap-2">
-            <NotificationButton />
+            <NotificationBell user={user} />
             <GlobalChatButton 
               user={user} 
               asHeaderIcon 

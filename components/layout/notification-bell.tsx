@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { testGetPendingUsers } from "@/actions/test-pending-users"
 
@@ -103,9 +103,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
         (payload) => {
           if (payload.new.approval_status === "pending") {
             // 새로운 승인 요청 알림
-            toast({
-              title: "🔔 새로운 회원가입!",
-              description: `${payload.new.email}님이 회원가입했습니다. 승인이 필요합니다.`,
+            toast.info(`🔔 ${payload.new.email}님이 회원가입했습니다. 승인이 필요합니다.`, {
               duration: 10000,
             })
 
@@ -240,7 +238,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="w-4 h-4" />
-              승인 대기 알림
+              신규 가입 알림
               {pendingCount > 0 && (
                 <Badge variant="destructive">{pendingCount}</Badge>
               )}
@@ -250,23 +248,19 @@ export function NotificationBell({ user }: NotificationBellProps) {
             {pendingCount === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">승인 대기 중인 사용자가 없습니다</p>
+                <p className="text-sm">신규 가입 신청이 없습니다</p>
               </div>
             ) : (
               <div className="space-y-3 max-h-80 overflow-y-auto">
                 {pendingUsers.map((user) => (
-                  <div key={user.id} className="border rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm">{user.email}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {user.name && user.name.trim() !== "" ? user.name : "이름 없음"} • {new Date(user.created_at).toLocaleDateString("ko-KR")}
-                        </p>
-                      </div>
-                      <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                        <Clock className="w-3 h-3 mr-1" />
-                        대기
-                      </Badge>
+                  <div key={user.id} className="border rounded-lg p-3 space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">
+                        이름: {user.name && user.name.trim() !== "" ? user.name : "이름 없음"}, 이메일: {user.email}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        신청 계정연결 하세요
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -279,7 +273,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
                         className="flex-1"
                       >
                         <UserCheck className="w-3 h-3 mr-1" />
-                        직원 관리에서 연결하기
+                        확인
                       </Button>
                     </div>
                   </div>

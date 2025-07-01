@@ -34,6 +34,7 @@ interface User {
   email: string
   name: string
   isLinked: boolean
+  approval_status?: string
 }
 
 function isEmployeeRow(row: any): row is { position: any } {
@@ -513,7 +514,23 @@ export function EmployeesTable() {
                   <SelectItem value="none">계정 연결 해제</SelectItem>
                   {unlinkedUsers.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
-                      {user.email}
+                      <div className="flex flex-col">
+                        <span>{user.email}</span>
+                        {user.name && user.name !== user.email && (
+                          <span className="text-sm text-muted-foreground">이름: {user.name}</span>
+                        )}
+                        <span className="text-xs font-medium">
+                          {user.approval_status === 'approved' && (
+                            <span className="text-green-600">승인됨</span>
+                          )}
+                          {user.approval_status === 'pending' && (
+                            <span className="text-amber-600">승인 대기중</span>
+                          )}
+                          {!user.approval_status && (
+                            <span className="text-blue-600">등록 폼 미작성</span>
+                          )}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

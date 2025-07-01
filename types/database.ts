@@ -480,6 +480,50 @@ export type Database = {
           },
         ]
       }
+      pending_registrations: {
+        Row: {
+          id: string
+          user_id: string | null
+          email: string
+          name: string
+          role: string
+          student_name: string | null
+          status: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          email: string
+          name: string
+          role: string
+          student_name?: string | null
+          status?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          email?: string
+          name?: string
+          role?: string
+          student_name?: string | null
+          status?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_registrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       profiles: {
         Row: {
           approval_status: string | null
