@@ -98,7 +98,7 @@ export async function middleware(request: NextRequest) {
         // 승인된 경우에만 관리자 페이지 접근 체크
         if (profile.approval_status === "approved") {
           // 관리자 전용 페이지 접근 체크
-          const adminOnlyPaths = ["/employees", "/analytics"]
+          const adminOnlyPaths = ["/employees"]
           const isAdminPath = adminOnlyPaths.some(adminPath => 
             path === adminPath || path.startsWith(`${adminPath}/`)
           )

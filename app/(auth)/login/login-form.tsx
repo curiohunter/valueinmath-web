@@ -43,7 +43,7 @@ export function LoginForm() {
         disabled={isGoogleLoading || isLoading}
       >
         <Chrome className="mr-2 h-4 w-4" />
-        {isGoogleLoading ? "구글 로그인 중..." : "Google로 로그인"}
+{isGoogleLoading ? "구글 로그인 중..." : "Google로 로그인/회원가입"}
       </Button>
 
       {/* 구분선 */}

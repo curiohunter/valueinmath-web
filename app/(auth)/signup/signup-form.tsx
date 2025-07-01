@@ -10,6 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { Chrome } from "lucide-react"
 
 // 회원가입 폼 스키마
 const signupSchema = z
@@ -28,6 +29,7 @@ type SignupFormValues = z.infer<typeof signupSchema>
 
 export function SignupForm() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
   const supabase = getSupabaseBrowserClient()
@@ -42,6 +44,32 @@ export function SignupForm() {
       confirmPassword: "",
     },
   })
+
+  // 구글 회원가입 처리
+  const handleGoogleSignUp = async () => {
+    setIsGoogleLoading(true)
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        }
+      })
+
+      if (error) {
+        throw error
+      }
+    } catch (error: any) {
+      console.error('구글 회원가입 오류:', error)
+      toast({
+        title: "구글 회원가입 실패",
+        description: error.message || "구글 회원가입 중 오류가 발생했습니다.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGoogleLoading(false)
+    }
+  }
 
   // 폼 제출 처리
   const onSubmit = async (values: SignupFormValues) => {
@@ -88,8 +116,31 @@ export function SignupForm() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <div className="space-y-4">
+      {/* 구글 회원가입 버튼 */}
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={handleGoogleSignUp}
+        disabled={isGoogleLoading || isLoading}
+      >
+        <Chrome className="mr-2 h-4 w-4" />
+        {isGoogleLoading ? "구글 회원가입 중..." : "Google로 회원가입"}
+      </Button>
+
+      {/* 구분선 */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">또는</span>
+        </div>
+      </div>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -149,7 +200,8 @@ export function SignupForm() {
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? "회원가입 중..." : "회원가입"}
         </Button>
-      </form>
-    </Form>
+        </form>
+      </Form>
+    </div>
   )
 }
