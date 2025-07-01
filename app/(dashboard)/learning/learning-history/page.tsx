@@ -343,7 +343,6 @@ export default function LearningHistoryPage() {
           note: edited.note,
         })
         .match({
-          class_id: edited.class_id,
           student_id: edited.student_id,
           date: edited.originalDate || edited.date
         });
@@ -367,7 +366,6 @@ export default function LearningHistoryPage() {
         .from("study_logs")
         .delete()
         .match({
-          class_id: row.class_id,
           student_id: row.student_id,
           date: row.date
         });

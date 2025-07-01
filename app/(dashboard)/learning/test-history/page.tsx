@@ -380,9 +380,9 @@ export default function TestHistoryPage() {
           note: edited.note,
         })
         .match({
-          class_id: edited.class_id,
           student_id: edited.student_id,
-          date: edited.originalDate || edited.date
+          date: edited.originalDate || edited.date,
+          test: edited.test
         });
       if (error) throw error;
       toast({ title: "수정 완료", description: "시험 기록이 성공적으로 수정되었습니다." });
