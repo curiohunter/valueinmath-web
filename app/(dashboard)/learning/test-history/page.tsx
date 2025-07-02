@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { Button } from "@/components/ui/button";
-import { supabaseClient } from "@/lib/supabase/client";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Edit, Trash2 } from "lucide-react";
@@ -50,6 +51,8 @@ const TEST_TYPE_OPTIONS = [
 ];
 
 export default function TestHistoryPage() {
+  const supabase = createClientComponentClient<Database>();
+  
   // 필터 상태
   const [datePreset, setDatePreset] = useState("custom");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
@@ -86,8 +89,8 @@ export default function TestHistoryPage() {
   // 반/학생 이름 매핑 fetch
   useEffect(() => {
     async function fetchMeta() {
-      const { data: classes } = await supabaseClient.from("classes").select("id,name");
-      const { data: students } = await supabaseClient.from("students").select("id,name");
+      const { data: classes } = await supabase.from("classes").select("id,name");
+      const { data: students } = await supabase.from("students").select("id,name");
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
       setStudentMap(Object.fromEntries((students || []).map((s: any) => [s.id, s.name])));
       setClassOptions(classes || []);
@@ -147,7 +150,7 @@ export default function TestHistoryPage() {
     });
 
     try {
-      let query = supabaseClient
+      let query = supabase
         .from("test_logs")
         .select("class_id,student_id,date,test,test_type,test_score,note");
       
@@ -245,7 +248,7 @@ export default function TestHistoryPage() {
     });
 
     try {
-      let query = supabaseClient
+      let query = supabase
         .from("test_logs")
         .select("class_id,student_id,date,test,test_type,test_score,note");
       
@@ -371,7 +374,7 @@ export default function TestHistoryPage() {
     setIsSaving(true);
     try {
       // 먼저 기존 시험 기록을 업데이트
-      const { error: updateError } = await supabaseClient
+      const { error: updateError } = await supabase
         .from("test_logs")
         .update({
           date: edited.date,
@@ -391,14 +394,14 @@ export default function TestHistoryPage() {
       // 클래스가 변경된 경우 class_students 테이블도 업데이트
       if (edited.class_id !== edited.original_class_id) {
         // 먼저 학생의 현재 클래스 매핑을 모두 가져옴
-        const { data: currentMappings } = await supabaseClient
+        const { data: currentMappings } = await supabase
           .from("class_students")
           .select("*")
           .eq("student_id", edited.student_id);
 
         // 기존 클래스에서 해당 학생 제거
         if (edited.original_class_id) {
-          await supabaseClient
+          await supabase
             .from("class_students")
             .delete()
             .match({
@@ -413,7 +416,7 @@ export default function TestHistoryPage() {
         );
         
         if (!existingMapping && edited.class_id) {
-          await supabaseClient
+          await supabase
             .from("class_students")
             .insert({
               class_id: edited.class_id,
@@ -437,7 +440,7 @@ export default function TestHistoryPage() {
   async function handleDelete(rowId: string, row: any) {
     setIsDeleting(true);
     try {
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from("test_logs")
         .delete()
         .match({

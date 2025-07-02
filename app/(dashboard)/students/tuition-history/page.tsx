@@ -5,7 +5,8 @@ import StudentClassTabs from "@/components/StudentClassTabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { supabaseClient } from "@/lib/supabase/client";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { TuitionTable } from "@/components/tuition/tuition-table";
 import { Save, Trash2, Download, Filter, Calendar } from "lucide-react";
@@ -38,6 +39,8 @@ const calculateStats = (data: TuitionRow[]) => {
 };
 
 export default function TuitionHistoryPage() {
+  const supabase = createClientComponentClient<Database>();
+  
   // 필터 상태
   const [datePreset, setDatePreset] = useState("custom");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
@@ -71,8 +74,8 @@ export default function TuitionHistoryPage() {
   // 반/학생 이름 매핑 fetch
   useEffect(() => {
     async function fetchMeta() {
-      const { data: classes } = await supabaseClient.from("classes").select("id,name");
-      const { data: students } = await supabaseClient.from("students").select("id,name");
+      const { data: classes } = await supabase.from("classes").select("id,name");
+      const { data: students } = await supabase.from("students").select("id,name");
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
       setStudentMap(Object.fromEntries((students || []).map((s: any) => [s.id, s.name])));
       setClassOptions(classes || []);
@@ -98,7 +101,7 @@ export default function TuitionHistoryPage() {
     setError(null);
 
     try {
-      let query = supabaseClient
+      let query = supabase
         .from("tuition_fees")
         .select(`
           id,
@@ -287,7 +290,7 @@ export default function TuitionHistoryPage() {
         note: row.note || undefined
       };
 
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from("tuition_fees")
         .update(updateData)
         .eq("id", row.id);
@@ -324,7 +327,7 @@ export default function TuitionHistoryPage() {
     if (!confirmDelete) return;
     
     try {
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from("tuition_fees")
         .delete()
         .eq("id", row.id);
@@ -373,7 +376,7 @@ export default function TuitionHistoryPage() {
           note: row.note || undefined
         };
 
-        const { error } = await supabaseClient
+        const { error } = await supabase
           .from("tuition_fees")
           .update(updateData)
           .eq("id", row.id);

@@ -4,7 +4,8 @@ import React, { useState, useEffect, Fragment, useRef } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { supabaseClient } from "@/lib/supabase/client";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/types/database";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Calendar, Users, Search, RotateCcw, FileText, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { ClassAccordion } from "@/components/ui/class-accordion";
@@ -24,6 +25,7 @@ const scoreColor = (score: number) => {
 };
 
 export default function TestLogsPage() {
+  const supabase = createClientComponentClient<Database>();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<Array<{
     id?: string;
@@ -77,9 +79,9 @@ export default function TestLogsPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: classData } = await supabaseClient.from("classes").select("id, name");
-      const { data: classStudentData } = await supabaseClient.from("class_students").select("class_id, student_id");
-      const { data: studentData } = await supabaseClient.from("students").select("id, name, status");
+      const { data: classData } = await supabase.from("classes").select("id, name");
+      const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
+      const { data: studentData } = await supabase.from("students").select("id, name, status");
       setClasses(classData || []);
       setClassStudents(classStudentData || []);
       setStudents(studentData || []);
@@ -96,7 +98,7 @@ export default function TestLogsPage() {
   const fetchTodayTestLogs = async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { data: todayLogs, error } = await supabaseClient
+      const { data: todayLogs, error } = await supabase
         .from("test_logs")
         .select("*")
         .eq("date", today);
@@ -110,12 +112,12 @@ export default function TestLogsPage() {
           ...todayLogs.map(log => log.last_modified_by).filter(Boolean)
         ])];
         
-        const { data: studentsData } = await supabaseClient
+        const { data: studentsData } = await supabase
           .from("students")
           .select("id, name")
           .in("id", studentIds.filter(id => id !== null));
           
-        const { data: employeesData } = await supabaseClient
+        const { data: employeesData } = await supabase
           .from("employees")
           .select("id, name")
           .in("id", employeeIds.filter(id => id !== null));
@@ -153,7 +155,7 @@ export default function TestLogsPage() {
 
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
-    const channel = supabaseClient
+    const channel = supabase
       .channel('today-test-logs')
       .on('postgres_changes', 
         { 
@@ -170,7 +172,7 @@ export default function TestLogsPage() {
       .subscribe();
 
     return () => {
-      supabaseClient.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -295,53 +297,80 @@ export default function TestLogsPage() {
       return;
     }
     try {
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      const { data: currentEmployee } = await supabaseClient
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error("User fetch error:", userError);
+        alert("사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.");
+        return;
+      }
+      
+      const { data: currentEmployee } = await supabase
         .from("employees")
         .select("id")
-        .eq("auth_id", user?.id || "")
+        .eq("auth_id", user.id)
         .single();
 
       // 반별 담당 선생님 정보 가져오기
       const classIds = [...new Set(rows.map(r => r.classId).filter(Boolean))];
-      const { data: classData } = await supabaseClient
+      const { data: classData } = await supabase
         .from("classes")
         .select("id, teacher_id")
         .in("id", classIds);
       
       const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
 
-      // @ts-ignore - complex type issue with upsert
-      const { error } = await supabaseClient
-        .from("test_logs")
-        .upsert(
-          rows.map(r => {
-            const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
-            const baseData = {
-              class_id: r.classId || null,
-              student_id: r.studentId,
-              date: r.date,
-              test: r.test,
-              test_type: r.testType as any,
-              test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
-              note: r.note,
-            };
-            
-            if (r.id) {
-              return {
-                ...baseData,
-                id: r.id,
-                last_modified_by: currentEmployee?.id || null
-              };
-            } else {
-              return {
-                ...baseData,
-                created_by: teacherId || null
-              };
-            }
-          }),
-          { onConflict: "student_id,date,test" }
-        );
+      // 기존 레코드와 새 레코드 분리
+      const existingRows = rows.filter(r => r.id);
+      const newRows = rows.filter(r => !r.id);
+      
+      let error = null;
+      
+      // 기존 레코드 업데이트
+      if (existingRows.length > 0) {
+        const updateData = existingRows.map(r => ({
+          id: r.id,
+          class_id: r.classId || null,
+          student_id: r.studentId,
+          date: r.date,
+          test: r.test,
+          test_type: r.testType as any,
+          test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
+          note: r.note || null,
+          last_modified_by: currentEmployee?.id || null
+        }));
+        
+        // @ts-ignore - complex type issue
+        const { error: updateError } = await supabase
+          .from("test_logs")
+          .upsert(updateData, { onConflict: "id" });
+        
+        if (updateError) error = updateError;
+      }
+      
+      // 새 레코드 삽입
+      if (!error && newRows.length > 0) {
+        const insertData = newRows.map(r => {
+          const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
+          return {
+            class_id: r.classId || null,
+            student_id: r.studentId,
+            date: r.date,
+            test: r.test,
+            test_type: r.testType as any,
+            test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
+            note: r.note || null,
+            created_by: teacherId || null
+          };
+        });
+        
+        // @ts-ignore - complex type issue
+        const { error: insertError } = await supabase
+          .from("test_logs")
+          .insert(insertData);
+        
+        if (insertError) error = insertError;
+      }
       if (error) throw error;
       
       alert("저장되었습니다.");

@@ -8,7 +8,8 @@ import { ScoreLegendBox } from "@/components/ui/score-legend-box";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabaseClient } from "@/lib/supabase/client";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/types/database";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { HelpCircle, Trash2, ChevronLeft, ChevronRight, Plus, Calendar, Users, ChevronDown } from "lucide-react";
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal";
@@ -51,6 +52,7 @@ const focusMap: Record<string, number> = {
 };
 
 export default function LearningPage() {
+  const supabase = createClientComponentClient<Database>();
   // 입력 상태
   const [date, setDate] = useState(today);
   const [rows, setRows] = useState<
@@ -110,10 +112,10 @@ export default function LearningPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: classData } = await supabaseClient.from("classes").select("id, name");
-      const { data: classStudentData } = await supabaseClient.from("class_students").select("class_id, student_id");
-      const { data: studentData } = await supabaseClient.from("students").select("id, name, status, grade, school_type");
-      const { data: teacherData } = await supabaseClient.from("employees").select("id, name");
+      const { data: classData } = await supabase.from("classes").select("id, name");
+      const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
+      const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type");
+      const { data: teacherData } = await supabase.from("employees").select("id, name");
       setClasses(classData || []);
       setClassStudents(classStudentData || []);
       setStudents(studentData || []);
@@ -133,7 +135,7 @@ export default function LearningPage() {
   // 오늘 날짜의 학습 기록 불러오기
   const fetchTodayLogs = async () => {
     try {
-      const { data: todayLogs, error } = await supabaseClient
+      const { data: todayLogs, error } = await supabase
         .from("today_study_logs")
         .select("*");
       
@@ -221,7 +223,7 @@ export default function LearningPage() {
   // 실시간 동기화
   useEffect(() => {
     // 오늘 날짜의 study_logs 변경사항 구독
-    const channel = supabaseClient
+    const channel = supabase
       .channel('today-study-logs')
       .on('postgres_changes', 
         { 
@@ -239,7 +241,7 @@ export default function LearningPage() {
       .subscribe();
 
     return () => {
-      supabaseClient.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -338,51 +340,131 @@ export default function LearningPage() {
     }
     try {
       // 현재 사용자 정보 가져오기 (last_modified_by용)
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      const { data: currentEmployee } = await supabaseClient
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error("User fetch error:", userError);
+        alert("사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.");
+        return;
+      }
+      
+      const { data: currentEmployee } = await supabase
         .from("employees")
         .select("id")
-        .eq("auth_id", user?.id || "")
+        .eq("auth_id", user.id)
         .single();
 
       // 반별 담당 선생님 정보 가져오기
       const classIds = [...new Set(rows.map(r => r.classId).filter(Boolean))];
-      const { data: classData } = await supabaseClient
+      const { data: classData } = await supabase
         .from("classes")
         .select("id, teacher_id")
         .in("id", classIds);
       
       const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
 
-      const { error } = await supabaseClient
-        .from("study_logs")
-        .upsert(
-          rows.map(r => {
-            const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
-            
+      // 기존 레코드와 새 레코드 분리
+      const existingRows = rows.filter(r => r.id);
+      const newRows = rows.filter(r => !r.id);
+      
+      console.log("Existing rows count:", existingRows.length);
+      console.log("New rows count:", newRows.length);
+      
+      let error = null;
+      
+      // 기존 레코드 업데이트
+      if (existingRows.length > 0) {
+        const updateData = existingRows.map(r => ({
+          id: r.id,
+          class_id: r.classId || null,
+          student_id: r.studentId,
+          date: r.date,
+          attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
+          homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
+          focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
+          book1: r.book1,
+          book1log: r.book1log,
+          book2: r.book2,
+          book2log: r.book2log,
+          note: r.note,
+          last_modified_by: currentEmployee?.id,
+        }));
+        
+        console.log("Update data sample:", updateData[0]);
+        
+        const { error: updateError } = await supabase
+          .from("study_logs")
+          .upsert(updateData, { onConflict: "id" });
+        
+        if (updateError) error = updateError;
+      }
+      
+      // 새 레코드 삽입
+      if (!error && newRows.length > 0) {
+        const insertData = newRows.map(r => {
+          const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
+          return {
+            class_id: r.classId || null,
+            student_id: r.studentId,
+            date: r.date,
+            attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
+            homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
+            focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
+            book1: r.book1,
+            book1log: r.book1log,
+            book2: r.book2,
+            book2log: r.book2log,
+            note: r.note,
+            created_by: teacherId,
+          };
+        });
+        
+        console.log("Insert data sample:", insertData[0]);
+        
+        const { error: insertError } = await supabase
+          .from("study_logs")
+          .insert(insertData);
+        
+        if (insertError) error = insertError;
+      }
+      
+      if (error) {
+        console.error("Supabase error details:", error);
+        console.error("Error code:", error.code);
+        console.error("Error message:", error.message);
+        console.error("Error details:", error.details);
+        console.error("First row data:", rows[0]);
+        console.error("Sent data:", rows.map(r => {
+          const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
+          const baseData = {
+            class_id: r.classId || null,
+            student_id: r.studentId,
+            date: r.date,
+            attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
+            homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
+            focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
+            book1: r.book1,
+            book1log: r.book1log,
+            book2: r.book2,
+            book2log: r.book2log,
+            note: r.note,
+          };
+          
+          if (r.id) {
             return {
-              id: r.id, // 기존 레코드는 ID 포함
-              class_id: r.classId || null,
-              student_id: r.studentId,
-              date: r.date,
-              attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
-              homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
-              focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
-              book1: r.book1 || null,
-              book1log: r.book1log || null,
-              book2: r.book2 || null,
-              book2log: r.book2log || null,
-              note: r.note || null,
-              // 새 레코드인 경우 반 담당선생님을 created_by로, 기존 레코드인 경우 현재 사용자를 last_modified_by로
-              ...(r.id ? 
-                { last_modified_by: currentEmployee?.id || null } : 
-                { created_by: teacherId || null }
-              ),
+              ...baseData,
+              id: r.id,
+              last_modified_by: currentEmployee?.id,
             };
-          }),
-          { onConflict: "student_id,date" }
-        );
-      if (error) throw error;
+          } else {
+            return {
+              ...baseData,
+              created_by: teacherId,
+            };
+          }
+        }));
+        throw error;
+      }
       
       // 저장 성공 알림
       alert("저장되었습니다.");
