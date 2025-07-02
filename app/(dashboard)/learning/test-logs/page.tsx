@@ -302,11 +302,21 @@ export default function TestLogsPage() {
         .eq("auth_id", user?.id || "")
         .single();
 
+      // 반별 담당 선생님 정보 가져오기
+      const classIds = [...new Set(rows.map(r => r.classId).filter(Boolean))];
+      const { data: classData } = await supabaseClient
+        .from("classes")
+        .select("id, teacher_id")
+        .in("id", classIds);
+      
+      const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
+
       // @ts-ignore - complex type issue with upsert
       const { error } = await supabaseClient
         .from("test_logs")
         .upsert(
           rows.map(r => {
+            const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
             const baseData = {
               class_id: r.classId || null,
               student_id: r.studentId,
@@ -326,7 +336,7 @@ export default function TestLogsPage() {
             } else {
               return {
                 ...baseData,
-                created_by: currentEmployee?.id || null
+                created_by: teacherId || null
               };
             }
           }),

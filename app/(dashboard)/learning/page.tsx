@@ -337,7 +337,7 @@ export default function LearningPage() {
       return;
     }
     try {
-      // 현재 사용자 정보 가져오기
+      // 현재 사용자 정보 가져오기 (last_modified_by용)
       const { data: { user } } = await supabaseClient.auth.getUser();
       const { data: currentEmployee } = await supabaseClient
         .from("employees")
@@ -345,25 +345,41 @@ export default function LearningPage() {
         .eq("auth_id", user?.id || "")
         .single();
 
+      // 반별 담당 선생님 정보 가져오기
+      const classIds = [...new Set(rows.map(r => r.classId).filter(Boolean))];
+      const { data: classData } = await supabaseClient
+        .from("classes")
+        .select("id, teacher_id")
+        .in("id", classIds);
+      
+      const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
+
       const { error } = await supabaseClient
         .from("study_logs")
         .upsert(
-          rows.map(r => ({
-            id: r.id, // 기존 레코드는 ID 포함
-            class_id: r.classId || null,
-            student_id: r.studentId,
-            date: r.date,
-            attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
-            homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
-            focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
-            book1: r.book1,
-            book1log: r.book1log,
-            book2: r.book2,
-            book2log: r.book2log,
-            note: r.note,
-            // 새 레코드인 경우 created_by, 기존 레코드인 경우 last_modified_by
-            ...(r.id ? { last_modified_by: currentEmployee?.id } : { created_by: currentEmployee?.id }),
-          })),
+          rows.map(r => {
+            const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
+            
+            return {
+              id: r.id, // 기존 레코드는 ID 포함
+              class_id: r.classId || null,
+              student_id: r.studentId,
+              date: r.date,
+              attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
+              homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
+              focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
+              book1: r.book1 || null,
+              book1log: r.book1log || null,
+              book2: r.book2 || null,
+              book2log: r.book2log || null,
+              note: r.note || null,
+              // 새 레코드인 경우 반 담당선생님을 created_by로, 기존 레코드인 경우 현재 사용자를 last_modified_by로
+              ...(r.id ? 
+                { last_modified_by: currentEmployee?.id || null } : 
+                { created_by: teacherId || null }
+              ),
+            };
+          }),
           { onConflict: "student_id,date" }
         );
       if (error) throw error;
