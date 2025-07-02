@@ -833,6 +833,16 @@ export type Database = {
           user_name: string | null
         }[]
       }
+      get_unread_message_count: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      mark_messages_as_read: {
+        Args: {
+          message_ids: string[]
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"

@@ -31,10 +31,11 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
   const inputRef = useRef<HTMLInputElement>(null)
   const supabase = createClientComponentClient<Database>()
 
-  // 메시지 로드
+  // 메시지 로드 및 읽음 처리
   useEffect(() => {
     if (isOpen) {
       loadMessages()
+      markMessagesAsRead()
     }
   }, [isOpen])
 
@@ -42,6 +43,35 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // 실시간 메시지 구독
+  useEffect(() => {
+    if (!isOpen) return
+
+    const channel = supabase
+      .channel('global-messages')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'global_messages' 
+        }, 
+        (payload) => {
+          loadMessages()
+          // 새 메시지가 내 것이 아니면 읽음 처리
+          if (payload.new.user_id !== user?.id) {
+            supabase
+              .rpc('mark_messages_as_read', { message_ids: [payload.new.id] })
+              .catch(error => console.error("새 메시지 읽음 처리 실패:", error))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isOpen, user?.id])
 
   const loadMessages = async () => {
     try {
@@ -67,6 +97,31 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
       setMessages(messages)
     } catch (error) {
       console.error("메시지 로드 실패:", error)
+    }
+  }
+
+  // 메시지를 읽음으로 표시
+  const markMessagesAsRead = async () => {
+    try {
+      // 현재 로드된 메시지 중 내가 보내지 않은 메시지들의 ID 수집
+      const { data: messagesData, error: messagesError } = await supabase
+        .rpc('get_global_messages_with_names')
+      
+      if (messagesError) throw messagesError
+
+      const unreadMessageIds = messagesData
+        ?.filter(msg => msg.user_id !== user?.id)
+        ?.map(msg => msg.id) || []
+
+      if (unreadMessageIds.length > 0) {
+        // 읽음 처리
+        const { error } = await supabase
+          .rpc('mark_messages_as_read', { message_ids: unreadMessageIds })
+        
+        if (error) throw error
+      }
+    } catch (error) {
+      console.error("메시지 읽음 처리 실패:", error)
     }
   }
 

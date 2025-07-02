@@ -575,7 +575,8 @@ export async function saveMonthlyReport(
   year: number,
   month: number,
   reportContent: string,
-  teacherComment?: string
+  teacherComment?: string,
+  monthlyStats?: MonthlyStats
 ): Promise<AnalyticsApiResponse<{ id: string }>> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -602,6 +603,7 @@ export async function saveMonthlyReport(
         .update({
           report_content: reportContent,
           teacher_comment: teacherComment,
+          monthly_stats: monthlyStats || null,
           updated_at: new Date().toISOString()
         })
         .eq("id", existing.id)
@@ -616,7 +618,8 @@ export async function saveMonthlyReport(
           year,
           month,
           report_content: reportContent,
-          teacher_comment: teacherComment
+          teacher_comment: teacherComment,
+          monthly_stats: monthlyStats || null
         })
         .select("id")
         .single()
@@ -692,6 +695,7 @@ export async function getSavedReportById(
   month: number
   created_at: string
   teacher_comment?: string
+  monthly_stats?: MonthlyStats
 }>> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -721,7 +725,8 @@ export async function getSavedReportById(
         year: data.year,
         month: data.month,
         created_at: data.created_at,
-        teacher_comment: data.teacher_comment
+        teacher_comment: data.teacher_comment,
+        monthly_stats: data.monthly_stats || null
       }
     }
     
@@ -730,6 +735,66 @@ export async function getSavedReportById(
     return { 
       success: false, 
       error: "보고서 조회 중 오류가 발생했습니다." 
+    }
+  }
+}
+
+// 저장된 보고서 삭제
+export async function deleteSavedReport(
+  reportId: string
+): Promise<AnalyticsApiResponse<void>> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    const { error } = await supabase
+      .from("monthly_reports")
+      .delete()
+      .eq("id", reportId)
+    
+    if (error) {
+      throw error
+    }
+    
+    return { success: true }
+    
+  } catch (error) {
+    console.error("deleteSavedReport 오류:", error)
+    return { 
+      success: false, 
+      error: "보고서 삭제 중 오류가 발생했습니다." 
+    }
+  }
+}
+
+// 저장된 보고서 수정
+export async function updateSavedReport(
+  reportId: string,
+  reportContent: string,
+  teacherComment?: string
+): Promise<AnalyticsApiResponse<void>> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    const { error } = await supabase
+      .from("monthly_reports")
+      .update({
+        report_content: reportContent,
+        teacher_comment: teacherComment,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", reportId)
+    
+    if (error) {
+      throw error
+    }
+    
+    return { success: true }
+    
+  } catch (error) {
+    console.error("updateSavedReport 오류:", error)
+    return { 
+      success: false, 
+      error: "보고서 수정 중 오류가 발생했습니다." 
     }
   }
 }

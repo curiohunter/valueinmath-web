@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { FileText, Download, Printer, Eye, Calendar, User, Edit2, Save, X, List, Check } from "lucide-react"
+import { FileText, Download, Printer, Eye, Calendar, User, Edit2, Save, X, List, Check, Trash2, MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { saveMonthlyReport, getSavedMonthlyReports, getSavedReportById } from "@/services/analytics-service"
+import { saveMonthlyReport, getSavedMonthlyReports, getSavedReportById, deleteSavedReport, updateSavedReport } from "@/services/analytics-service"
 import type { MonthlyReportData } from "@/types/analytics"
 
 interface MonthlyReportGeneratorProps {
@@ -37,8 +37,12 @@ export function MonthlyReportGenerator({
     student: any
     year: number
     month: number
+    monthlyStats?: any
   } | null>(null)
   const [isLoadingViewReport, setIsLoadingViewReport] = useState(false)
+  const [isEditingReport, setIsEditingReport] = useState(false)
+  const [editingReportId, setEditingReportId] = useState<string | null>(null)
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
   const handleGenerateReport = async () => {
@@ -114,7 +118,9 @@ export function MonthlyReportGenerator({
         monthlyData.student.id,
         monthlyData.year,
         monthlyData.month,
-        finalReport
+        finalReport,
+        undefined, // teacher_comment
+        monthlyData.monthlyStats
       )
       
       if (result.success) {
@@ -146,7 +152,8 @@ export function MonthlyReportGenerator({
           content: result.data.report_content,
           student: result.data.student,
           year: result.data.year,
-          month: result.data.month
+          month: result.data.month,
+          monthlyStats: result.data.monthly_stats
         })
         // 탭은 그대로 유지하고 미리보기만 표시
         setShowPreview(true)
@@ -158,6 +165,79 @@ export function MonthlyReportGenerator({
       alert("보고서 조회 중 오류가 발생했습니다.")
     } finally {
       setIsLoadingViewReport(false)
+    }
+  }
+
+  // 보고서 삭제
+  const handleDeleteReport = async (reportId: string) => {
+    if (!confirm("정말로 이 보고서를 삭제하시겠습니까?")) return
+    
+    setDeletingReportId(reportId)
+    try {
+      const result = await deleteSavedReport(reportId)
+      
+      if (result.success) {
+        alert("보고서가 삭제되었습니다.")
+        // 목록 새로고침
+        const reportsResult = await getSavedMonthlyReports()
+        if (reportsResult.success && reportsResult.data) {
+          setSavedReports(reportsResult.data)
+        }
+        // 현재 보고 있는 보고서가 삭제된 경우
+        if (viewingReport && savedReports.find(r => r.id === reportId)) {
+          setViewingReport(null)
+          setShowPreview(false)
+        }
+      } else {
+        alert("보고서 삭제에 실패했습니다.")
+      }
+    } catch (error) {
+      console.error("보고서 삭제 오류:", error)
+      alert("보고서 삭제 중 오류가 발생했습니다.")
+    } finally {
+      setDeletingReportId(null)
+    }
+  }
+
+  // 보고서 수정 저장
+  const handleUpdateReport = async () => {
+    if (!editingReportId || !viewingReport) return
+    
+    setIsEditingReport(true)
+    try {
+      // 편집된 내용 반영
+      let finalReport = viewingReport.content
+      const sections = viewingReport.content.split('\n\n').filter(section => section.trim())
+      
+      sections.forEach((section, index) => {
+        if (editedContent[index]) {
+          const lines = section.trim().split('\n')
+          const title = lines[0]
+          finalReport = finalReport.replace(section, `${title}\n${editedContent[index]}`)
+        }
+      })
+      
+      const result = await updateSavedReport(editingReportId, finalReport)
+      
+      if (result.success) {
+        alert("보고서가 수정되었습니다.")
+        // 수정된 내용으로 업데이트
+        setViewingReport({
+          ...viewingReport,
+          content: finalReport
+        })
+        setEditingSections({})
+        setEditedContent({})
+        setIsEditingReport(false)
+        setEditingReportId(null)
+      } else {
+        alert("보고서 수정에 실패했습니다.")
+      }
+    } catch (error) {
+      console.error("보고서 수정 오류:", error)
+      alert("보고서 수정 중 오류가 발생했습니다.")
+    } finally {
+      setIsEditingReport(false)
     }
   }
 
@@ -286,36 +366,38 @@ export function MonthlyReportGenerator({
           </div>
         </div>
 
-        {/* 학습 통계 요약 */}
-        <div className="report-section bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 p-6 rounded-lg border">
-          <h2 className="section-title text-lg font-bold text-gray-800 mb-4">학습 통계 요약</h2>
-          <div className="stats-grid grid grid-cols-2 gap-4">
-            <div className="stat-item bg-white p-4 rounded-lg border">
-              <div className="stat-label text-xs text-gray-500 mb-1">출석률</div>
-              <div className="stat-value text-lg font-bold text-blue-600">
-                {data.monthlyStats.attendanceRate || 0}%
+        {/* 학습 통계 요약 - 생성된 보고서에서만 표시 */}
+        {data.monthlyStats && (
+          <div className="report-section bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 p-6 rounded-lg border">
+            <h2 className="section-title text-lg font-bold text-gray-800 mb-4">학습 통계 요약</h2>
+            <div className="stats-grid grid grid-cols-2 gap-4">
+              <div className="stat-item bg-white p-4 rounded-lg border">
+                <div className="stat-label text-xs text-gray-500 mb-1">출석률</div>
+                <div className="stat-value text-lg font-bold text-blue-600">
+                  {data.monthlyStats.attendanceRate || 0}%
+                </div>
               </div>
-            </div>
-            <div className="stat-item bg-white p-4 rounded-lg border">
-              <div className="stat-label text-xs text-gray-500 mb-1">평균 집중도</div>
-              <div className="stat-value text-lg font-bold text-green-600">
-                {(data.monthlyStats.avgFocus || 0).toFixed(1)}점
+              <div className="stat-item bg-white p-4 rounded-lg border">
+                <div className="stat-label text-xs text-gray-500 mb-1">평균 집중도</div>
+                <div className="stat-value text-lg font-bold text-green-600">
+                  {(data.monthlyStats.avgFocus || 0).toFixed(1)}점
+                </div>
               </div>
-            </div>
-            <div className="stat-item bg-white p-4 rounded-lg border">
-              <div className="stat-label text-xs text-gray-500 mb-1">과제 수행도</div>
-              <div className="stat-value text-lg font-bold text-purple-600">
-                {(data.monthlyStats.avgHomework || 0).toFixed(1)}점
+              <div className="stat-item bg-white p-4 rounded-lg border">
+                <div className="stat-label text-xs text-gray-500 mb-1">과제 수행도</div>
+                <div className="stat-value text-lg font-bold text-purple-600">
+                  {(data.monthlyStats.avgHomework || 0).toFixed(1)}점
+                </div>
               </div>
-            </div>
-            <div className="stat-item bg-white p-4 rounded-lg border">
-              <div className="stat-label text-xs text-gray-500 mb-1">시험 평균</div>
-              <div className="stat-value text-lg font-bold text-orange-600">
-                {(data.monthlyStats.avgTestScore || 0).toFixed(1)}점
+              <div className="stat-item bg-white p-4 rounded-lg border">
+                <div className="stat-label text-xs text-gray-500 mb-1">시험 평균</div>
+                <div className="stat-value text-lg font-bold text-orange-600">
+                  {(data.monthlyStats.avgTestScore || 0).toFixed(1)}점
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* 보고서 내용 섹션별 표시 */}
         {sections.map((section, index) => {
@@ -334,7 +416,7 @@ export function MonthlyReportGenerator({
                   <h2 className="section-title text-lg font-bold text-gray-800">
                     {title}
                   </h2>
-                  {!isEditing ? (
+                  {(!isEditing && (editingReportId || (!viewingReport && reportText))) ? (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -343,7 +425,7 @@ export function MonthlyReportGenerator({
                     >
                       <Edit2 className="h-4 w-4" />
                     </Button>
-                  ) : (
+                  ) : isEditing && (
                     <div className="flex gap-2">
                       <Button
                         variant="ghost"
@@ -386,7 +468,8 @@ export function MonthlyReportGenerator({
           if (!title || !content) return null
           
           // 학습 통계 요약은 편집 불가 (index 0은 보통 학습 개요)
-          const isEditable = !title.includes('학습 개요') && !title.includes('학업 태도 기록')
+          // 수정 모드일 때는 모든 섹션 편집 가능
+          const isEditable = editingReportId ? true : (!title.includes('학습 개요') && !title.includes('학업 태도 기록'))
           const isEditing = editingSections[index]
           const displayContent = getSectionContent(index, content)
           
@@ -396,7 +479,7 @@ export function MonthlyReportGenerator({
                 <h2 className="section-title text-lg font-bold text-gray-800">
                   {title}
                 </h2>
-                {isEditable && !isEditing && (
+                {isEditable && !isEditing && (editingReportId || (!viewingReport && reportText)) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -581,14 +664,25 @@ export function MonthlyReportGenerator({
                           )}
                         </div>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewReport(report.id)}
-                        disabled={isLoadingViewReport}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewReport(report.id)}
+                          disabled={isLoadingViewReport}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteReport(report.id)}
+                          disabled={deletingReportId === report.id}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -615,21 +709,70 @@ export function MonthlyReportGenerator({
               <div className="flex items-center gap-2">
                 {viewingReport && (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handlePrint}
-                      className="flex items-center gap-2"
-                    >
-                      <Printer className="h-4 w-4" />
-                      인쇄/PDF
-                    </Button>
+                    {editingReportId ? (
+                      <>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={handleUpdateReport}
+                          disabled={isEditingReport}
+                          className="flex items-center gap-2"
+                        >
+                          <Save className="h-4 w-4" />
+                          {isEditingReport ? "저장 중..." : "수정 저장"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingReportId(null)
+                            setEditingSections({})
+                            setEditedContent({})
+                          }}
+                        >
+                          취소
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const reportId = savedReports.find(r => 
+                              r.student?.id === viewingReport.student.id && 
+                              r.year === viewingReport.year && 
+                              r.month === viewingReport.month
+                            )?.id
+                            if (reportId) {
+                              setEditingReportId(reportId)
+                            }
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                          수정
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handlePrint}
+                          className="flex items-center gap-2"
+                        >
+                          <Printer className="h-4 w-4" />
+                          인쇄/PDF
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => {
                         setViewingReport(null)
                         setShowPreview(false)
+                        setEditingReportId(null)
+                        setEditingSections({})
+                        setEditedContent({})
                       }}
                     >
                       <X className="h-4 w-4" />
@@ -650,12 +793,7 @@ export function MonthlyReportGenerator({
                     student: viewingReport.student,
                     year: viewingReport.year,
                     month: viewingReport.month,
-                    monthlyStats: {
-                      attendanceRate: 0,
-                      avgFocus: 0,
-                      avgHomework: 0,
-                      avgTestScore: 0
-                    }
+                    monthlyStats: viewingReport.monthlyStats || null
                   } as MonthlyReportData)
                 : formatReportForDisplay(reportText!, monthlyData!)
               }

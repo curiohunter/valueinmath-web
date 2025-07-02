@@ -63,30 +63,44 @@ export function Sidebar() {
   }, [])
 
   // 읽지 않은 메시지 수 가져오기
-  // 읽지 않은 메시지 수 가져오기 useEffect 제거
-  // useEffect(() => {
-  //   async function fetchUnreadCount() {
-  //     try {
-  //       // API 엔드포인트를 통해 읽지 않은 메시지 수 가져오기
-  //       const response = await fetch("/api/chat/unread-count")
-  //       if (!response.ok) {
-  //         throw new Error(`Failed to fetch unread count: ${response.status}`)
-  //       }
-  //
-  //       const data = await response.json()
-  //       setUnreadCount(data.count || 0)
-  //     } catch (error) {
-  //       console.error("Error fetching unread count:", error)
-  //       // 오류가 발생해도 UI에 영향을 주지 않도록 함
-  //     }
-  //   }
-  //
-  //   fetchUnreadCount()
-  //
-  //   // 10초마다 업데이트
-  //   const interval = setInterval(fetchUnreadCount, 10000)
-  //   return () => clearInterval(interval)
-  // }, [])
+  useEffect(() => {
+    async function fetchUnreadCount() {
+      try {
+        const { data, error } = await supabase
+          .rpc('get_unread_message_count')
+        
+        if (error) throw error
+        setUnreadCount(data || 0)
+      } catch (error) {
+        console.error("Error fetching unread count:", error)
+      }
+    }
+
+    fetchUnreadCount()
+
+    // 10초마다 업데이트
+    const interval = setInterval(fetchUnreadCount, 10000)
+    
+    // 실시간 구독
+    const channel = supabase
+      .channel('global-messages-sidebar')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'global_messages' 
+        }, 
+        () => {
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
+  }, [])
 
   // 기본 사이드바 항목
   const sidebarItems = [
