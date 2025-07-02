@@ -4,7 +4,7 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ArrowDown, FileText, Trash2, Search, RotateCcw } from "lucide-react"
+import { ArrowDown, FileText, Trash2, Search, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TuitionRow as TuitionTableRow } from "./tuition-row"
 import type { TuitionRow } from "@/types/tuition"
@@ -39,6 +39,9 @@ interface TuitionTableProps {
   dateRange?: { from: string; to: string }
   onDateRangeChange?: (range: { from: string; to: string }) => void
   onResetFilters?: () => void
+  // 사이드바 토글 관련
+  isSidebarOpen?: boolean
+  onToggleSidebar?: () => void
 }
 
 export function TuitionTable({
@@ -68,7 +71,9 @@ export function TuitionTable({
   onDeleteRow,
   dateRange,
   onDateRangeChange,
-  onResetFilters
+  onResetFilters,
+  isSidebarOpen = true,
+  onToggleSidebar
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -78,6 +83,20 @@ export function TuitionTable({
       <div className="w-full max-w-[1400px] mx-auto">
         {/* 검색 및 필터링 바 */}
         <div className="bg-white rounded-t-xl shadow-sm border border-b-0 p-4">
+          <div className="flex items-center gap-4 mb-3">
+            {/* 사이드바 토글 버튼 */}
+            {onToggleSidebar && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onToggleSidebar}
+                className="h-8 w-8 p-0 bg-white border shadow-sm hover:bg-gray-50"
+              >
+                {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </Button>
+            )}
+            <h2 className="text-lg font-semibold text-gray-800">학원비 관리</h2>
+          </div>
           {isHistoryMode ? (
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-3">
               <div className="relative">

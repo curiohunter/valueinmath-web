@@ -495,17 +495,6 @@ export default function TuitionPage() {
           />
         </div>
 
-        {/* 토글 버튼 */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-16 w-6 px-0 bg-white border shadow-md hover:bg-gray-50"
-          style={{ left: isSidebarOpen ? '304px' : '0px' }}
-        >
-          {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </Button>
-
         {/* 오른쪽 테이블 */}
         <div className="flex-1">
           <TuitionTable
@@ -521,6 +510,8 @@ export default function TuitionPage() {
             selectedRows={selectedRows}
             onRowSelect={handleRowSelect}
             onSelectAll={handleSelectAll}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           />
         </div>
       </div>

@@ -416,7 +416,7 @@ export async function generateMonthlyTuition(
             is_sibling: student.has_sibling || false,
             class_type: '정규',
             amount,
-            note: null,
+            note: undefined,
             payment_status: '미납',
           })
           

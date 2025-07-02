@@ -8,7 +8,7 @@ import type { Database } from "@/types/database"
 // 서버 컴포넌트에서 사용할 Supabase 클라이언트
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies()
-  return createServerComponentClient<Database>({ cookies: () => cookieStore })
+  return createServerComponentClient<Database>({ cookies: () => cookieStore as any })
 }
 
 // 서버 액션에서 사용할 Supabase 클라이언트

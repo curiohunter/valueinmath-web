@@ -62,7 +62,11 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
           if (payload.new.user_id !== user?.id) {
             supabase
               .rpc('mark_messages_as_read', { message_ids: [payload.new.id] })
-              .catch(error => console.error("새 메시지 읽음 처리 실패:", error))
+              .then(result => {
+                if (result.error) {
+                  console.error("새 메시지 읽음 처리 실패:", result.error);
+                }
+              })
           }
         }
       )

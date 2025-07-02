@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Fragment } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { BulkDatePicker } from "@/components/ui/bulk-date-picker";
 import { ClassAccordion } from "@/components/ui/class-accordion";
@@ -7,12 +7,25 @@ import { ScoreDropdown } from "@/components/ui/score-dropdown";
 import { ScoreLegendBox } from "@/components/ui/score-legend-box";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { supabaseClient } from "@/lib/supabase/client";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { HelpCircle, Trash2 } from "lucide-react";
+import { HelpCircle, Trash2, ChevronLeft, ChevronRight, Plus, Calendar, Users, ChevronDown } from "lucide-react";
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal";
 
 const today = new Date().toISOString().slice(0, 10);
+
+// 점수 색상 스타일 함수 (노션 스타일)
+const scoreColor = (score: number) => {
+  switch (score) {
+    case 1: return "bg-red-100 text-red-600 border-red-200";
+    case 2: return "bg-orange-100 text-orange-600 border-orange-200";
+    case 3: return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    case 4: return "bg-blue-100 text-blue-600 border-blue-200";
+    case 5: return "bg-green-100 text-green-700 border-green-200";
+    default: return "bg-gray-100 text-gray-400 border-gray-200";
+  }
+};
 
 // 출결/숙제/집중도 string→숫자 매핑
 const attendanceMap: Record<string, number> = {
@@ -42,6 +55,7 @@ export default function LearningPage() {
   const [date, setDate] = useState(today);
   const [rows, setRows] = useState<
     Array<{
+      id?: string; // 기존 레코드 ID
       classId: string;
       studentId: string;
       name: string;
@@ -54,6 +68,11 @@ export default function LearningPage() {
       book1log: string;
       book2: string;
       book2log: string;
+      createdBy?: string;
+      createdByName?: string;
+      lastModifiedBy?: string;
+      lastModifiedByName?: string;
+      updatedAt?: string;
     }>
   >([]);
   const [classes, setClasses] = useState<any[]>([]);
@@ -64,15 +83,21 @@ export default function LearningPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [openClassIds, setOpenClassIds] = useState<string[]>([]);
+  const [filterClassId, setFilterClassId] = useState<string>("all"); // 반별 필터
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false); // 저장하지 않은 변경사항 추적
+  const [originalRows, setOriginalRows] = useState<typeof rows>([]); // 원본 데이터 저장
   // 교재/진도 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRowIdx, setModalRowIdx] = useState<number | null>(null);
-  const [modalField, setModalField] = useState<"book1" | "book1log" | "book2" | "book2log" | null>(null);
+  const [modalField, setModalField] = useState<"book1" | "book1log" | "book2" | "book2log" | "note" | null>(null);
   const [modalValue, setModalValue] = useState("");
   const modalInputRef = useRef<HTMLInputElement>(null);
   
   // 반만들기 모달 상태
   const [classModalOpen, setClassModalOpen] = useState(false);
+  
+  // 사이드바 열림/닫힘 상태
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   // 반만들기 완료 후 데이터 새로고침
   const handleClassModalClose = () => {
@@ -95,6 +120,9 @@ export default function LearningPage() {
       setTeachers(teacherData || []);
       // 첫 반 자동 선택
       if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
+      
+      // 오늘 날짜의 기존 데이터 불러오기
+      await fetchTodayLogs();
     } catch (e) {
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
     } finally {
@@ -102,8 +130,117 @@ export default function LearningPage() {
     }
   };
 
+  // 오늘 날짜의 학습 기록 불러오기
+  const fetchTodayLogs = async () => {
+    try {
+      const { data: todayLogs, error } = await supabaseClient
+        .from("today_study_logs")
+        .select("*");
+      
+      if (error) throw error;
+      
+      if (todayLogs && todayLogs.length > 0) {
+        setRows(todayLogs.map((log: any) => ({
+          id: log.id,
+          classId: log.class_id || "",
+          studentId: log.student_id || "",
+          name: log.student_name || "",
+          date: log.date,
+          attendance: log.attendance_status || 5,
+          homework: log.homework || 5,
+          focus: log.focus || 5,
+          note: log.note || "",
+          book1: log.book1 || "",
+          book1log: log.book1log || "",
+          book2: log.book2 || "",
+          book2log: log.book2log || "",
+          createdBy: log.created_by,
+          createdByName: log.created_by_name,
+          lastModifiedBy: log.last_modified_by,
+          lastModifiedByName: log.last_modified_by_name,
+          updatedAt: log.updated_at
+        })));
+        // 원본 데이터 저장
+        setOriginalRows(todayLogs.map((log: any) => ({
+          id: log.id,
+          classId: log.class_id || "",
+          studentId: log.student_id || "",
+          name: log.student_name || "",
+          date: log.date,
+          attendance: log.attendance_status || 5,
+          homework: log.homework || 5,
+          focus: log.focus || 5,
+          note: log.note || "",
+          book1: log.book1 || "",
+          book1log: log.book1log || "",
+          book2: log.book2 || "",
+          book2log: log.book2log || "",
+          createdBy: log.created_by,
+          createdByName: log.created_by_name,
+          lastModifiedBy: log.last_modified_by,
+          lastModifiedByName: log.last_modified_by_name,
+          updatedAt: log.updated_at
+        })));
+      }
+    } catch (error) {
+      console.error("오늘 날짜 데이터 불러오기 실패:", error);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // 자정 감지 및 자동 저장
+  useEffect(() => {
+    // 현재 날짜 확인
+    const checkDateChange = () => {
+      const currentDate = new Date().toISOString().slice(0, 10);
+      
+      // 날짜가 변경되었고 수정된 데이터가 있으면
+      if (currentDate !== date && rows.length > 0) {
+        console.log("날짜가 변경되어 자동 저장합니다.");
+        
+        // 자동 저장 실행
+        handleSave().then(() => {
+          // 저장 후 날짜 업데이트 및 데이터 초기화
+          setDate(currentDate);
+          setRows([]);
+          fetchData(); // 새로운 날짜의 데이터 불러오기
+        });
+      }
+    };
+
+    // 1분마다 날짜 변경 확인
+    const interval = setInterval(checkDateChange, 60000);
+
+    // 컴포넌트 언마운트 시 정리
+    return () => clearInterval(interval);
+  }, [date, rows.length]);
+
+  // 실시간 동기화
+  useEffect(() => {
+    // 오늘 날짜의 study_logs 변경사항 구독
+    const channel = supabaseClient
+      .channel('today-study-logs')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'study_logs',
+          filter: `date=eq.${today}`
+        }, 
+        (payload: any) => {
+          // 변경사항이 있으면 데이터 다시 불러오기
+          console.log('Study log changed:', payload);
+          fetchTodayLogs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabaseClient.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -119,6 +256,14 @@ export default function LearningPage() {
       .filter(s => studentIds.includes(s.id) && s.status?.trim().includes("재원"))
       .sort((a, b) => a.name.localeCompare(b.name, "ko"));
   };
+
+  // 데이터 변경 감지
+  useEffect(() => {
+    // 원본과 현재 데이터 비교
+    const hasChanges = JSON.stringify(rows) !== JSON.stringify(originalRows);
+    setHasUnsavedChanges(hasChanges);
+  }, [rows, originalRows]);
+
 
   // 반별 전체추가
   const handleAddAll = (classId: string) => {
@@ -146,27 +291,33 @@ export default function LearningPage() {
 
   // 학생별 추가
   const handleAddStudent = (classId: string, student: { id: string; name: string }) => {
-    setRows(prev =>
-      prev.some(r => r.studentId === student.id && r.classId === classId)
-        ? prev
-        : [
-            ...prev,
-            {
-              classId,
-              studentId: student.id,
-              name: student.name,
-              date,
-              attendance: 5,
-              homework: 5,
-              focus: 5,
-              note: "",
-              book1: "",
-              book1log: "",
-              book2: "",
-              book2log: "",
-            },
-          ]
-    );
+    setRows(prev => {
+      // 이미 테이블에 있는지 확인 (오늘 날짜로)
+      const existingRow = prev.find(r => r.studentId === student.id && r.date === date);
+      if (existingRow) {
+        // 이미 있으면 추가하지 않음
+        return prev;
+      } else {
+        // 없으면 새로 추가
+        return [
+          ...prev,
+          {
+            classId,
+            studentId: student.id,
+            name: student.name,
+            date,
+            attendance: 5,
+            homework: 5,
+            focus: 5,
+            note: "",
+            book1: "",
+            book1log: "",
+            book2: "",
+            book2log: "",
+          },
+        ];
+      }
+    });
   };
 
   // 날짜 일괄 적용
@@ -186,10 +337,19 @@ export default function LearningPage() {
       return;
     }
     try {
+      // 현재 사용자 정보 가져오기
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      const { data: currentEmployee } = await supabaseClient
+        .from("employees")
+        .select("id")
+        .eq("auth_id", user?.id || "")
+        .single();
+
       const { error } = await supabaseClient
         .from("study_logs")
         .upsert(
           rows.map(r => ({
+            id: r.id, // 기존 레코드는 ID 포함
             class_id: r.classId || null,
             student_id: r.studentId,
             date: r.date,
@@ -201,13 +361,21 @@ export default function LearningPage() {
             book2: r.book2,
             book2log: r.book2log,
             note: r.note,
+            // 새 레코드인 경우 created_by, 기존 레코드인 경우 last_modified_by
+            ...(r.id ? { last_modified_by: currentEmployee?.id } : { created_by: currentEmployee?.id }),
           })),
           { onConflict: "student_id,date" }
         );
       if (error) throw error;
+      
+      // 저장 성공 알림
       alert("저장되었습니다.");
-      // setRows([]); // 저장 후 초기화 원할 경우 주석 해제
+      
+      // 데이터 다시 불러오기 (저장 후에도 테이블에 유지)
+      await fetchTodayLogs();
+      setHasUnsavedChanges(false); // 저장 후 변경사항 초기화
     } catch (e) {
+      console.error("저장 오류:", e);
       alert("저장 중 오류가 발생했습니다.");
     }
   };
@@ -220,18 +388,47 @@ export default function LearningPage() {
 
   // 교재/진도 일괄 적용 함수
   const handleBulkApply = (key: "book1" | "book1log" | "book2" | "book2log") => {
+    // 현재 필터링되고 정렬된 행들 (테이블에 표시되는 순서와 동일)
+    const currentFilteredRows = rows
+      .filter(row => filterClassId === "all" || row.classId === filterClassId)
+      .sort((a, b) => {
+        // 반별로 먼저 정렬
+        const classA = classes.find(c => c.id === a.classId)?.name || "";
+        const classB = classes.find(c => c.id === b.classId)?.name || "";
+        if (classA !== classB) return classA.localeCompare(classB, "ko");
+        // 같은 반이면 이름순
+        return a.name.localeCompare(b.name, "ko");
+      });
+    
+    if (currentFilteredRows.length === 0) {
+      alert("필터링된 학생이 없습니다.");
+      return;
+    }
+    
+    // 필터링된 행들 중 첫 번째 값
+    const firstValue = currentFilteredRows[0][key];
+    
+    if (!firstValue || firstValue.trim() === "") {
+      alert("첫 번째 학생의 해당 항목이 비어있습니다.");
+      return;
+    }
+    
+    // 필터링된 반의 학생들에게만 적용
     setRows(prev => {
-      if (prev.length === 0) return prev;
-      const firstValue = prev[0][key];
-      return prev.map((r, i) => i === 0 ? r : { ...r, [key]: firstValue });
+      return prev.map(r => {
+        if (filterClassId === "all" || r.classId === filterClassId) {
+          return { ...r, [key]: firstValue };
+        }
+        return r;
+      });
     });
   };
 
-  const openModal = (idx: number, field: "book1" | "book1log" | "book2" | "book2log", value: string) => {
+  const openModal = (idx: number, field: "book1" | "book1log" | "book2" | "book2log" | "note", value: string | undefined) => {
     setModalOpen(true);
     setModalRowIdx(idx);
     setModalField(field);
-    setModalValue(value);
+    setModalValue(value || "");
   };
   const handleModalSave = () => {
     if (modalRowIdx !== null && modalField) {
@@ -255,293 +452,512 @@ export default function LearningPage() {
     </div>
   );
 
+  // 필터링 및 정렬된 데이터
+  const filteredAndSortedRows = rows
+    .filter(row => filterClassId === "all" || row.classId === filterClassId)
+    .sort((a, b) => {
+      // 반별로 먼저 정렬
+      const classA = classes.find(c => c.id === a.classId)?.name || "";
+      const classB = classes.find(c => c.id === b.classId)?.name || "";
+      if (classA !== classB) return classA.localeCompare(classB, "ko");
+      // 같은 반이면 이름순
+      return a.name.localeCompare(b.name, "ko");
+    });
+
   return (
     <TooltipProvider>
       <div className="space-y-6">
         <LearningTabs />
-        <div className="flex gap-6">
-          {/* 왼쪽: 날짜/일괄적용 + 반별 아코디언 (축소, 스타일 통일) */}
-          <div className="w-52 max-h-[600px] flex-shrink-0 bg-white rounded-xl shadow p-2 overflow-y-auto">
-            <div className="space-y-2 mb-2">
-              <input
-                type="date"
-                className="input input-bordered w-full text-sm px-2 py-1"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-              />
-              <Button
-                size="sm"
-                variant="default"
-                className="w-full text-sm"
-                onClick={() => setClassModalOpen(true)}
-              >
-                반 만들기
-              </Button>
-            </div>
-            <div className="space-y-2 mt-2">
+        
+        {/* 메인 콘텐츠 */}
+        <div className="flex gap-6 relative">
+          
+          {/* 왼쪽 사이드바 */}
+          <div className={`transition-all duration-300 ${
+            isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
+          }`}>
+            <div className="w-72 max-h-[800px] flex-shrink-0 space-y-4 overflow-y-auto">
+              {/* 날짜 선택 카드 */}
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50">
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calendar className="w-4 h-4 text-blue-600" />
+                    <span className="font-semibold text-gray-700">날짜 선택</span>
+                  </div>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                    value={date}
+                    onChange={e => setDate(e.target.value)}
+                  />
+                  <div className="mt-2 text-xs text-blue-600 font-medium">
+                    {new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
+                </div>
+              </Card>
+              
+              {/* 반 만들기 버튼 카드 */}
+              <Card className="border-0 shadow-md bg-gradient-to-br from-green-50 to-emerald-50">
+                <div className="p-4">
+                  <Button
+                    onClick={() => setClassModalOpen(true)}
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-2.5 rounded-lg shadow-md transition-all duration-200 hover:shadow-lg"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    반 만들기
+                  </Button>
+                  <div className="mt-2 text-xs text-green-600 text-center">
+                    새로운 반을 생성합니다
+                  </div>
+                </div>
+              </Card>
+              
+              {/* 반별 학생 목록 */}
+              <Card className="border-0 shadow-md">
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Users className="w-4 h-4 text-gray-600" />
+                    <span className="font-semibold text-gray-700">반별 추가</span>
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      {classes?.length || 0}개 반
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-3">
               {classes.map(cls => {
                 const classStudentList = getClassStudents(cls.id);
                 const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
                 const isOpen = openClassIds.includes(cls.id);
                 return (
-                  <div key={cls.id} className="bg-gray-50 rounded-lg border px-2 py-2">
-                    <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleClassAccordion(cls.id)}>
-                      <div className="flex items-center gap-1">
-                        <span className="font-bold text-sm">{cls.name}</span>
-                        <span className="text-gray-400 text-xs">{classStudentList.length}명</span>
+                  <div key={cls.id}>
+                    {/* 반 헤더 - 카드형 디자인 */}
+                    <Card className="border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer hover:shadow-md">
+                      <div className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleClassAccordion(cls.id);
+                              }}
+                              className="p-1 rounded-md hover:bg-white/50 transition-colors flex-shrink-0 mt-0.5"
+                            >
+                              {isOpen ? (
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-gray-500" />
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-sm text-gray-800 truncate">
+                                {cls.name}
+                              </div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                {classStudentList.length}명
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddAll(cls.id);
+                            }}
+                            size="sm"
+                            variant="ghost"
+                            className="w-8 h-8 p-0 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 shadow-sm transition-all duration-200 hover:shadow-md flex-shrink-0"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-6 h-6 p-0 flex items-center justify-center"
-                          onClick={e => { e.stopPropagation(); handleAddAll(cls.id); }}
-                        >
-                          <span className="text-lg text-blue-400">+</span>
-                        </Button>
-                        <span className="text-base">{isOpen ? "▾" : "▸"}</span>
-                      </div>
-                    </div>
+                    </Card>
+                    
+                    {/* 학생 목록 - 아코디언 */}
                     {isOpen && (
-                      <div className="pl-1 mt-2 space-y-1">
+                      <div className="mt-2 ml-4 space-y-2">
                         {classStudentList
                           .filter(s => !addedStudentIds.includes(s.id))
                           .map(s => (
-                            <div key={s.id} className="flex items-center justify-between py-0.5">
-                              <span className="text-sm">{s.name}</span>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-6 h-6 p-0 flex items-center justify-center"
-                                onClick={() => handleAddStudent(cls.id, s)}
-                              >
-                                <span className="text-lg text-blue-400">+</span>
-                              </Button>
-                            </div>
+                            <Card 
+                              key={s.id}
+                              className="border border-gray-100 hover:border-gray-200 transition-colors"
+                            >
+                              <div className="p-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-green-400 rounded-full" />
+                                    <span className="text-sm font-medium text-gray-700">
+                                      {s.name}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    onClick={() => handleAddStudent(cls.id, s)}
+                                    size="sm"
+                                    variant="ghost"
+                                    className="w-6 h-6 p-0 rounded-full hover:bg-blue-100 text-blue-600"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </Card>
                           ))}
+                          
                         {classStudentList.filter(s => !addedStudentIds.includes(s.id)).length === 0 && (
-                          <span className="text-xs text-gray-400">추가할 학생 없음</span>
+                          <div className="text-center py-4 text-gray-400 text-sm">
+                            이미 모든 학생이 추가됨
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
                 );
               })}
+                  </div>
+                  
+                  {(!classes || classes.length === 0) && (
+                    <div className="text-center py-8 text-gray-400">
+                      <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <div className="text-sm">등록된 반이 없습니다</div>
+                    </div>
+                  )}
+                </div>
+              </Card>
             </div>
           </div>
-          {/* 오른쪽: 표 + 저장 버튼 */}
+          
+          {/* 오른쪽 테이블 */}
           <div className="flex-1">
-            <div className="w-full max-w-[1200px] mx-auto">
-              <div className="bg-white rounded-lg shadow border overflow-x-auto">
-                <table className="min-w-[900px] w-full text-sm">
+            <Card className="bg-white rounded-xl shadow border overflow-hidden">
+              {/* 헤더 섹션 */}
+              <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    {/* 사이드바 토글 버튼 */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                      className="h-8 w-8 p-0 bg-white border shadow-sm hover:bg-gray-50"
+                    >
+                      {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </Button>
+                    
+                    <h2 className="text-lg font-semibold text-gray-800">학습 관리</h2>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-600">반 필터:</span>
+                      <select
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={filterClassId}
+                        onChange={(e) => setFilterClassId(e.target.value)}
+                      >
+                        <option value="all">전체</option>
+                        {classes.map(cls => (
+                          <option key={cls.id} value={cls.id}>{cls.name}</option>
+                        ))}
+                      </select>
+                      {filterClassId !== "all" && (
+                        <Badge variant="secondary">
+                          {filteredAndSortedRows.length}명
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {hasUnsavedChanges && (
+                      <span className="text-sm text-orange-600 font-medium animate-pulse">
+                        저장하지 않은 변경사항이 있습니다
+                      </span>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setRows([])}
+                      className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      일괄 삭제
+                    </Button>
+                    <Button 
+                      size="sm"
+                      onClick={handleSave}
+                      className={`${
+                        hasUnsavedChanges 
+                          ? "bg-red-600 hover:bg-red-700 animate-pulse shadow-lg" 
+                          : "bg-blue-600 hover:bg-blue-700"
+                      } text-white font-medium`}
+                    >
+                      {hasUnsavedChanges ? "저장 필요!" : "저장"}
+                    </Button>
+                    <Badge variant="outline" className="text-sm font-medium">
+                      {date}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 테이블 섹션 */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
                   <thead>
-                    <tr className="bg-gray-100 border-b">
-                      <th className="min-w-[80px] w-[8%] px-2 py-2 text-left font-medium text-gray-700">반</th>
-                      <th className="min-w-[80px] w-[8%] px-2 py-2 text-left font-medium text-gray-700">학생</th>
-                      <th className="min-w-[100px] w-[10%] px-2 py-2 text-left font-medium text-gray-700">날짜</th>
-                      <th className="min-w-[60px] w-[7%] px-1 py-2 text-center font-medium text-gray-700">
-                        <div className="flex items-center justify-center gap-1">
-                          출결
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" align="center">
-                              <ScoreLegendBox type="attendance" />
-                            </TooltipContent>
-                          </Tooltip>
+                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-8"></th>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">학생</th>
+                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-36">날짜</th>
+                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">출결</th>
+                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">숙제</th>
+                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">집중도</th>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
+                        <div className="flex items-center gap-2">
+                          <span>교재1</span>
+                          <button
+                            onClick={() => handleBulkApply("book1")}
+                            className="text-gray-400 hover:text-gray-600"
+                            title="첫 번째 값으로 일괄 적용"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
                         </div>
                       </th>
-                      <th className="min-w-[60px] w-[7%] px-1 py-2 text-center font-medium text-gray-700">
-                        <div className="flex items-center justify-center gap-1">
-                          숙제
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" align="center">
-                              <ScoreLegendBox type="homework" />
-                            </TooltipContent>
-                          </Tooltip>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
+                        <div className="flex items-center gap-2">
+                          <span>진도1</span>
+                          <button
+                            onClick={() => handleBulkApply("book1log")}
+                            className="text-gray-400 hover:text-gray-600"
+                            title="첫 번째 값으로 일괄 적용"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
                         </div>
                       </th>
-                      <th className="min-w-[60px] w-[7%] px-1 py-2 text-center font-medium text-gray-700">
-                        <div className="flex items-center justify-center gap-1">
-                          집중도
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" align="center">
-                              <ScoreLegendBox type="focus" />
-                            </TooltipContent>
-                          </Tooltip>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
+                        <div className="flex items-center gap-2">
+                          <span>교재2</span>
+                          <button
+                            onClick={() => handleBulkApply("book2")}
+                            className="text-gray-400 hover:text-gray-600"
+                            title="첫 번째 값으로 일괄 적용"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
                         </div>
                       </th>
-                      <th className="min-w-[110px] w-[10%] px-2 py-2 text-left font-medium text-gray-700">교재1
-                        <Button size="sm" variant="ghost" className="ml-1 w-5 h-5 p-0 text-gray-400" onClick={() => handleBulkApply("book1")}>↓</Button>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
+                        <div className="flex items-center gap-2">
+                          <span>진도2</span>
+                          <button
+                            onClick={() => handleBulkApply("book2log")}
+                            className="text-gray-400 hover:text-gray-600"
+                            title="첫 번째 값으로 일괄 적용"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                        </div>
                       </th>
-                      <th className="min-w-[110px] w-[10%] px-2 py-2 text-left font-medium text-gray-700">진도1
-                        <Button size="sm" variant="ghost" className="ml-1 w-5 h-5 p-0 text-gray-400" onClick={() => handleBulkApply("book1log")}>↓</Button>
-                      </th>
-                      <th className="min-w-[110px] w-[10%] px-2 py-2 text-left font-medium text-gray-700">교재2
-                        <Button size="sm" variant="ghost" className="ml-1 w-5 h-5 p-0 text-gray-400" onClick={() => handleBulkApply("book2")}>↓</Button>
-                      </th>
-                      <th className="min-w-[110px] w-[10%] px-2 py-2 text-left font-medium text-gray-700">진도2
-                        <Button size="sm" variant="ghost" className="ml-1 w-5 h-5 p-0 text-gray-400" onClick={() => handleBulkApply("book2log")}>↓</Button>
-                      </th>
-                      <th className="min-w-[120px] w-[13%] px-2 py-2 text-left font-medium text-gray-700">특이사항</th>
-                      <th className="min-w-[45px] w-[5%] px-1 py-2 text-center font-medium text-gray-700">삭제</th>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-32">특이사항</th>
+                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-20">삭제</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {rows.map((row, idx) => (
-                      <tr key={row.classId + row.studentId} className="hover:bg-blue-50/30">
-                        <td className="min-w-[80px] w-[8%] px-2 py-1 text-xs font-medium text-gray-800">{classes.find(c => c.id === row.classId)?.name || row.classId}</td>
-                        <td className="min-w-[80px] w-[8%] px-2 py-1 text-xs font-medium text-gray-800">{row.name || students.find(s => s.id === row.studentId)?.name || row.studentId}</td>
-                        <td className="min-w-[100px] w-[10%] px-2 py-1">
+                  <tbody>
+                    {/* 반별로 그룹화 */}
+                    {Object.entries(
+                      filteredAndSortedRows.reduce((groups: { [className: string]: typeof filteredAndSortedRows }, row) => {
+                        const className = classes.find(c => c.id === row.classId)?.name || row.classId;
+                        if (!groups[className]) {
+                          groups[className] = [];
+                        }
+                        groups[className].push(row);
+                        return groups;
+                      }, {})
+                    )
+                    .sort(([a], [b]) => a.localeCompare(b, "ko"))
+                    .map(([className, classRows]) => (
+                      <React.Fragment key={className}>
+                        {/* 반별 그룹 헤더 */}
+                        <tr className="bg-gradient-to-r from-green-50 to-emerald-50 border-t-2 border-green-200">
+                          <td colSpan={12} className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-sm font-semibold text-green-800">
+                                {className}
+                              </span>
+                              <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                                {classRows.length}명
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* 그룹 내 학생들 */}
+                        {classRows.map((row, idx) => {
+                          const originalIdx = rows.findIndex(r => r.studentId === row.studentId && r.classId === row.classId);
+                          return (
+                          <tr key={row.classId + row.studentId} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {row.name || students.find(s => s.id === row.studentId)?.name || row.studentId}
+                            </td>
+                        <td className="px-4 py-3 text-center">
                           <input
                             type="date"
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full max-w-[135px] px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             value={row.date}
-                            onChange={e => handleChange(idx, "date", e.target.value)}
+                            onChange={e => handleChange(originalIdx, "date", e.target.value)}
                           />
                         </td>
-                        <td className="min-w-[60px] w-[7%] px-1 py-1 text-center">
-                          <select
-                            className="w-full px-0.5 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={row.attendance}
-                            onChange={e => handleChange(idx, "attendance", parseInt(e.target.value))}
+                        <td className="px-4 py-3 text-center">
+                          <span 
+                            className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${
+                              row.attendance === 5 ? 'bg-green-100 text-green-700 border-green-200' :
+                              row.attendance === 4 ? 'bg-blue-100 text-blue-600 border-blue-200' :
+                              row.attendance === 3 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
+                              row.attendance === 2 ? 'bg-orange-100 text-orange-600 border-orange-200' :
+                              'bg-red-100 text-red-600 border-red-200'
+                            }`}
+                            onClick={() => {
+                              const nextValue = row.attendance === 5 ? 1 : row.attendance + 1;
+                              handleChange(originalIdx, "attendance", nextValue);
+                            }}
                           >
-                            {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                          </select>
+                            {row.attendance}
+                          </span>
                         </td>
-                        <td className="min-w-[60px] w-[7%] px-1 py-1 text-center">
-                          <select
-                            className="w-full px-0.5 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={row.homework}
-                            onChange={e => handleChange(idx, "homework", parseInt(e.target.value))}
+                        <td className="px-4 py-3 text-center">
+                          <span 
+                            className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${
+                              row.homework === 5 ? 'bg-green-100 text-green-700 border-green-200' :
+                              row.homework === 4 ? 'bg-blue-100 text-blue-600 border-blue-200' :
+                              row.homework === 3 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
+                              row.homework === 2 ? 'bg-orange-100 text-orange-600 border-orange-200' :
+                              'bg-red-100 text-red-600 border-red-200'
+                            }`}
+                            onClick={() => {
+                              const nextValue = row.homework === 5 ? 1 : row.homework + 1;
+                              handleChange(originalIdx, "homework", nextValue);
+                            }}
                           >
-                            {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                          </select>
+                            {row.homework}
+                          </span>
                         </td>
-                        <td className="min-w-[60px] w-[7%] px-1 py-1 text-center">
-                          <select
-                            className="w-full px-0.5 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={row.focus}
-                            onChange={e => handleChange(idx, "focus", parseInt(e.target.value))}
+                        <td className="px-4 py-3 text-center">
+                          <span 
+                            className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${
+                              row.focus === 5 ? 'bg-green-100 text-green-700 border-green-200' :
+                              row.focus === 4 ? 'bg-blue-100 text-blue-600 border-blue-200' :
+                              row.focus === 3 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
+                              row.focus === 2 ? 'bg-orange-100 text-orange-600 border-orange-200' :
+                              'bg-red-100 text-red-600 border-red-200'
+                            }`}
+                            onClick={() => {
+                              const nextValue = row.focus === 5 ? 1 : row.focus + 1;
+                              handleChange(originalIdx, "focus", nextValue);
+                            }}
                           >
-                            {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                          </select>
+                            {row.focus}
+                          </span>
                         </td>
-                        <td className="min-w-[110px] w-[10%] px-2 py-1">
-                          <input
-                            type="text"
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-xs cursor-pointer hover:bg-gray-50 focus:outline-none truncate"
-                            value={row.book1}
-                            readOnly
-                            onClick={() => openModal(idx, "book1", row.book1)}
-                            placeholder="교재1"
+                        <td className="px-4 py-3">
+                          <div 
+                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                            onClick={() => openModal(originalIdx, "book1", row.book1)}
                             title={row.book1}
-                          />
+                          >
+                            {row.book1 || <span className="text-gray-400">클릭하여 입력</span>}
+                          </div>
                         </td>
-                        <td className="min-w-[110px] w-[10%] px-2 py-1">
-                          <input
-                            type="text"
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-xs cursor-pointer hover:bg-gray-50 focus:outline-none truncate"
-                            value={row.book1log}
-                            readOnly
-                            onClick={() => openModal(idx, "book1log", row.book1log)}
-                            placeholder="진도1"
+                        <td className="px-4 py-3">
+                          <div 
+                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                            onClick={() => openModal(originalIdx, "book1log", row.book1log)}
                             title={row.book1log}
-                          />
+                          >
+                            {row.book1log || <span className="text-gray-400">클릭하여 입력</span>}
+                          </div>
                         </td>
-                        <td className="min-w-[110px] w-[10%] px-2 py-1">
-                          <input
-                            type="text"
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-xs cursor-pointer hover:bg-gray-50 focus:outline-none truncate"
-                            value={row.book2}
-                            readOnly
-                            onClick={() => openModal(idx, "book2", row.book2)}
-                            placeholder="교재2"
+                        <td className="px-4 py-3">
+                          <div 
+                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                            onClick={() => openModal(originalIdx, "book2", row.book2)}
                             title={row.book2}
-                          />
+                          >
+                            {row.book2 || <span className="text-gray-400">클릭하여 입력</span>}
+                          </div>
                         </td>
-                        <td className="min-w-[110px] w-[10%] px-2 py-1">
-                          <input
-                            type="text"
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-xs cursor-pointer hover:bg-gray-50 focus:outline-none truncate"
-                            value={row.book2log}
-                            readOnly
-                            onClick={() => openModal(idx, "book2log", row.book2log)}
-                            placeholder="진도2"
+                        <td className="px-4 py-3">
+                          <div 
+                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                            onClick={() => openModal(originalIdx, "book2log", row.book2log)}
                             title={row.book2log}
-                          />
+                          >
+                            {row.book2log || <span className="text-gray-400">클릭하여 입력</span>}
+                          </div>
                         </td>
-                        <td className="min-w-[120px] w-[13%] px-2 py-1">
-                          <input
-                            type="text"
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            value={row.note}
-                            onChange={e => handleChange(idx, "note", e.target.value)}
-                            placeholder="특이사항"
-                          />
+                        <td className="px-4 py-3">
+                          <div 
+                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                            onClick={() => openModal(originalIdx, "note", row.note)}
+                            title={row.note}
+                          >
+                            {row.note || <span className="text-gray-400">클릭하여 입력</span>}
+                          </div>
                         </td>
-                        <td className="min-w-[45px] w-[5%] px-1 py-1 text-center">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="w-6 h-6 p-0 text-red-500 hover:bg-red-100"
-                                onClick={() => setRows(rows => rows.filter((_, i) => i !== idx))}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" align="center">
-                              이 행 삭제
-                            </TooltipContent>
-                          </Tooltip>
+                        <td className="px-4 py-3 text-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
+                            onClick={() => setRows(rows => rows.filter((_, i) => i !== originalIdx))}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </td>
                       </tr>
+                        );
+                        })}
+                      </React.Fragment>
                     ))}
-                    {rows.length === 0 && (
+                    {filteredAndSortedRows.length === 0 && (
                       <tr>
-                        <td colSpan={12} className="px-4 py-12 text-center text-gray-400">
-                          <div className="text-gray-300 text-4xl mb-4">📊</div>
-                          <div className="text-lg font-medium text-gray-500 mb-2">학습 관리 기록이 없습니다</div>
-                          <div className="text-sm text-gray-400">왼쪽에서 반과 학생을 추가해 주세요</div>
+                        <td colSpan={12} className="text-center text-gray-400 py-12">
+                          <div className="text-4xl mb-4">📝</div>
+                          <div className="text-lg mb-2">학습 기록이 없습니다</div>
+                          <div className="text-sm">왼쪽 사이드바에서 반과 학생을 추가해 주세요</div>
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-              {/* 하단 액션 버튼: 테스트 로그와 동일하게 */}
-              <div className="bg-gray-50 px-4 py-3 border-t">
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-600">
-                    총 <span className="font-medium text-blue-600">{rows.length}</span>개의 학습 기록
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setRows([])} size="sm">
-                      일괄 삭제
-                    </Button>
-                    <Button onClick={handleSave} size="sm">
-                      저장
-                    </Button>
+              
+              {/* 하단 요약 바 */}
+              <div className="p-4 border-t bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-gray-600">
+                      총 <span className="font-semibold text-gray-900">{rows.length}</span>개의 학습 기록
+                    </span>
+                    {filteredAndSortedRows.length !== rows.length && (
+                      <Badge variant="secondary" className="text-xs">
+                        필터됨: {filteredAndSortedRows.length}개
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
         </div>
         {/* 모달: 교재/진도 입력 확대 */}
         {modalOpen && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
             <div className="bg-white rounded-xl shadow-lg p-6 w-[400px] max-w-full">
-              <div className="mb-4 font-semibold text-lg">교재/진도 입력</div>
+              <div className="mb-4 font-semibold text-lg">
+                {modalField === "note" ? "특이사항 입력" : "교재/진도 입력"}
+              </div>
               <input
                 ref={modalInputRef}
                 className="input input-bordered w-full text-lg h-12 px-4 py-3"
