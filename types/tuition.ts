@@ -5,9 +5,17 @@ type TuitionFeeRow = Database["public"]["Tables"]["tuition_fees"]["Row"]
 type ClassRow = Database["public"]["Tables"]["classes"]["Row"]
 type StudentRow = Database["public"]["Tables"]["students"]["Row"]
 
-// 수업 유형 enum
-export const CLASS_TYPES = ['정규', '특강'] as const
+// 수업 유형 enum (DB 값)
+export const CLASS_TYPES = ['정규', '특강', '모의고사비', '입학테스트비'] as const
 export type ClassType = typeof CLASS_TYPES[number]
+
+// UI 표시용 라벨 매핑
+export const CLASS_TYPE_LABELS: Record<ClassType, string> = {
+  '정규': '정규',
+  '특강': '특강',
+  '모의고사비': '모의고사',
+  '입학테스트비': '입학테스트'
+}
 
 // 납부 상태 enum
 export const PAYMENT_STATUS = ['미납', '완납', '부분납'] as const

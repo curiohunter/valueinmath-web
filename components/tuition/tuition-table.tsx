@@ -4,7 +4,7 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ArrowDown, FileText, Trash2, Search } from "lucide-react"
+import { ArrowDown, FileText, Trash2, Search, RotateCcw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TuitionRow as TuitionTableRow } from "./tuition-row"
 import type { TuitionRow } from "@/types/tuition"
@@ -27,6 +27,8 @@ interface TuitionTableProps {
   onSearchChange?: (value: string) => void
   paymentStatusFilter?: string
   onPaymentStatusFilterChange?: (value: string) => void
+  classTypeFilter?: string
+  onClassTypeFilterChange?: (value: string) => void
   isReadOnly?: boolean
   showSearchAndFilter?: boolean
   isHistoryMode?: boolean // 이력 모드 여부
@@ -57,6 +59,8 @@ export function TuitionTable({
   onSearchChange,
   paymentStatusFilter = "all",
   onPaymentStatusFilterChange,
+  classTypeFilter = "all",
+  onClassTypeFilterChange,
   isReadOnly = false,
   showSearchAndFilter = true,
   isHistoryMode = false,
@@ -75,8 +79,8 @@ export function TuitionTable({
         {/* 검색 및 필터링 바 */}
         <div className="bg-white rounded-t-xl shadow-sm border border-b-0 p-4">
           {isHistoryMode ? (
-            <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
-              <div className="lg:col-span-2 relative">
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-3">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
                   placeholder="학생명, 반명, 비고로 검색..."
@@ -116,12 +120,27 @@ export function TuitionTable({
                 </select>
               </div>
               <div>
+                <select
+                  value={classTypeFilter}
+                  onChange={(e) => onClassTypeFilterChange?.(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">전체 수업유형</option>
+                  <option value="정규">정규</option>
+                  <option value="특강">특강</option>
+                  <option value="모의고사비">모의고사</option>
+                  <option value="입학테스트비">입학테스트</option>
+                </select>
+              </div>
+              <div>
                 <Button
                   onClick={onResetFilters}
                   variant="outline"
-                  className="w-full"
+                  size="icon"
+                  className="h-10 w-10"
+                  title="필터 초기화"
                 >
-                  초기화
+                  <RotateCcw className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -148,7 +167,7 @@ export function TuitionTable({
               </select>
             </div>
           )}
-          {(searchTerm || paymentStatusFilter !== "all") && (
+          {(searchTerm || paymentStatusFilter !== "all" || (classTypeFilter && classTypeFilter !== "all")) && (
             <div className="mt-3">
               <Badge variant="secondary" className="text-xs">
                 {rows.length} / {originalRows.length}건 표시

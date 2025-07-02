@@ -24,11 +24,11 @@ interface AnalyticsChartsProps {
 const testScoreChartConfig = {
   score: {
     label: "시험 점수",
-    color: "hsl(var(--chart-1))"
+    color: "#3b82f6" // blue-500
   },
   average: {
     label: "평균",
-    color: "hsl(var(--chart-2))"
+    color: "#ef4444" // red-500
   }
 } satisfies ChartConfig
 
@@ -78,20 +78,6 @@ export function AnalyticsCharts({
     }))
   }, [monthlyData])
 
-  // 교재 진도 차트 데이터 가공
-  const progressData = useMemo(() => {
-    if (!bookProgresses?.length) return []
-    
-    return bookProgresses.map(book => ({
-      bookName: book.bookName.length > 10 
-        ? book.bookName.substring(0, 10) + "..." 
-        : book.bookName,
-      fullBookName: book.bookName,
-      progress: book.progressPercentage,
-      completed: book.completedChapters,
-      total: book.totalChapters
-    }))
-  }, [bookProgresses])
 
   // 차트 트렌드 계산
   const testTrend = useMemo(() => {
@@ -181,19 +167,21 @@ export function AnalyticsCharts({
                 <Line
                   type="monotone"
                   dataKey="score"
-                  stroke="var(--color-score)"
+                  stroke="#3b82f6"
                   strokeWidth={3}
-                  dot={{ fill: "var(--color-score)", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={{ fill: "#3b82f6", strokeWidth: 2, r: 5 }}
+                  activeDot={{ r: 7, fill: "#2563eb" }}
+                  connectNulls
                 />
                 <Line
                   type="monotone"
                   dataKey="average"
-                  stroke="var(--color-average)"
+                  stroke="#ef4444"
                   strokeWidth={2}
-                  strokeDasharray="5 5"
+                  strokeDasharray="8 4"
                   dot={false}
                   name="평균"
+                  opacity={0.7}
                 />
               </LineChart>
             </ChartContainer>
@@ -209,58 +197,52 @@ export function AnalyticsCharts({
         </CardContent>
       </Card>
 
-      {/* 교재 진도 차트 */}
+      {/* 교재 진도 목록 */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5" />
-            교재별 진도율
+            교재별 진도 현황
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {progressData.length > 0 ? (
-            <ChartContainer config={progressChartConfig} className="h-64">
-              <BarChart data={progressData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="bookName" 
-                  tick={{ fontSize: 12 }}
-                  tickMargin={8}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  domain={[0, 100]}
-                  tick={{ fontSize: 12 }}
-                  tickMargin={8}
-                  label={{ value: '진도율 (%)', angle: -90, position: 'insideLeft' }}
-                />
-                <ChartTooltip 
-                  content={<ChartTooltipContent />}
-                  labelFormatter={(value, payload) => {
-                    const data = payload?.[0]?.payload
-                    return data?.fullBookName || value
-                  }}
-                  formatter={(value, name, props) => {
-                    if (name === 'progress') {
-                      const data = props.payload
-                      return [
-                        `${value}% (${data.completed}/${data.total} 챕터)`,
-                        '진도율'
-                      ]
-                    }
-                    return [value, name]
-                  }}
-                />
-                <Bar
-                  dataKey="progress"
-                  fill="var(--color-progress)"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={60}
-                />
-              </BarChart>
-            </ChartContainer>
+          {bookProgresses.length > 0 ? (
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {bookProgresses.map((book, index) => (
+                <div key={index} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-medium text-sm">{book.bookName}</h4>
+                    <span className="text-xs text-muted-foreground">
+                      {book.lastUpdated ? new Date(book.lastUpdated).toLocaleDateString('ko-KR') : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>현재 진도:</span>
+                      <span className="font-medium text-foreground">{book.currentChapter || '시작 전'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>완료 챕터:</span>
+                      <span className="font-medium text-foreground">{book.completedChapters}개</span>
+                    </div>
+                    {book.chapters.length > 0 && (
+                      <div className="mt-2">
+                        <details className="cursor-pointer">
+                          <summary className="text-xs text-muted-foreground hover:text-foreground">
+                            진도 상세보기
+                          </summary>
+                          <div className="mt-1 pl-4 text-xs text-muted-foreground">
+                            {book.chapters.map((chapter, idx) => (
+                              <div key={idx}>{chapter}</div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="h-64 flex items-center justify-center text-muted-foreground">
               <div className="text-center">

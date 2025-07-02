@@ -321,7 +321,7 @@ export default function LearningHistoryPage() {
 
   // 수정 버튼 클릭
   function handleEdit(row: any) {
-    setEditingRow({ ...row, originalDate: row.date });
+    setEditingRow({ ...row, originalDate: row.date, original_class_id: row.class_id });
     setIsEditModalOpen(true);
   }
 
@@ -329,7 +329,8 @@ export default function LearningHistoryPage() {
   async function handleSaveEdit(edited: any) {
     setIsSaving(true);
     try {
-      const { error } = await supabaseClient
+      // 먼저 기존 학습 기록을 업데이트
+      const { error: updateError } = await supabaseClient
         .from("study_logs")
         .update({
           date: edited.date,
@@ -341,12 +342,48 @@ export default function LearningHistoryPage() {
           book2: edited.book2,
           book2log: edited.book2log,
           note: edited.note,
+          class_id: edited.class_id, // 클래스 ID 업데이트 추가
         })
         .match({
           student_id: edited.student_id,
           date: edited.originalDate || edited.date
         });
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // 클래스가 변경된 경우 class_students 테이블도 업데이트
+      if (edited.class_id !== edited.original_class_id) {
+        // 먼저 학생의 현재 클래스 매핑을 모두 가져옴
+        const { data: currentMappings } = await supabaseClient
+          .from("class_students")
+          .select("*")
+          .eq("student_id", edited.student_id);
+
+        // 기존 클래스에서 해당 학생 제거
+        if (edited.original_class_id) {
+          await supabaseClient
+            .from("class_students")
+            .delete()
+            .match({
+              class_id: edited.original_class_id,
+              student_id: edited.student_id
+            });
+        }
+
+        // 새 클래스에 학생 추가 (중복 체크)
+        const existingMapping = currentMappings?.find(
+          m => m.class_id === edited.class_id
+        );
+        
+        if (!existingMapping && edited.class_id) {
+          await supabaseClient
+            .from("class_students")
+            .insert({
+              class_id: edited.class_id,
+              student_id: edited.student_id
+            });
+        }
+      }
+
       toast({ title: "수정 완료", description: "기록이 성공적으로 수정되었습니다." });
       setIsEditModalOpen(false);
       setEditingRow(null);
@@ -523,7 +560,7 @@ export default function LearningHistoryPage() {
                 <tbody className="divide-y divide-gray-100">
                   {paginatedData.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="px-4 py-12 text-center text-gray-400">
+                      <td colSpan={12} className="px-4 py-12 text-center text-gray-400">
                         <div className="text-gray-300 text-4xl mb-4">📋</div>
                         <div className="text-lg font-medium text-gray-500 mb-2">기록이 없습니다</div>
                         <div className="text-sm text-gray-400">검색 조건을 조정해보세요</div>
@@ -534,7 +571,7 @@ export default function LearningHistoryPage() {
                       <React.Fragment key={group.className}>
                         {/* 반별 그룹 헤더 */}
                         <tr className="bg-gradient-to-r from-green-50 to-emerald-50 border-t-2 border-green-200">
-                          <td colSpan={11} className="px-4 py-3">
+                          <td colSpan={12} className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                               <span className="text-sm font-semibold text-green-800">
@@ -721,7 +758,7 @@ export default function LearningHistoryPage() {
                   기본 정보
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">수업 날짜</label>
                       <Input 
@@ -730,6 +767,21 @@ export default function LearningHistoryPage() {
                         onChange={e => setEditingRow({ ...editingRow, date: e.target.value })}
                         className="h-11"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">클래스</label>
+                      <select
+                        className="w-full h-11 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        value={editingRow.class_id || ""}
+                        onChange={e => setEditingRow({ ...editingRow, class_id: e.target.value })}
+                      >
+                        <option value="">클래스를 선택하세요</option>
+                        {classOptions.map(cls => (
+                          <option key={cls.id} value={cls.id}>
+                            {cls.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>

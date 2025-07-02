@@ -54,7 +54,17 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
         throw error
       }
 
-      setMessages(messagesData || [])
+      // RPC 결과를 Message 타입으로 변환
+      const messages: Message[] = (messagesData || []).map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        message_type: msg.message_type,
+        created_at: msg.created_at,
+        user_id: msg.user_id,
+        user_name: msg.user_name || undefined
+      }))
+
+      setMessages(messages)
     } catch (error) {
       console.error("메시지 로드 실패:", error)
     }
@@ -102,7 +112,7 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
     <div className="fixed right-0 top-0 h-full w-80 bg-white border-l shadow-lg z-50 flex flex-col">
       {/* 헤더 */}
       <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-        <h3 className="text-lg font-semibold">글로벌 채팅</h3>
+        <h3 className="text-lg font-semibold">전체 채팅</h3>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>

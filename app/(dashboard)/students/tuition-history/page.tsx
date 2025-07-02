@@ -44,6 +44,7 @@ export default function TuitionHistoryPage() {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedStudent, setSelectedStudent] = useState("");
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState("");
+  const [selectedClassType, setSelectedClassType] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<TuitionRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,6 +65,7 @@ export default function TuitionHistoryPage() {
   // 테이블 상태
   const [searchTerm, setSearchTerm] = useState("");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [classTypeFilter, setClassTypeFilter] = useState("all");
   const [isSaving, setIsSaving] = useState(false);
 
   // 반/학생 이름 매핑 fetch
@@ -209,6 +211,10 @@ export default function TuitionHistoryPage() {
     setFilteredClassId("");
     setFilteredStudentId("");
     setSelectedPaymentStatus("");
+    setSelectedClassType("");
+    setSearchTerm("");
+    setPaymentStatusFilter("all");
+    setClassTypeFilter("all");
     setDatePreset("custom");
     const today = new Date();
     const year = today.getFullYear();
@@ -233,7 +239,10 @@ export default function TuitionHistoryPage() {
     // 납부 상태 필터
     const statusMatches = paymentStatusFilter === "all" || row.paymentStatus === paymentStatusFilter;
     
-    return searchMatches && statusMatches;
+    // 수업 유형 필터
+    const classTypeMatches = classTypeFilter === "all" || row.classType === classTypeFilter;
+    
+    return searchMatches && statusMatches && classTypeMatches;
   });
   
   const totalPages = Math.ceil(filteredData.length / pageSize);
@@ -465,6 +474,8 @@ export default function TuitionHistoryPage() {
             onSearchChange={setSearchTerm}
             paymentStatusFilter={paymentStatusFilter}
             onPaymentStatusFilterChange={setPaymentStatusFilter}
+            classTypeFilter={classTypeFilter}
+            onClassTypeFilterChange={setClassTypeFilter}
             showSearchAndFilter={true}
             isReadOnly={false}
             isHistoryMode={true}

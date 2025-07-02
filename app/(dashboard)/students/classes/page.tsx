@@ -20,18 +20,33 @@ export default function ClassesPage() {
   const [teacherFilter, setTeacherFilter] = useState("all")
   const [subjectFilter, setSubjectFilter] = useState("all")
 
-  useEffect(() => {
+  // 데이터 로드 함수
+  const loadData = async () => {
+    setLoading(true)
     const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-    supabase.from("classes").select("*, monthly_fee").then(({ data }) => setClasses(data ?? []))
-    supabase.from("employees")
-      .select("id, name, position")
-      .in("position", ["원장", "강사"])
-      .then(({ data }) => setTeachers(data ?? []))
-    supabase.from("students").select("id, name, status, school_type, grade").then(({ data }) => setStudents(data ?? []))
-    supabase.from("class_students").select("class_id, student_id").then(({ data }) => setClassStudents(data ?? []))
+    
+    const [classesRes, teachersRes, studentsRes, classStudentsRes] = await Promise.all([
+      supabase.from("classes").select("*, monthly_fee").order("teacher_id", { ascending: true }).order("name", { ascending: true }),
+      supabase.from("employees")
+        .select("id, name, position")
+        .in("position", ["원장", "강사"])
+        .order("name", { ascending: true }),
+      supabase.from("students").select("id, name, status, school_type, grade").order("name", { ascending: true }),
+      supabase.from("class_students").select("class_id, student_id")
+    ])
+    
+    setClasses(classesRes.data ?? [])
+    setTeachers(teachersRes.data ?? [])
+    setStudents(studentsRes.data ?? [])
+    setClassStudents(classStudentsRes.data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadData()
   }, [])
 
   // 반별 학생 수 매핑
@@ -40,7 +55,7 @@ export default function ClassesPage() {
     return acc
   }, {})
 
-  // 담당 선생님/과목 필터 적용
+  // 담당 선생님/과목 필터 적용 및 정렬
   let filteredClasses = classes;
   if (teacherFilter !== "all") {
     filteredClasses = filteredClasses.filter((c: any) => c.teacher_id === teacherFilter)
@@ -48,6 +63,20 @@ export default function ClassesPage() {
   if (subjectFilter !== "all") {
     filteredClasses = filteredClasses.filter((c: any) => c.subject === subjectFilter)
   }
+  
+  // 선생님별로 그룹화하여 정렬
+  const sortedClasses = [...filteredClasses].sort((a: any, b: any) => {
+    // 먼저 선생님 이름으로 정렬
+    const teacherA = teachers.find(t => t.id === a.teacher_id)?.name || 'ㅎ'
+    const teacherB = teachers.find(t => t.id === b.teacher_id)?.name || 'ㅎ'
+    
+    if (teacherA !== teacherB) {
+      return teacherA.localeCompare(teacherB)
+    }
+    
+    // 같은 선생님이면 반 이름으로 정렬
+    return a.name.localeCompare(b.name)
+  })
 
 
   // 수정 기능: 수정 모달 오픈 (상세에서 바로)
@@ -58,7 +87,7 @@ export default function ClassesPage() {
   // 수정 모달에서 저장 후 닫기
   const handleEditClose = () => {
     setEditClass(null)
-    window.location.reload()
+    loadData() // 전체 새로고침 대신 데이터만 다시 로드
   }
 
   return (
@@ -76,7 +105,7 @@ export default function ClassesPage() {
         <CardContent className="p-0">
           <Suspense fallback={<div>로딩 중...</div>}>
             <ClassesTable
-              classes={filteredClasses}
+              classes={sortedClasses}
               teachers={teachers}
               students={students}
               studentsCountMap={studentsCountMap}
@@ -85,7 +114,10 @@ export default function ClassesPage() {
           </Suspense>
         </CardContent>
       </Card>
-      <ClassFormModal open={modalOpen} onClose={() => setModalOpen(false)} teachers={teachers} students={students} />
+      <ClassFormModal open={modalOpen} onClose={() => {
+        setModalOpen(false)
+        loadData() // 새 반 추가 후 데이터 새로고침
+      }} teachers={teachers} students={students} />
       {/* 수정 모달: editClass가 있으면 */}
       <ClassFormModal
         open={!!editClass}

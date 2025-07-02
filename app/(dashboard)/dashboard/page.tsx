@@ -752,8 +752,12 @@ export default function DashboardPage() {
         {/* 오른쪽: 입학테스트 상세정보 */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">입학테스트 관리</CardTitle>
-            <CardDescription className="text-xs">입학테스트 일정 및 결과를 관리합니다</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">입학테스트 관리</CardTitle>
+                <CardDescription className="text-xs">입학테스트 일정 및 결과를 관리합니다</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="pt-3">
             <div className="space-y-2">

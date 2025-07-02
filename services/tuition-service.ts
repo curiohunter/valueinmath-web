@@ -246,7 +246,7 @@ export async function saveTuitionFee(
         payment_status: data.payment_status || '미납',
         payment_date: data.payment_date || null,
       }, {
-        onConflict: "class_id,student_id,year,month"
+        onConflict: "class_id,student_id,year,month,class_type"
       })
     
     if (error) {
@@ -288,7 +288,7 @@ export async function saveTuitionFees(
     const { error } = await supabase
       .from("tuition_fees")
       .upsert(insertData as any, {
-        onConflict: "class_id,student_id,year,month"
+        onConflict: "class_id,student_id,year,month,class_type"
       })
     
     if (error) {

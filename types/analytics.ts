@@ -27,6 +27,7 @@ export interface StudyLogSummary {
   homework: number | null          // 1-5 점수  
   focus: number | null             // 1-5 점수
   note: string | null
+  created_by?: string | null       // 선생님 ID (employees.id)
 }
 
 // 시험 기록 요약 (test_logs 기반)
@@ -38,6 +39,7 @@ export interface TestLogSummary {
   test: string | null              // 시험명
   test_score: number | null        // 점수
   note: string | null              // 비고 (결석 등)
+  created_by?: string | null       // 선생님 ID (employees.id)
 }
 
 // 월별 통계 집계
@@ -131,6 +133,7 @@ export interface BookProgress {
   completedChapters: number
   totalChapters: number
   progressPercentage: number
+  lastUpdated?: string
 }
 
 // 성적 분석을 위한 타입

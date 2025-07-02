@@ -822,6 +822,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_global_messages_with_names: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          content: string
+          message_type: string
+          created_at: string
+          user_id: string | null
+          user_name: string | null
+        }[]
+      }
     }
     Enums: {
       claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"

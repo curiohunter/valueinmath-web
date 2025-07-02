@@ -171,7 +171,7 @@ export function Sidebar() {
   return (
     <div className="h-screen w-40 border-r bg-background flex flex-col">
       <div className="p-4">
-        <h1 className="text-xl font-bold">학원관리 시스템</h1>
+        <h1 className="text-xl font-bold">밸류인 수학학원</h1>
       </div>
       <div className="flex-1 px-2 py-2 overflow-y-auto">
         <nav className="space-y-1">

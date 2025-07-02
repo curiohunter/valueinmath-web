@@ -362,7 +362,7 @@ export default function TestHistoryPage() {
 
   // 수정 버튼 클릭
   function handleEdit(row: any) {
-    setEditingRow({ ...row, originalDate: row.date });
+    setEditingRow({ ...row, originalDate: row.date, original_class_id: row.class_id });
     setIsEditModalOpen(true);
   }
 
@@ -370,7 +370,8 @@ export default function TestHistoryPage() {
   async function handleSaveEdit(edited: any) {
     setIsSaving(true);
     try {
-      const { error } = await supabaseClient
+      // 먼저 기존 시험 기록을 업데이트
+      const { error: updateError } = await supabaseClient
         .from("test_logs")
         .update({
           date: edited.date,
@@ -378,13 +379,49 @@ export default function TestHistoryPage() {
           test_type: edited.test_type,
           test_score: edited.test_score,
           note: edited.note,
+          class_id: edited.class_id, // 클래스 ID 업데이트 추가
         })
         .match({
           student_id: edited.student_id,
           date: edited.originalDate || edited.date,
           test: edited.test
         });
-      if (error) throw error;
+      if (updateError) throw updateError;
+
+      // 클래스가 변경된 경우 class_students 테이블도 업데이트
+      if (edited.class_id !== edited.original_class_id) {
+        // 먼저 학생의 현재 클래스 매핑을 모두 가져옴
+        const { data: currentMappings } = await supabaseClient
+          .from("class_students")
+          .select("*")
+          .eq("student_id", edited.student_id);
+
+        // 기존 클래스에서 해당 학생 제거
+        if (edited.original_class_id) {
+          await supabaseClient
+            .from("class_students")
+            .delete()
+            .match({
+              class_id: edited.original_class_id,
+              student_id: edited.student_id
+            });
+        }
+
+        // 새 클래스에 학생 추가 (중복 체크)
+        const existingMapping = currentMappings?.find(
+          m => m.class_id === edited.class_id
+        );
+        
+        if (!existingMapping && edited.class_id) {
+          await supabaseClient
+            .from("class_students")
+            .insert({
+              class_id: edited.class_id,
+              student_id: edited.student_id
+            });
+        }
+      }
+
       toast({ title: "수정 완료", description: "시험 기록이 성공적으로 수정되었습니다." });
       setIsEditModalOpen(false);
       setEditingRow(null);
@@ -763,7 +800,7 @@ export default function TestHistoryPage() {
                   기본 정보
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">시험 날짜</label>
                       <Input 
@@ -772,6 +809,21 @@ export default function TestHistoryPage() {
                         onChange={e => setEditingRow({ ...editingRow, date: e.target.value })}
                         className="h-11"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">클래스</label>
+                      <select
+                        className="w-full h-11 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        value={editingRow.class_id || ""}
+                        onChange={e => setEditingRow({ ...editingRow, class_id: e.target.value })}
+                      >
+                        <option value="">클래스를 선택하세요</option>
+                        {classOptions.map(cls => (
+                          <option key={cls.id} value={cls.id}>
+                            {cls.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>

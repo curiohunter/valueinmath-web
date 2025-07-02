@@ -200,6 +200,72 @@ export default function TuitionPage() {
     }
   }, [classesWithStudents, yearMonth, localRows, toast])
 
+  // 개별 학생 추가 핸들러
+  const handleAddStudent = useCallback(async (classId: string, studentId: string) => {
+    const targetClass = classesWithStudents.find(c => c.id === classId)
+    if (!targetClass) {
+      toast({
+        title: "오류",
+        description: "선택한 반을 찾을 수 없습니다.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const student = targetClass.students.find(s => s.id === studentId)
+    if (!student) {
+      toast({
+        title: "오류",
+        description: "선택한 학생을 찾을 수 없습니다.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const year = parseInt(yearMonth.split('-')[0])
+    const month = parseInt(yearMonth.split('-')[1])
+
+    // 이미 존재하는지 확인
+    const exists = localRows.some(row => 
+      row.classId === classId && 
+      row.studentId === studentId && 
+      row.year === year && 
+      row.month === month
+    )
+
+    if (!exists) {
+      const amount = targetClass.monthly_fee || 50000 // 기본값 설정
+      const discountedAmount = student.has_sibling ? Math.floor(amount * 0.95) : amount
+
+      const newRow: TuitionRow = {
+        id: `temp-${Date.now()}-${student.id}`, // 임시 ID
+        classId,
+        className: targetClass.name,
+        studentId: student.id,
+        studentName: student.name,
+        year,
+        month,
+        isSibling: student.has_sibling || false,
+        classType: '정규',
+        amount: discountedAmount,
+        note: '',
+        paymentStatus: '미납'
+      }
+
+      setLocalRows(prev => [...prev, newRow])
+      toast({
+        title: "추가 완료",
+        description: `${student.name} 학생의 학원비가 추가되었습니다.`,
+      })
+    } else {
+      toast({
+        title: "이미 존재",
+        description: "해당 학생의 학원비가 이미 추가되어 있습니다.",
+        variant: "destructive"
+      })
+    }
+  }, [classesWithStudents, yearMonth, localRows, toast])
+
   // 월별 자동 생성 핸들러 (로컬에만 추가)
   const handleGenerateMonthly = useCallback(async () => {
     const year = parseInt(yearMonth.split('-')[0])
@@ -421,6 +487,7 @@ export default function TuitionPage() {
             onYearMonthChange={handleYearMonthChange}
             classesWithStudents={classesWithStudents}
             onAddAll={handleAddAll}
+            onAddStudent={handleAddStudent}
             onGenerateMonthly={handleGenerateMonthly}
             isGenerating={isGenerating}
             selectedClassId={selectedClassId}

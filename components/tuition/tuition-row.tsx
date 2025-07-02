@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, Calendar, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CLASS_TYPES, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus } from "@/types/tuition"
+import { CLASS_TYPES, CLASS_TYPE_LABELS, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus } from "@/types/tuition"
 
 interface TuitionRowProps {
   row: TuitionRowType
@@ -55,6 +55,10 @@ export function TuitionRow({
         return 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
       case '특강':
         return 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+      case '모의고사비':
+        return 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+      case '입학테스트비':
+        return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
       default:
         return 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
     }
@@ -180,7 +184,7 @@ export function TuitionRow({
             "text-sm font-medium border transition-all duration-200",
             getClassTypeStyle(row.classType)
           )}>
-            <SelectValue />
+            <SelectValue>{CLASS_TYPE_LABELS[row.classType]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {CLASS_TYPES.map(type => (
@@ -188,9 +192,13 @@ export function TuitionRow({
                 <div className="flex items-center gap-2">
                   <div className={cn(
                     "w-2 h-2 rounded-full",
-                    type === '정규' ? 'bg-blue-400' : 'bg-purple-400'
+                    type === '정규' ? 'bg-blue-400' : 
+                    type === '특강' ? 'bg-purple-400' :
+                    type === '모의고사비' ? 'bg-green-400' :
+                    type === '입학테스트비' ? 'bg-orange-400' :
+                    'bg-slate-400'
                   )} />
-                  {type}
+                  {CLASS_TYPE_LABELS[type]}
                 </div>
               </SelectItem>
             ))}

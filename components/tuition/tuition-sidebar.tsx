@@ -13,6 +13,7 @@ interface TuitionSidebarProps {
   onYearMonthChange: (value: string) => void
   classesWithStudents: ClassWithStudents[]
   onAddAll: (classId: string) => void
+  onAddStudent: (classId: string, studentId: string) => void
   onGenerateMonthly: () => void
   isGenerating?: boolean
   selectedClassId?: string
@@ -24,6 +25,7 @@ export function TuitionSidebar({
   onYearMonthChange,
   classesWithStudents,
   onAddAll,
+  onAddStudent,
   onGenerateMonthly,
   isGenerating = false,
   selectedClassId,
@@ -225,7 +227,7 @@ export function TuitionSidebar({
                                 )}
                               </div>
                               <Button
-                                onClick={() => onAddAll(cls.id)} // 개별 학생 추가 기능은 나중에 구현
+                                onClick={() => onAddStudent(cls.id, student.id)}
                                 size="sm"
                                 variant="ghost"
                                 className="w-6 h-6 p-0 rounded-full hover:bg-blue-100 text-blue-600"

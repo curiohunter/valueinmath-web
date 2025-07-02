@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { saveMonthlyReport, getSavedMonthlyReports } from "@/services/analytics-service"
+import { saveMonthlyReport, getSavedMonthlyReports, getSavedReportById } from "@/services/analytics-service"
 import type { MonthlyReportData } from "@/types/analytics"
 
 interface MonthlyReportGeneratorProps {
@@ -32,6 +32,13 @@ export function MonthlyReportGenerator({
   const [savedReports, setSavedReports] = useState<any[]>([])
   const [isLoadingReports, setIsLoadingReports] = useState(false)
   const [activeTab, setActiveTab] = useState("generate")
+  const [viewingReport, setViewingReport] = useState<{
+    content: string
+    student: any
+    year: number
+    month: number
+  } | null>(null)
+  const [isLoadingViewReport, setIsLoadingViewReport] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
 
   const handleGenerateReport = async () => {
@@ -125,6 +132,32 @@ export function MonthlyReportGenerator({
       alert("보고서 저장 중 오류가 발생했습니다.")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // 저장된 보고서 보기
+  const handleViewReport = async (reportId: string) => {
+    setIsLoadingViewReport(true)
+    try {
+      const result = await getSavedReportById(reportId)
+      
+      if (result.success && result.data) {
+        setViewingReport({
+          content: result.data.report_content,
+          student: result.data.student,
+          year: result.data.year,
+          month: result.data.month
+        })
+        // 탭은 그대로 유지하고 미리보기만 표시
+        setShowPreview(true)
+      } else {
+        alert("보고서를 불러올 수 없습니다.")
+      }
+    } catch (error) {
+      console.error("보고서 조회 오류:", error)
+      alert("보고서 조회 중 오류가 발생했습니다.")
+    } finally {
+      setIsLoadingViewReport(false)
     }
   }
 
@@ -287,6 +320,66 @@ export function MonthlyReportGenerator({
         {/* 보고서 내용 섹션별 표시 */}
         {sections.map((section, index) => {
           const lines = section.trim().split('\n')
+          
+          // 종합 평가 섹션 특별 처리
+          if (lines[0]?.includes('────────────────────') && lines[1]?.includes('종합 평가')) {
+            const title = '종합 평가'
+            const content = lines.slice(2).join('\n').trim() || '(선생님이 직접 작성해주세요)'
+            const isEditing = editingSections[index]
+            const displayContent = getSectionContent(index, content)
+            
+            return (
+              <div key={index} className="report-section bg-gray-50 dark:bg-gray-900/20 p-6 rounded-lg border">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-300">
+                  <h2 className="section-title text-lg font-bold text-gray-800">
+                    {title}
+                  </h2>
+                  {!isEditing ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditSection(index, content)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSaveSection(index)}
+                        className="text-green-600 hover:text-green-700"
+                      >
+                        <Save className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancelEdit(index)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {isEditing ? (
+                  <Textarea
+                    value={displayContent}
+                    onChange={(e) => setEditedContent(prev => ({ ...prev, [index]: e.target.value }))}
+                    className="min-h-32 font-mono text-sm"
+                    placeholder="종합 평가를 입력하세요..."
+                  />
+                ) : (
+                  <div className="content-text whitespace-pre-line leading-relaxed text-gray-700 dark:text-gray-300">
+                    {displayContent}
+                  </div>
+                )}
+              </div>
+            )
+          }
+          
           const title = lines[0]?.replace(/^[■●▶📚📝👨‍🏫]\s*/, '').trim()
           const content = lines.slice(1).join('\n').trim()
           
@@ -491,10 +584,8 @@ export function MonthlyReportGenerator({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          // 보고서 보기 기능 - 나중에 구현
-                          alert("보고서 보기 기능은 준비 중입니다.")
-                        }}
+                        onClick={() => handleViewReport(report.id)}
+                        disabled={isLoadingViewReport}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -513,12 +604,39 @@ export function MonthlyReportGenerator({
       </CardContent>
 
       {/* 보고서 미리보기 */}
-      {showPreview && reportText && monthlyData && (
+      {showPreview && ((reportText && monthlyData) || viewingReport) && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              보고서 미리보기
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Eye className="h-5 w-5" />
+                {viewingReport ? "저장된 보고서" : "보고서 미리보기"}
+              </div>
+              <div className="flex items-center gap-2">
+                {viewingReport && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePrint}
+                      className="flex items-center gap-2"
+                    >
+                      <Printer className="h-4 w-4" />
+                      인쇄/PDF
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setViewingReport(null)
+                        setShowPreview(false)
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -527,7 +645,20 @@ export function MonthlyReportGenerator({
               className="bg-white dark:bg-gray-900 p-8 rounded-lg border shadow-sm"
               style={{ fontFamily: "'Malgun Gothic', 'Noto Sans KR', sans-serif" }}
             >
-              {formatReportForDisplay(reportText, monthlyData)}
+              {viewingReport 
+                ? formatReportForDisplay(viewingReport.content, {
+                    student: viewingReport.student,
+                    year: viewingReport.year,
+                    month: viewingReport.month,
+                    monthlyStats: {
+                      attendanceRate: 0,
+                      avgFocus: 0,
+                      avgHomework: 0,
+                      avgTestScore: 0
+                    }
+                  } as MonthlyReportData)
+                : formatReportForDisplay(reportText!, monthlyData!)
+              }
             </div>
           </CardContent>
         </Card>
