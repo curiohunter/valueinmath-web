@@ -41,63 +41,92 @@ export default function GlobalChatButton({
         if (error) throw error
         setUnreadCount(data || 0)
       } catch (error) {
-        console.error("Error fetching unread count:", error)
+        console.error('[GlobalChatButton] Error fetching unread count:', error)
       }
     }
 
     fetchUnreadCount()
 
-    // 실시간 구독
-    console.log('[GlobalChatButton] Setting up realtime subscription...')
-    
-    const channel = supabase
-      .channel('global-messages-button-' + Date.now()) // 유니크한 채널명 사용
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'global_messages' 
-        }, 
-        (payload) => {
-          console.log('[GlobalChatButton] New message received:', payload)
-          console.log('[GlobalChatButton] Current user ID:', user.id)
-          console.log('[GlobalChatButton] Message user ID:', payload.new.user_id)
-          console.log('[GlobalChatButton] Chat open status:', chatOpen)
-          
-          // 새 메시지가 내 것이 아니고 채팅창이 닫혀있으면 카운트 증가
-          if (payload.new.user_id !== user.id && !chatOpen) {
-            console.log('[GlobalChatButton] Incrementing unread count')
-            setUnreadCount(prev => prev + 1)
+    // 실시간 구독 설정
+    let retryCount = 0
+    let retryTimeout: NodeJS.Timeout | null = null
+    let channel: any = null
+    let isCleanedUp = false
+
+    const setupChannel = () => {
+      if (isCleanedUp) return // 컴포넌트가 언마운트된 경우 중단
+      
+      // 기존 채널이 있으면 제거
+      if (channel) {
+        supabase.removeChannel(channel)
+        channel = null
+      }
+      
+      channel = supabase
+        .channel(`global-messages-button-${user.id}`) // 사용자별 고정 채널명
+        .on('postgres_changes', 
+          { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'global_messages' 
+          }, 
+          (payload) => {
+            // 새 메시지가 내 것이 아니고 채팅창이 닫혀있으면 카운트 증가
+            if (payload.new.user_id !== user.id && !chatOpen) {
+              setUnreadCount(prev => prev + 1)
+            }
           }
-        }
-      )
-      .on('postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'message_read_status'
-        },
-        (payload) => {
-          console.log('[GlobalChatButton] Read status changed:', payload)
-          // 읽음 상태가 변경되면 카운트 다시 가져오기
-          fetchUnreadCount()
-        }
-      )
-      .subscribe((status) => {
-        console.log('[GlobalChatButton] Realtime subscription status:', status)
-        if (status === 'SUBSCRIBED') {
-          console.log('[GlobalChatButton] Successfully subscribed to realtime updates')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[GlobalChatButton] Channel error occurred')
-        } else if (status === 'TIMED_OUT') {
-          console.error('[GlobalChatButton] Subscription timed out')
-        } else if (status === 'CLOSED') {
-          console.log('[GlobalChatButton] Channel closed')
-        }
-      })
+        )
+        .on('postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'message_read_status'
+          },
+          (payload) => {
+            // 읽음 상태가 변경되면 카운트 다시 가져오기
+            fetchUnreadCount()
+          }
+        )
+        .subscribe((status, error) => {
+          if (status === 'SUBSCRIBED') {
+            retryCount = 0 // 성공 시 재시도 카운트 초기화
+            // 기존 타임아웃 취소
+            if (retryTimeout) {
+              clearTimeout(retryTimeout)
+              retryTimeout = null
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error(`[GlobalChatButton] ${status}:`, error)
+            // 재시도 로직 (최대 3번)
+            if (retryCount < 3 && !isCleanedUp) {
+              retryCount++
+              // 지수 백오프: 2초, 4초, 8초
+              const delay = Math.min(2000 * Math.pow(2, retryCount - 1), 8000)
+              console.log(`[GlobalChatButton] Retrying in ${delay}ms (attempt ${retryCount}/3)...`)
+              
+              retryTimeout = setTimeout(() => {
+                if (!isCleanedUp) {
+                  setupChannel()
+                }
+              }, delay)
+            } else if (retryCount >= 3) {
+              console.error('[GlobalChatButton] Max retries reached. Stopping reconnection attempts.')
+            }
+          }
+        })
+    }
+
+    setupChannel()
 
     return () => {
-      supabase.removeChannel(channel)
+      isCleanedUp = true
+      if (retryTimeout) {
+        clearTimeout(retryTimeout)
+      }
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [user, chatOpen])
 
