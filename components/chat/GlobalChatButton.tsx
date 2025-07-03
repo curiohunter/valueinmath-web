@@ -48,8 +48,10 @@ export default function GlobalChatButton({
     fetchUnreadCount()
 
     // 실시간 구독
+    console.log('[GlobalChatButton] Setting up realtime subscription...')
+    
     const channel = supabase
-      .channel('global-messages-button')
+      .channel('global-messages-button-' + Date.now()) // 유니크한 채널명 사용
       .on('postgres_changes', 
         { 
           event: 'INSERT', 
@@ -57,9 +59,14 @@ export default function GlobalChatButton({
           table: 'global_messages' 
         }, 
         (payload) => {
-          console.log('Button: New message received', payload)
+          console.log('[GlobalChatButton] New message received:', payload)
+          console.log('[GlobalChatButton] Current user ID:', user.id)
+          console.log('[GlobalChatButton] Message user ID:', payload.new.user_id)
+          console.log('[GlobalChatButton] Chat open status:', chatOpen)
+          
           // 새 메시지가 내 것이 아니고 채팅창이 닫혀있으면 카운트 증가
           if (payload.new.user_id !== user.id && !chatOpen) {
+            console.log('[GlobalChatButton] Incrementing unread count')
             setUnreadCount(prev => prev + 1)
           }
         }
@@ -70,13 +77,23 @@ export default function GlobalChatButton({
           schema: 'public',
           table: 'message_read_status'
         },
-        () => {
+        (payload) => {
+          console.log('[GlobalChatButton] Read status changed:', payload)
           // 읽음 상태가 변경되면 카운트 다시 가져오기
           fetchUnreadCount()
         }
       )
       .subscribe((status) => {
-        console.log('Button realtime subscription status:', status)
+        console.log('[GlobalChatButton] Realtime subscription status:', status)
+        if (status === 'SUBSCRIBED') {
+          console.log('[GlobalChatButton] Successfully subscribed to realtime updates')
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[GlobalChatButton] Channel error occurred')
+        } else if (status === 'TIMED_OUT') {
+          console.error('[GlobalChatButton] Subscription timed out')
+        } else if (status === 'CLOSED') {
+          console.log('[GlobalChatButton] Channel closed')
+        }
       })
 
     return () => {

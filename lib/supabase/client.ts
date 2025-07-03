@@ -14,6 +14,11 @@ export function createBrowserSupabaseClient() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
     }
   })
 }

@@ -48,21 +48,61 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
   useEffect(() => {
     if (!isOpen) return
 
+    console.log('[GlobalChatPanel] Setting up realtime subscription...')
+    console.log('[GlobalChatPanel] User authenticated:', !!user?.id)
+    
+    // 실시간 연결 상태 확인
+    const realtimeClient = supabase.realtime
+    console.log('[GlobalChatPanel] Realtime client:', realtimeClient)
+    console.log('[GlobalChatPanel] Realtime socket state:', realtimeClient.isConnected())
+    
     const channel = supabase
-      .channel('global-messages')
+      .channel('db-changes')
       .on('postgres_changes', 
         { 
-          event: 'INSERT', 
+          event: '*', 
           schema: 'public', 
           table: 'global_messages' 
         }, 
         async (payload) => {
-          console.log('New message received:', payload)
+          console.log('[GlobalChatPanel] Realtime event received:', {
+            eventType: payload.eventType,
+            table: payload.table,
+            schema: payload.schema,
+            new: payload.new,
+            old: payload.old
+          })
+          
+          // INSERT 이벤트만 처리
+          if (payload.eventType !== 'INSERT') return
           
           // 새 메시지의 사용자 정보 가져오기
           const newMessage = payload.new as any
-          let userName = undefined
           
+          // 중복 메시지 방지를 위한 체크
+          setMessages(prev => {
+            const isDuplicate = prev.some(msg => msg.id === newMessage.id)
+            if (isDuplicate) {
+              console.log('[GlobalChatPanel] Duplicate message detected, ignoring:', newMessage.id)
+              return prev
+            }
+            
+            // 사용자 정보는 이미 RPC에서 가져왔을 가능성이 높으므로
+            // 여기서는 간단히 처리
+            const formattedMessage: Message = {
+              id: newMessage.id,
+              content: newMessage.content,
+              message_type: newMessage.message_type,
+              created_at: newMessage.created_at,
+              user_id: newMessage.user_id,
+              user_name: undefined // 나중에 업데이트
+            }
+            
+            console.log('[GlobalChatPanel] Adding new message to list:', formattedMessage)
+            return [...prev, formattedMessage]
+          })
+          
+          // 사용자 이름을 비동기로 가져와서 업데이트
           if (newMessage.user_id) {
             const { data: userData } = await supabase
               .from('profiles')
@@ -70,20 +110,16 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
               .eq('id', newMessage.user_id)
               .single()
             
-            userName = userData?.name
+            if (userData?.name) {
+              setMessages(prev => 
+                prev.map(msg => 
+                  msg.id === newMessage.id 
+                    ? { ...msg, user_name: userData.name }
+                    : msg
+                )
+              )
+            }
           }
-          
-          // 새 메시지를 기존 메시지 목록에 추가
-          const formattedMessage: Message = {
-            id: newMessage.id,
-            content: newMessage.content,
-            message_type: newMessage.message_type,
-            created_at: newMessage.created_at,
-            user_id: newMessage.user_id,
-            user_name: userName
-          }
-          
-          setMessages(prev => [...prev, formattedMessage])
           
           // 새 메시지가 내 것이 아니면 읽음 처리
           if (newMessage.user_id !== user?.id) {
@@ -92,11 +128,26 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Realtime subscription status:', status)
+      .subscribe((status, error) => {
+        console.log('[GlobalChatPanel] Realtime subscription status:', status)
+        if (error) {
+          console.error('[GlobalChatPanel] Realtime subscription error:', error)
+        }
+        if (status === 'SUBSCRIBED') {
+          console.log('[GlobalChatPanel] ✅ Successfully subscribed to realtime updates')
+          // 채널 정보 출력
+          console.log('[GlobalChatPanel] Active subscriptions:', channel.bindings)
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[GlobalChatPanel] ❌ Channel error occurred')
+        } else if (status === 'TIMED_OUT') {
+          console.error('[GlobalChatPanel] ⏱️ Subscription timed out')
+        } else if (status === 'CLOSED') {
+          console.log('[GlobalChatPanel] 🚪 Channel closed')
+        }
       })
 
     return () => {
+      console.log('[GlobalChatPanel] Cleaning up realtime subscription')
       supabase.removeChannel(channel)
     }
   }, [isOpen, user?.id])
@@ -170,25 +221,8 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
 
       if (error) throw error
 
-      // 내가 보낸 메시지는 바로 추가 (실시간 구독에서 받지 않으므로)
-      if (data) {
-        const { data: userData } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', user.id)
-          .single()
-        
-        const formattedMessage: Message = {
-          id: data.id,
-          content: data.content,
-          message_type: data.message_type,
-          created_at: data.created_at,
-          user_id: data.user_id,
-          user_name: userData?.name
-        }
-        
-        setMessages(prev => [...prev, formattedMessage])
-      }
+      // 내가 보낸 메시지 추가 안 함 - 실시간 구독에서 받도록 함
+      console.log('[GlobalChatPanel] Message sent successfully:', data)
 
       setNewMessage("")
       
