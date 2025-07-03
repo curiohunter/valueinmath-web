@@ -11,7 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import type { Database } from "@/types/database";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { HelpCircle, Trash2, ChevronLeft, ChevronRight, Plus, Calendar, Users, ChevronDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { HelpCircle, Trash2, ChevronLeft, ChevronRight, Plus, Calendar, Users, ChevronDown, Filter, X } from "lucide-react";
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -53,11 +55,12 @@ const focusMap: Record<string, number> = {
 
 export default function LearningPage() {
   const supabase = createClientComponentClient<Database>();
+  
   // 입력 상태
   const [date, setDate] = useState(today);
   const [rows, setRows] = useState<
     Array<{
-      id?: string; // 기존 레코드 ID
+      id?: string;
       classId: string;
       studentId: string;
       name: string;
@@ -77,6 +80,7 @@ export default function LearningPage() {
       updatedAt?: string;
     }>
   >([]);
+  
   const [classes, setClasses] = useState<any[]>([]);
   const [classStudents, setClassStudents] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -85,9 +89,13 @@ export default function LearningPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [openClassIds, setOpenClassIds] = useState<string[]>([]);
-  const [filterClassId, setFilterClassId] = useState<string>("all"); // 반별 필터
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false); // 저장하지 않은 변경사항 추적
-  const [originalRows, setOriginalRows] = useState<typeof rows>([]); // 원본 데이터 저장
+  
+  // 다중선택 반 필터 상태
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [originalRows, setOriginalRows] = useState<typeof rows>([]);
+  
   // 교재/진도 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRowIdx, setModalRowIdx] = useState<number | null>(null);
@@ -101,10 +109,19 @@ export default function LearningPage() {
   // 사이드바 열림/닫힘 상태
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
+  // 필터링 및 정렬된 데이터
+  const filteredAndSortedRows = rows
+    .filter(row => selectedClassIds.length === 0 || selectedClassIds.includes(row.classId))
+    .sort((a, b) => {
+      const classA = classes.find(c => c.id === a.classId)?.name || "";
+      const classB = classes.find(c => c.id === b.classId)?.name || "";
+      if (classA !== classB) return classA.localeCompare(classB, "ko");
+      return a.name.localeCompare(b.name, "ko");
+    });
+
   // 반만들기 완료 후 데이터 새로고침
   const handleClassModalClose = () => {
     setClassModalOpen(false);
-    // 데이터 새로고침
     fetchData();
   };
   
@@ -116,14 +133,14 @@ export default function LearningPage() {
       const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
       const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type");
       const { data: teacherData } = await supabase.from("employees").select("id, name");
+      
       setClasses(classData || []);
       setClassStudents(classStudentData || []);
       setStudents(studentData || []);
       setTeachers(teacherData || []);
-      // 첫 반 자동 선택
+      
       if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
       
-      // 현재 선택된 날짜의 데이터 불러오기
       await fetchLogsForDate(date);
     } catch (e) {
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
@@ -172,7 +189,6 @@ export default function LearningPage() {
         setRows(mappedRows);
         setOriginalRows(mappedRows);
       } else {
-        // 해당 날짜에 데이터가 없으면 빈 배열로 초기화
         setRows([]);
         setOriginalRows([]);
       }
@@ -181,7 +197,7 @@ export default function LearningPage() {
     }
   };
 
-  // 오늘 날짜의 학습 기록 불러오기 (뷰 사용)
+  // 오늘 날짜의 학습 기록 불러오기
   const fetchTodayLogs = async () => {
     try {
       const { data: todayLogs, error } = await supabase
@@ -191,7 +207,7 @@ export default function LearningPage() {
       if (error) throw error;
       
       if (todayLogs && todayLogs.length > 0) {
-        setRows(todayLogs.map((log: any) => ({
+        const mappedRows = todayLogs.map((log: any) => ({
           id: log.id,
           classId: log.class_id || "",
           studentId: log.student_id || "",
@@ -210,28 +226,10 @@ export default function LearningPage() {
           lastModifiedBy: log.last_modified_by,
           lastModifiedByName: log.last_modified_by_name,
           updatedAt: log.updated_at
-        })));
-        // 원본 데이터 저장
-        setOriginalRows(todayLogs.map((log: any) => ({
-          id: log.id,
-          classId: log.class_id || "",
-          studentId: log.student_id || "",
-          name: log.student_name || "",
-          date: log.date,
-          attendance: log.attendance_status || 5,
-          homework: log.homework || 5,
-          focus: log.focus || 5,
-          note: log.note || "",
-          book1: log.book1 || "",
-          book1log: log.book1log || "",
-          book2: log.book2 || "",
-          book2log: log.book2log || "",
-          createdBy: log.created_by,
-          createdByName: log.created_by_name,
-          lastModifiedBy: log.last_modified_by,
-          lastModifiedByName: log.last_modified_by_name,
-          updatedAt: log.updated_at
-        })));
+        }));
+        
+        setRows(mappedRows);
+        setOriginalRows(mappedRows);
       }
     } catch (error) {
       console.error("오늘 날짜 데이터 불러오기 실패:", error);
@@ -242,81 +240,22 @@ export default function LearningPage() {
     fetchData();
   }, []);
 
-  // 이전 날짜 추적을 위한 ref
   const prevDateRef = useRef(date);
 
-  // 날짜 변경 시 해당 날짜 데이터 불러오기
   useEffect(() => {
     if (date && date !== prevDateRef.current) {
-      // 저장하지 않은 변경사항이 있으면 경고
       if (hasUnsavedChanges) {
         const confirmChange = confirm("저장하지 않은 변경사항이 있습니다. 날짜를 변경하시겠습니까?");
         if (!confirmChange) {
-          // 날짜를 원래대로 되돌림
           setDate(prevDateRef.current);
           return;
         }
       }
       
-      // 날짜 변경 확정 - 이전 날짜 업데이트
       prevDateRef.current = date;
-      
-      // 해당 날짜의 데이터 불러오기 (항상 fetchLogsForDate 사용)
       fetchLogsForDate(date);
     }
   }, [date, hasUnsavedChanges]);
-
-  // 자정 감지 및 자동 저장
-  useEffect(() => {
-    // 현재 날짜 확인
-    const checkDateChange = () => {
-      const currentDate = new Date().toISOString().slice(0, 10);
-      
-      // 날짜가 변경되었고 수정된 데이터가 있으면
-      if (currentDate !== date && rows.length > 0) {
-        console.log("날짜가 변경되어 자동 저장합니다.");
-        
-        // 자동 저장 실행
-        handleSave().then(() => {
-          // 저장 후 날짜 업데이트 및 데이터 초기화
-          setDate(currentDate);
-          setRows([]);
-          fetchData(); // 새로운 날짜의 데이터 불러오기
-        });
-      }
-    };
-
-    // 1분마다 날짜 변경 확인
-    const interval = setInterval(checkDateChange, 60000);
-
-    // 컴포넌트 언마운트 시 정리
-    return () => clearInterval(interval);
-  }, [date, rows.length]);
-
-  // 실시간 동기화
-  useEffect(() => {
-    // 선택된 날짜의 study_logs 변경사항 구독
-    const channel = supabase
-      .channel(`study-logs-${date}`)
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'study_logs',
-          filter: `date=eq.${date}`
-        }, 
-        (payload: any) => {
-          // 변경사항이 있으면 데이터 다시 불러오기
-          console.log('Study log changed:', payload);
-          fetchLogsForDate(date);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [date]);
 
   useEffect(() => {
     if (modalOpen && modalInputRef.current) {
@@ -324,7 +263,7 @@ export default function LearningPage() {
     }
   }, [modalOpen]);
 
-  // 반별 학생 목록 생성 함수 재사용
+  // 반별 학생 목록 생성 함수
   const getClassStudents = (classId: string) => {
     const studentIds = classStudents.filter(cs => cs.class_id === classId).map(cs => cs.student_id);
     return students
@@ -334,11 +273,9 @@ export default function LearningPage() {
 
   // 데이터 변경 감지
   useEffect(() => {
-    // 원본과 현재 데이터 비교
     const hasChanges = JSON.stringify(rows) !== JSON.stringify(originalRows);
     setHasUnsavedChanges(hasChanges);
   }, [rows, originalRows]);
-
 
   // 반별 전체추가
   const handleAddAll = (classId: string) => {
@@ -367,13 +304,10 @@ export default function LearningPage() {
   // 학생별 추가
   const handleAddStudent = (classId: string, student: { id: string; name: string }) => {
     setRows(prev => {
-      // 이미 테이블에 있는지 확인 (오늘 날짜로)
       const existingRow = prev.find(r => r.studentId === student.id && r.date === date);
       if (existingRow) {
-        // 이미 있으면 추가하지 않음
         return prev;
       } else {
-        // 없으면 새로 추가
         return [
           ...prev,
           {
@@ -395,11 +329,6 @@ export default function LearningPage() {
     });
   };
 
-  // 날짜 일괄 적용
-  const handleApplyAllDate = () => {
-    setRows(prev => prev.map(r => ({ ...r, date })));
-  };
-
   // 표 입력 변경
   const handleChange = (idx: number, key: keyof (typeof rows)[number], value: any) => {
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
@@ -411,8 +340,8 @@ export default function LearningPage() {
       alert("저장할 데이터가 없습니다.");
       return;
     }
+    
     try {
-      // 현재 사용자 정보 가져오기 (last_modified_by용)
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
@@ -427,7 +356,6 @@ export default function LearningPage() {
         .eq("auth_id", user.id)
         .single();
 
-      // 반별 담당 선생님 정보 가져오기
       const classIds = [...new Set(rows.map(r => r.classId).filter(Boolean))];
       const { data: classData } = await supabase
         .from("classes")
@@ -436,16 +364,11 @@ export default function LearningPage() {
       
       const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
 
-      // 기존 레코드와 새 레코드 분리
       const existingRows = rows.filter(r => r.id);
       const newRows = rows.filter(r => !r.id);
       
-      console.log("Existing rows count:", existingRows.length);
-      console.log("New rows count:", newRows.length);
-      
       let error = null;
       
-      // 기존 레코드 업데이트
       if (existingRows.length > 0) {
         const updateData = existingRows.map(r => ({
           id: r.id,
@@ -463,8 +386,6 @@ export default function LearningPage() {
           last_modified_by: currentEmployee?.id,
         }));
         
-        console.log("Update data sample:", updateData[0]);
-        
         const { error: updateError } = await supabase
           .from("study_logs")
           .upsert(updateData, { onConflict: "id" });
@@ -472,7 +393,6 @@ export default function LearningPage() {
         if (updateError) error = updateError;
       }
       
-      // 새 레코드 삽입
       if (!error && newRows.length > 0) {
         const insertData = newRows.map(r => {
           const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
@@ -492,8 +412,6 @@ export default function LearningPage() {
           };
         });
         
-        console.log("Insert data sample:", insertData[0]);
-        
         const { error: insertError } = await supabase
           .from("study_logs")
           .insert(insertData);
@@ -502,49 +420,13 @@ export default function LearningPage() {
       }
       
       if (error) {
-        console.error("Supabase error details:", error);
-        console.error("Error code:", error.code);
-        console.error("Error message:", error.message);
-        console.error("Error details:", error.details);
-        console.error("First row data:", rows[0]);
-        console.error("Sent data:", rows.map(r => {
-          const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
-          const baseData = {
-            class_id: r.classId || null,
-            student_id: r.studentId,
-            date: r.date,
-            attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
-            homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
-            focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
-            book1: r.book1,
-            book1log: r.book1log,
-            book2: r.book2,
-            book2log: r.book2log,
-            note: r.note,
-          };
-          
-          if (r.id) {
-            return {
-              ...baseData,
-              id: r.id,
-              last_modified_by: currentEmployee?.id,
-            };
-          } else {
-            return {
-              ...baseData,
-              created_by: teacherId,
-            };
-          }
-        }));
+        console.error("Supabase error:", error);
         throw error;
       }
       
-      // 저장 성공 알림
       alert("저장되었습니다.");
-      
-      // 데이터 다시 불러오기 (저장 후에도 테이블에 유지)
       await fetchTodayLogs();
-      setHasUnsavedChanges(false); // 저장 후 변경사항 초기화
+      setHasUnsavedChanges(false);
     } catch (e) {
       console.error("저장 오류:", e);
       alert("저장 중 오류가 발생했습니다.");
@@ -559,15 +441,12 @@ export default function LearningPage() {
 
   // 교재/진도 일괄 적용 함수
   const handleBulkApply = (key: "book1" | "book1log" | "book2" | "book2log") => {
-    // 현재 필터링되고 정렬된 행들 (테이블에 표시되는 순서와 동일)
     const currentFilteredRows = rows
-      .filter(row => filterClassId === "all" || row.classId === filterClassId)
+      .filter(row => selectedClassIds.length === 0 || selectedClassIds.includes(row.classId))
       .sort((a, b) => {
-        // 반별로 먼저 정렬
         const classA = classes.find(c => c.id === a.classId)?.name || "";
         const classB = classes.find(c => c.id === b.classId)?.name || "";
         if (classA !== classB) return classA.localeCompare(classB, "ko");
-        // 같은 반이면 이름순
         return a.name.localeCompare(b.name, "ko");
       });
     
@@ -576,7 +455,6 @@ export default function LearningPage() {
       return;
     }
     
-    // 필터링된 행들 중 첫 번째 값
     const firstValue = currentFilteredRows[0][key];
     
     if (!firstValue || firstValue.trim() === "") {
@@ -584,10 +462,9 @@ export default function LearningPage() {
       return;
     }
     
-    // 필터링된 반의 학생들에게만 적용
     setRows(prev => {
       return prev.map(r => {
-        if (filterClassId === "all" || r.classId === filterClassId) {
+        if (selectedClassIds.length === 0 || selectedClassIds.includes(r.classId)) {
           return { ...r, [key]: firstValue };
         }
         return r;
@@ -601,6 +478,7 @@ export default function LearningPage() {
     setModalField(field);
     setModalValue(value || "");
   };
+
   const handleModalSave = () => {
     if (modalRowIdx !== null && modalField) {
       setRows(prev => prev.map((r, i) =>
@@ -616,24 +494,13 @@ export default function LearningPage() {
       <div className="text-gray-400">로딩 중...</div>
     </div>
   );
+
   if (error) return (
     <div className="p-8 text-center">
       <div className="text-red-400 text-4xl mb-4">⚠️</div>
       <div className="text-red-500">{error}</div>
     </div>
   );
-
-  // 필터링 및 정렬된 데이터
-  const filteredAndSortedRows = rows
-    .filter(row => filterClassId === "all" || row.classId === filterClassId)
-    .sort((a, b) => {
-      // 반별로 먼저 정렬
-      const classA = classes.find(c => c.id === a.classId)?.name || "";
-      const classB = classes.find(c => c.id === b.classId)?.name || "";
-      if (classA !== classB) return classA.localeCompare(classB, "ko");
-      // 같은 반이면 이름순
-      return a.name.localeCompare(b.name, "ko");
-    });
 
   return (
     <TooltipProvider>
@@ -695,96 +562,94 @@ export default function LearningPage() {
                   </div>
                   
                   <div className="space-y-3">
-              {classes.map(cls => {
-                const classStudentList = getClassStudents(cls.id);
-                const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
-                const isOpen = openClassIds.includes(cls.id);
-                return (
-                  <div key={cls.id}>
-                    {/* 반 헤더 - 카드형 디자인 */}
-                    <Card className="border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer hover:shadow-md">
-                      <div className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleClassAccordion(cls.id);
-                              }}
-                              className="p-1 rounded-md hover:bg-white/50 transition-colors flex-shrink-0 mt-0.5"
-                            >
-                              {isOpen ? (
-                                <ChevronDown className="w-4 h-4 text-gray-500" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-gray-500" />
-                              )}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm text-gray-800 truncate">
-                                {cls.name}
-                              </div>
-                              <div className="text-xs text-gray-500 mb-1">
-                                {classStudentList.length}명
+                    {classes.map(cls => {
+                      const classStudentList = getClassStudents(cls.id);
+                      const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
+                      const isOpen = openClassIds.includes(cls.id);
+                      return (
+                        <div key={cls.id}>
+                          <Card className="border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer hover:shadow-md">
+                            <div className="p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start gap-2 flex-1 min-w-0">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleClassAccordion(cls.id);
+                                    }}
+                                    className="p-1 rounded-md hover:bg-white/50 transition-colors flex-shrink-0 mt-0.5"
+                                  >
+                                    {isOpen ? (
+                                      <ChevronDown className="w-4 h-4 text-gray-500" />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4 text-gray-500" />
+                                    )}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-semibold text-sm text-gray-800 truncate">
+                                      {cls.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-1">
+                                      {classStudentList.length}명
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddAll(cls.id);
+                                  }}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="w-8 h-8 p-0 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 shadow-sm transition-all duration-200 hover:shadow-md flex-shrink-0"
+                                >
+                                  <Plus className="w-4 h-4" />
+                                </Button>
                               </div>
                             </div>
-                          </div>
+                          </Card>
                           
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddAll(cls.id);
-                            }}
-                            size="sm"
-                            variant="ghost"
-                            className="w-8 h-8 p-0 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 shadow-sm transition-all duration-200 hover:shadow-md flex-shrink-0"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                    
-                    {/* 학생 목록 - 아코디언 */}
-                    {isOpen && (
-                      <div className="mt-2 ml-4 space-y-2">
-                        {classStudentList
-                          .filter(s => !addedStudentIds.includes(s.id))
-                          .map(s => (
-                            <Card 
-                              key={s.id}
-                              className="border border-gray-100 hover:border-gray-200 transition-colors"
-                            >
-                              <div className="p-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-green-400 rounded-full" />
-                                    <span className="text-sm font-medium text-gray-700">
-                                      {s.name}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    onClick={() => handleAddStudent(cls.id, s)}
-                                    size="sm"
-                                    variant="ghost"
-                                    className="w-6 h-6 p-0 rounded-full hover:bg-blue-100 text-blue-600"
+                          {isOpen && (
+                            <div className="mt-2 ml-4 space-y-2">
+                              {classStudentList
+                                .filter(s => !addedStudentIds.includes(s.id))
+                                .map(s => (
+                                  <Card 
+                                    key={s.id}
+                                    className="border border-gray-100 hover:border-gray-200 transition-colors"
                                   >
-                                    <Plus className="w-3 h-3" />
-                                  </Button>
+                                    <div className="p-2">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-2 h-2 bg-green-400 rounded-full" />
+                                          <span className="text-sm font-medium text-gray-700">
+                                            {s.name}
+                                          </span>
+                                        </div>
+                                        <Button
+                                          onClick={() => handleAddStudent(cls.id, s)}
+                                          size="sm"
+                                          variant="ghost"
+                                          className="w-6 h-6 p-0 rounded-full hover:bg-blue-100 text-blue-600"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </Card>
+                                ))}
+                              
+                              {classStudentList.filter(s => !addedStudentIds.includes(s.id)).length === 0 && (
+                                <div className="text-center py-4 text-gray-400 text-sm">
+                                  이미 모든 학생이 추가됨
                                 </div>
-                              </div>
-                            </Card>
-                          ))}
-                          
-                        {classStudentList.filter(s => !addedStudentIds.includes(s.id)).length === 0 && (
-                          <div className="text-center py-4 text-gray-400 text-sm">
-                            이미 모든 학생이 추가됨
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   
                   {(!classes || classes.length === 0) && (
@@ -803,69 +668,144 @@ export default function LearningPage() {
             <Card className="bg-white rounded-xl shadow border overflow-hidden">
               {/* 헤더 섹션 */}
               <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-gray-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {/* 사이드바 토글 버튼 */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      className="h-8 w-8 p-0 bg-white border shadow-sm hover:bg-gray-50"
-                    >
-                      {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </Button>
-                    
-                    <h2 className="text-lg font-semibold text-gray-800">학습 관리</h2>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-600">반 필터:</span>
-                      <select
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={filterClassId}
-                        onChange={(e) => setFilterClassId(e.target.value)}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        className="h-8 w-8 p-0 bg-white border shadow-sm hover:bg-gray-50"
                       >
-                        <option value="all">전체</option>
-                        {classes.map(cls => (
-                          <option key={cls.id} value={cls.id}>{cls.name}</option>
-                        ))}
-                      </select>
-                      {filterClassId !== "all" && (
-                        <Badge variant="secondary">
-                          {filteredAndSortedRows.length}명
-                        </Badge>
+                        {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </Button>
+                      
+                      <h2 className="text-lg font-semibold text-gray-800">학습 관리</h2>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-600">반 필터:</span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="justify-start h-8 px-3 text-sm font-normal"
+                            >
+                              <Filter className="w-4 h-4 mr-2" />
+                              {selectedClassIds.length === 0
+                                ? "전체 반"
+                                : `${selectedClassIds.length}개 반 선택`}
+                              <ChevronDown className="w-4 h-4 ml-2" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 p-0" align="start">
+                            <div className="p-2 border-b">
+                              <h4 className="font-medium text-sm text-gray-700 mb-2">반 선택</h4>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedClassIds(classes.map(c => c.id))}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  전체 선택
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedClassIds([])}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  전체 해제
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {classes.map(cls => (
+                                <div key={cls.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50">
+                                  <Checkbox
+                                    id={cls.id}
+                                    checked={selectedClassIds.includes(cls.id)}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedClassIds(prev => [...prev, cls.id]);
+                                      } else {
+                                        setSelectedClassIds(prev => prev.filter(id => id !== cls.id));
+                                      }
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={cls.id}
+                                    className="text-sm font-medium cursor-pointer flex-1"
+                                  >
+                                    {cls.name}
+                                  </label>
+                                </div>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                        {selectedClassIds.length > 0 && (
+                          <Badge variant="secondary">
+                            {filteredAndSortedRows.length}명
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      {hasUnsavedChanges && (
+                        <span className="text-sm text-orange-600 font-medium animate-pulse">
+                          저장하지 않은 변경사항이 있습니다
+                        </span>
                       )}
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setRows([])}
+                        className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        일괄 삭제
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={handleSave}
+                        className={`${
+                          hasUnsavedChanges 
+                            ? "bg-red-600 hover:bg-red-700 animate-pulse shadow-lg" 
+                            : "bg-blue-600 hover:bg-blue-700"
+                        } text-white font-medium`}
+                      >
+                        {hasUnsavedChanges ? "저장 필요!" : "저장"}
+                      </Button>
+                      <Badge variant="outline" className="text-sm font-medium">
+                        {date}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    {hasUnsavedChanges && (
-                      <span className="text-sm text-orange-600 font-medium animate-pulse">
-                        저장하지 않은 변경사항이 있습니다
-                      </span>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setRows([])}
-                      className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      일괄 삭제
-                    </Button>
-                    <Button 
-                      size="sm"
-                      onClick={handleSave}
-                      className={`${
-                        hasUnsavedChanges 
-                          ? "bg-red-600 hover:bg-red-700 animate-pulse shadow-lg" 
-                          : "bg-blue-600 hover:bg-blue-700"
-                      } text-white font-medium`}
-                    >
-                      {hasUnsavedChanges ? "저장 필요!" : "저장"}
-                    </Button>
-                    <Badge variant="outline" className="text-sm font-medium">
-                      {date}
-                    </Badge>
-                  </div>
+
+                  {/* 선택된 반들을 태그로 표시 */}
+                  {selectedClassIds.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-gray-500">선택된 반:</span>
+                      {selectedClassIds.map(classId => {
+                        const className = classes.find(c => c.id === classId)?.name || classId;
+                        return (
+                          <Badge key={classId} variant="secondary" className="text-xs">
+                            {className}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto p-0 ml-1 hover:bg-transparent"
+                              onClick={() => setSelectedClassIds(prev => prev.filter(id => id !== classId))}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -965,138 +905,125 @@ export default function LearningPage() {
                         {classRows.map((row, idx) => {
                           const originalIdx = rows.findIndex(r => r.studentId === row.studentId && r.classId === row.classId);
                           return (
-                          <tr key={row.classId + row.studentId} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-700">
-                              {row.name || students.find(s => s.id === row.studentId)?.name || row.studentId}
-                            </td>
-                        <td className="px-4 py-3 text-center">
-                          <input
-                            type="date"
-                            className="w-full max-w-[135px] px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            value={row.date}
-                            onChange={e => handleChange(originalIdx, "date", e.target.value)}
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span 
-                            className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${
-                              row.attendance === 5 ? 'bg-green-100 text-green-700 border-green-200' :
-                              row.attendance === 4 ? 'bg-blue-100 text-blue-600 border-blue-200' :
-                              row.attendance === 3 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                              row.attendance === 2 ? 'bg-orange-100 text-orange-600 border-orange-200' :
-                              'bg-red-100 text-red-600 border-red-200'
-                            }`}
-                            onClick={() => {
-                              const nextValue = row.attendance === 5 ? 1 : row.attendance + 1;
-                              handleChange(originalIdx, "attendance", nextValue);
-                            }}
-                          >
-                            {row.attendance}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span 
-                            className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${
-                              row.homework === 5 ? 'bg-green-100 text-green-700 border-green-200' :
-                              row.homework === 4 ? 'bg-blue-100 text-blue-600 border-blue-200' :
-                              row.homework === 3 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                              row.homework === 2 ? 'bg-orange-100 text-orange-600 border-orange-200' :
-                              'bg-red-100 text-red-600 border-red-200'
-                            }`}
-                            onClick={() => {
-                              const nextValue = row.homework === 5 ? 1 : row.homework + 1;
-                              handleChange(originalIdx, "homework", nextValue);
-                            }}
-                          >
-                            {row.homework}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span 
-                            className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${
-                              row.focus === 5 ? 'bg-green-100 text-green-700 border-green-200' :
-                              row.focus === 4 ? 'bg-blue-100 text-blue-600 border-blue-200' :
-                              row.focus === 3 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                              row.focus === 2 ? 'bg-orange-100 text-orange-600 border-orange-200' :
-                              'bg-red-100 text-red-600 border-red-200'
-                            }`}
-                            onClick={() => {
-                              const nextValue = row.focus === 5 ? 1 : row.focus + 1;
-                              handleChange(originalIdx, "focus", nextValue);
-                            }}
-                          >
-                            {row.focus}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div 
-                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
-                            onClick={() => openModal(originalIdx, "book1", row.book1)}
-                            title={row.book1}
-                          >
-                            {row.book1 || <span className="text-gray-400">클릭하여 입력</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div 
-                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
-                            onClick={() => openModal(originalIdx, "book1log", row.book1log)}
-                            title={row.book1log}
-                          >
-                            {row.book1log || <span className="text-gray-400">클릭하여 입력</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div 
-                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
-                            onClick={() => openModal(originalIdx, "book2", row.book2)}
-                            title={row.book2}
-                          >
-                            {row.book2 || <span className="text-gray-400">클릭하여 입력</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div 
-                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
-                            onClick={() => openModal(originalIdx, "book2log", row.book2log)}
-                            title={row.book2log}
-                          >
-                            {row.book2log || <span className="text-gray-400">클릭하여 입력</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div 
-                            className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
-                            onClick={() => openModal(originalIdx, "note", row.note)}
-                            title={row.note}
-                          >
-                            {row.note || <span className="text-gray-400">클릭하여 입력</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
-                            onClick={() => setRows(rows => rows.filter((_, i) => i !== originalIdx))}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                        );
+                            <tr key={row.classId + row.studentId} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700">
+                                {row.name || students.find(s => s.id === row.studentId)?.name || row.studentId}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <input
+                                  type="date"
+                                  className="w-full max-w-[135px] px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  value={row.date}
+                                  onChange={e => handleChange(originalIdx, "date", e.target.value)}
+                                />
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span 
+                                  className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${scoreColor(row.attendance)}`}
+                                  onClick={() => {
+                                    const nextValue = row.attendance === 5 ? 1 : row.attendance + 1;
+                                    handleChange(originalIdx, "attendance", nextValue);
+                                  }}
+                                >
+                                  {row.attendance}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span 
+                                  className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${scoreColor(row.homework)}`}
+                                  onClick={() => {
+                                    const nextValue = row.homework === 5 ? 1 : row.homework + 1;
+                                    handleChange(originalIdx, "homework", nextValue);
+                                  }}
+                                >
+                                  {row.homework}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span 
+                                  className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${scoreColor(row.focus)}`}
+                                  onClick={() => {
+                                    const nextValue = row.focus === 5 ? 1 : row.focus + 1;
+                                    handleChange(originalIdx, "focus", nextValue);
+                                  }}
+                                >
+                                  {row.focus}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div 
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                  onClick={() => openModal(originalIdx, "book1", row.book1)}
+                                  title={row.book1}
+                                >
+                                  {row.book1 || <span className="text-gray-400">클릭하여 입력</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div 
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                  onClick={() => openModal(originalIdx, "book1log", row.book1log)}
+                                  title={row.book1log}
+                                >
+                                  {row.book1log || <span className="text-gray-400">클릭하여 입력</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div 
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                  onClick={() => openModal(originalIdx, "book2", row.book2)}
+                                  title={row.book2}
+                                >
+                                  {row.book2 || <span className="text-gray-400">클릭하여 입력</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div 
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                  onClick={() => openModal(originalIdx, "book2log", row.book2log)}
+                                  title={row.book2log}
+                                >
+                                  {row.book2log || <span className="text-gray-400">클릭하여 입력</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div 
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                  onClick={() => openModal(originalIdx, "note", row.note)}
+                                  title={row.note}
+                                >
+                                  {row.note || <span className="text-gray-400">클릭하여 입력</span>}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
+                                  onClick={() => setRows(rows => rows.filter((_, i) => i !== originalIdx))}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
                         })}
                       </React.Fragment>
                     ))}
+                    
                     {filteredAndSortedRows.length === 0 && (
                       <tr>
                         <td colSpan={12} className="text-center text-gray-400 py-12">
                           <div className="text-4xl mb-4">📝</div>
-                          <div className="text-lg mb-2">학습 기록이 없습니다</div>
-                          <div className="text-sm">왼쪽 사이드바에서 반과 학생을 추가해 주세요</div>
+                          <div className="text-lg mb-2">
+                            {selectedClassIds.length > 0 ? "선택한 반에 학습 기록이 없습니다" : "학습 기록이 없습니다"}
+                          </div>
+                          <div className="text-sm">
+                            {selectedClassIds.length > 0 ? "다른 반을 선택하거나 학생을 추가해 주세요" : "왼쪽 사이드바에서 반과 학생을 추가해 주세요"}
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -1110,18 +1037,19 @@ export default function LearningPage() {
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-600">
                       총 <span className="font-semibold text-gray-900">{rows.length}</span>개의 학습 기록
+                      {selectedClassIds.length > 0 && (
+                        <span className="ml-2 text-blue-600">
+                          (필터됨: <span className="font-semibold">{filteredAndSortedRows.length}</span>개)
+                        </span>
+                      )}
                     </span>
-                    {filteredAndSortedRows.length !== rows.length && (
-                      <Badge variant="secondary" className="text-xs">
-                        필터됨: {filteredAndSortedRows.length}개
-                      </Badge>
-                    )}
                   </div>
                 </div>
               </div>
             </Card>
           </div>
         </div>
+        
         {/* 모달: 교재/진도 입력 확대 */}
         {modalOpen && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
@@ -1155,4 +1083,4 @@ export default function LearningPage() {
       </div>
     </TooltipProvider>
   );
-} 
+}
