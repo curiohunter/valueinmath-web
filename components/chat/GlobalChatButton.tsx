@@ -57,9 +57,10 @@ export default function GlobalChatButton({
           table: 'global_messages' 
         }, 
         (payload) => {
-          // 새 메시지가 내 것이 아니면 카운트 증가
-          if (payload.new.user_id !== user.id) {
-            fetchUnreadCount()
+          console.log('Button: New message received', payload)
+          // 새 메시지가 내 것이 아니고 채팅창이 닫혀있으면 카운트 증가
+          if (payload.new.user_id !== user.id && !chatOpen) {
+            setUnreadCount(prev => prev + 1)
           }
         }
       )
@@ -74,12 +75,14 @@ export default function GlobalChatButton({
           fetchUnreadCount()
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Button realtime subscription status:', status)
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user])
+  }, [user, chatOpen])
 
   // 채팅 열 때 카운트 초기화
   useEffect(() => {

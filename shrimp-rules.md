@@ -39,16 +39,25 @@
 
 ## Supabase 통합 패턴
 
-### 클라이언트별 사용 규칙
+### 클라이언트별 사용 규칙 (2025-07-03 업데이트)
 ```typescript
-// Client Component에서
-import { createBrowserClient } from '@/lib/supabase/browser'
+// Client Component에서 - 반드시 이 패턴 사용
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import type { Database } from "@/types/database";
+
+export default function Component() {
+  const supabase = createClientComponentClient<Database>();
+  // ... component logic
+}
 
 // Server Component에서
 import { createServerClient } from '@/lib/supabase/server'
 
 // API Route나 Server Action에서
 import { createAdminClient } from '@/lib/supabase/admin'
+
+// ⚠️ 절대 사용 금지
+import { supabaseClient } from "@/lib/supabase/client"; // Auth session 문제 발생
 ```
 
 ### 데이터 작업 규칙
@@ -56,6 +65,46 @@ import { createAdminClient } from '@/lib/supabase/admin'
 - **쓰기**: 서비스 함수 사용 (`services/` 디렉토리)
 - **실시간**: Supabase Realtime 구독
 - **인증**: middleware.ts에서 처리
+
+### Upsert/Insert 필수 패턴 (2025-07-03 추가)
+```typescript
+// ❌ 잘못된 패턴 - ID가 undefined인 경우 null로 변환되어 에러 발생
+const { error } = await supabase
+  .from("table")
+  .upsert(rows.map(r => ({
+    id: r.id, // r.id가 undefined면 null이 되어 NOT NULL 제약조건 위반
+    ...otherFields
+  })));
+
+// ✅ 올바른 패턴 - 기존/새 레코드 분리
+const existingRows = rows.filter(r => r.id);
+const newRows = rows.filter(r => !r.id);
+
+// 기존 레코드 업데이트 (ID 포함)
+if (existingRows.length > 0) {
+  const { error } = await supabase
+    .from("table")
+    .upsert(existingRows.map(r => ({
+      id: r.id,
+      ...fields,
+      last_modified_by: currentUserId
+    })), { onConflict: "id" });
+}
+
+// 새 레코드 삽입 (ID 제외, 자동생성)
+if (newRows.length > 0) {
+  const { error } = await supabase
+    .from("table")
+    .insert(newRows.map(r => ({
+      ...fields, // id 필드 제외
+      created_by: teacherId // 반 담당선생님 ID
+    })));
+}
+```
+
+### created_by / last_modified_by 규칙
+- **created_by**: 해당 반의 담당선생님 ID 설정 (보고서 분류용)
+- **last_modified_by**: 실제 수정한 사용자 ID 설정 (감사 추적용)
 
 ### RLS 정책 준수
 - 직접 SQL 실행 금지
@@ -228,7 +277,7 @@ components/
 - [ ] 데이터베이스 마이그레이션 완료
 - [ ] Supabase 타입 최신화
 
-## 최근 해결된 주요 이슈 (2025-07-01)
+## 최근 해결된 주요 이슈 (2025-07-03 업데이트)
 
 ### 1. Google Calendar 형식 변환
 - **문제**: `2025-07-02T10:00:00+09:00` → `2025-07-02 10:00:00+09`
@@ -249,3 +298,14 @@ components/
 ### 5. Google OAuth Redirect
 - **문제**: Production에서 localhost로 리다이렉트
 - **해결**: NEXT_PUBLIC_SITE_URL 환경변수 추가
+
+### 6. Auth Session Missing 오류 (2025-07-03)
+- **문제**: `supabaseClient`로 직접 클라이언트 생성 시 인증 세션 없음
+- **해결**: `createClientComponentClient` 사용으로 변경
+- **영향**: learning, test-logs, history 페이지 모두 수정
+
+### 7. Supabase Upsert ID null 제약조건 위반 (2025-07-03)
+- **문제**: 새 레코드에 `id: undefined`가 포함되어 null로 변환됨
+- **원인**: upsert에서 기존/새 레코드를 구분 없이 처리
+- **해결**: 기존 레코드(ID 있음)와 새 레코드(ID 없음) 분리 처리
+- **패턴**: existingRows는 upsert, newRows는 insert 사용

@@ -56,21 +56,45 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
           schema: 'public', 
           table: 'global_messages' 
         }, 
-        (payload) => {
-          loadMessages()
+        async (payload) => {
+          console.log('New message received:', payload)
+          
+          // 새 메시지의 사용자 정보 가져오기
+          const newMessage = payload.new as any
+          let userName = undefined
+          
+          if (newMessage.user_id) {
+            const { data: userData } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', newMessage.user_id)
+              .single()
+            
+            userName = userData?.name
+          }
+          
+          // 새 메시지를 기존 메시지 목록에 추가
+          const formattedMessage: Message = {
+            id: newMessage.id,
+            content: newMessage.content,
+            message_type: newMessage.message_type,
+            created_at: newMessage.created_at,
+            user_id: newMessage.user_id,
+            user_name: userName
+          }
+          
+          setMessages(prev => [...prev, formattedMessage])
+          
           // 새 메시지가 내 것이 아니면 읽음 처리
-          if (payload.new.user_id !== user?.id) {
-            supabase
-              .rpc('mark_messages_as_read', { message_ids: [payload.new.id] })
-              .then(result => {
-                if (result.error) {
-                  console.error("새 메시지 읽음 처리 실패:", result.error);
-                }
-              })
+          if (newMessage.user_id !== user?.id) {
+            await supabase
+              .rpc('mark_messages_as_read', { message_ids: [newMessage.id] })
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status)
+      })
 
     return () => {
       supabase.removeChannel(channel)
@@ -134,18 +158,39 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
 
     setIsLoading(true)
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("global_messages")
         .insert({
           content: newMessage.trim(),
           message_type: "user",
           user_id: user.id
         })
+        .select()
+        .single()
 
       if (error) throw error
 
+      // 내가 보낸 메시지는 바로 추가 (실시간 구독에서 받지 않으므로)
+      if (data) {
+        const { data: userData } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single()
+        
+        const formattedMessage: Message = {
+          id: data.id,
+          content: data.content,
+          message_type: data.message_type,
+          created_at: data.created_at,
+          user_id: data.user_id,
+          user_name: userData?.name
+        }
+        
+        setMessages(prev => [...prev, formattedMessage])
+      }
+
       setNewMessage("")
-      await loadMessages()
       
       // 메시지 전송 후 입력창에 포커스 유지
       setTimeout(() => {

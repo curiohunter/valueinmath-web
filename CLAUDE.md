@@ -135,6 +135,41 @@ NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
    - **Query Parameters**: Cast to specific types when needed (e.g., `param as FilterType['field']`)
    - **Database Row Mapping**: Handle nullable fields properly in type conversion functions
 
+7. **Supabase Client Best Practices**
+   - **IMPORTANT**: Use `createClientComponentClient` from `@supabase/auth-helpers-nextjs` for client components
+   - **Avoid**: Direct `supabaseClient` from `@/lib/supabase/client` (causes auth session issues)
+   - **Pattern**: 
+     ```typescript
+     import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+     import type { Database } from "@/types/database";
+     
+     export default function Component() {
+       const supabase = createClientComponentClient<Database>();
+       // ... component logic
+     }
+     ```
+   - **Auth Session**: Always check if user exists before making authenticated requests
+
+8. **Supabase Upsert/Insert Best Practices**
+   - **ID Handling**: Never include undefined/null ID fields in upsert operations
+   - **Pattern for Mixed Records**: Separate existing and new records
+     ```typescript
+     const existingRows = rows.filter(r => r.id);
+     const newRows = rows.filter(r => !r.id);
+     
+     // Update existing with ID
+     if (existingRows.length > 0) {
+       await supabase.from("table").upsert(data, { onConflict: "id" });
+     }
+     
+     // Insert new without ID (auto-generated)
+     if (newRows.length > 0) {
+       await supabase.from("table").insert(data);
+     }
+     ```
+   - **created_by Field**: Set to responsible teacher ID for tracking/reporting
+   - **last_modified_by Field**: Set to current user ID for audit trail
+
 ## Current Issues & Solutions
 
 1. **Build Warnings**: ESLint and TypeScript errors ignored in production build

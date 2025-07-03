@@ -123,8 +123,8 @@ export default function LearningPage() {
       // 첫 반 자동 선택
       if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
       
-      // 오늘 날짜의 기존 데이터 불러오기
-      await fetchTodayLogs();
+      // 현재 선택된 날짜의 데이터 불러오기
+      await fetchLogsForDate(date);
     } catch (e) {
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
     } finally {
@@ -132,7 +132,56 @@ export default function LearningPage() {
     }
   };
 
-  // 오늘 날짜의 학습 기록 불러오기
+  // 특정 날짜의 학습 기록 불러오기
+  const fetchLogsForDate = async (targetDate: string) => {
+    try {
+      const { data: logs, error } = await supabase
+        .from("study_logs")
+        .select(`
+          *,
+          student:students!student_id(name),
+          created_employee:employees!created_by(name),
+          modified_employee:employees!last_modified_by(name)
+        `)
+        .eq("date", targetDate);
+      
+      if (error) throw error;
+      
+      if (logs && logs.length > 0) {
+        const mappedRows = logs.map((log: any) => ({
+          id: log.id,
+          classId: log.class_id || "",
+          studentId: log.student_id || "",
+          name: log.student?.name || "",
+          date: log.date,
+          attendance: log.attendance_status || 5,
+          homework: log.homework || 5,
+          focus: log.focus || 5,
+          note: log.note || "",
+          book1: log.book1 || "",
+          book1log: log.book1log || "",
+          book2: log.book2 || "",
+          book2log: log.book2log || "",
+          createdBy: log.created_by,
+          createdByName: log.created_employee?.name || "",
+          lastModifiedBy: log.last_modified_by,
+          lastModifiedByName: log.modified_employee?.name || "",
+          updatedAt: log.updated_at
+        }));
+        
+        setRows(mappedRows);
+        setOriginalRows(mappedRows);
+      } else {
+        // 해당 날짜에 데이터가 없으면 빈 배열로 초기화
+        setRows([]);
+        setOriginalRows([]);
+      }
+    } catch (error) {
+      console.error("날짜별 데이터 불러오기 실패:", error);
+    }
+  };
+
+  // 오늘 날짜의 학습 기록 불러오기 (뷰 사용)
   const fetchTodayLogs = async () => {
     try {
       const { data: todayLogs, error } = await supabase
@@ -193,6 +242,30 @@ export default function LearningPage() {
     fetchData();
   }, []);
 
+  // 이전 날짜 추적을 위한 ref
+  const prevDateRef = useRef(date);
+
+  // 날짜 변경 시 해당 날짜 데이터 불러오기
+  useEffect(() => {
+    if (date && date !== prevDateRef.current) {
+      // 저장하지 않은 변경사항이 있으면 경고
+      if (hasUnsavedChanges) {
+        const confirmChange = confirm("저장하지 않은 변경사항이 있습니다. 날짜를 변경하시겠습니까?");
+        if (!confirmChange) {
+          // 날짜를 원래대로 되돌림
+          setDate(prevDateRef.current);
+          return;
+        }
+      }
+      
+      // 날짜 변경 확정 - 이전 날짜 업데이트
+      prevDateRef.current = date;
+      
+      // 해당 날짜의 데이터 불러오기 (항상 fetchLogsForDate 사용)
+      fetchLogsForDate(date);
+    }
+  }, [date, hasUnsavedChanges]);
+
   // 자정 감지 및 자동 저장
   useEffect(() => {
     // 현재 날짜 확인
@@ -222,20 +295,20 @@ export default function LearningPage() {
 
   // 실시간 동기화
   useEffect(() => {
-    // 오늘 날짜의 study_logs 변경사항 구독
+    // 선택된 날짜의 study_logs 변경사항 구독
     const channel = supabase
-      .channel('today-study-logs')
+      .channel(`study-logs-${date}`)
       .on('postgres_changes', 
         { 
           event: '*', 
           schema: 'public', 
           table: 'study_logs',
-          filter: `date=eq.${today}`
+          filter: `date=eq.${date}`
         }, 
         (payload: any) => {
           // 변경사항이 있으면 데이터 다시 불러오기
           console.log('Study log changed:', payload);
-          fetchTodayLogs();
+          fetchLogsForDate(date);
         }
       )
       .subscribe();
@@ -243,7 +316,7 @@ export default function LearningPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [date]);
 
   useEffect(() => {
     if (modalOpen && modalInputRef.current) {

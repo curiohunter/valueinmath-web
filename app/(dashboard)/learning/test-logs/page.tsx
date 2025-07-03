@@ -154,19 +154,22 @@ export default function TestLogsPage() {
   }, []);
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    // 모든 날짜의 test_logs 변경사항 구독 (여러 날짜를 동시에 편집할 수 있으므로)
     const channel = supabase
-      .channel('today-test-logs')
+      .channel('all-test-logs')
       .on('postgres_changes', 
         { 
           event: '*', 
           schema: 'public', 
-          table: 'test_logs',
-          filter: `date=eq.${today}`
+          table: 'test_logs'
         }, 
         (payload: any) => {
           console.log('Test log changed:', payload);
-          fetchTodayTestLogs();
+          // 현재 편집 중인 날짜들의 데이터만 다시 불러오기
+          const uniqueDates = [...new Set(rows.map(r => r.date))];
+          if (uniqueDates.includes((payload.new as any)?.date || (payload.old as any)?.date)) {
+            fetchTodayTestLogs();
+          }
         }
       )
       .subscribe();
@@ -174,7 +177,7 @@ export default function TestLogsPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [rows]);
 
   // 데이터 변경 감지
   useEffect(() => {
