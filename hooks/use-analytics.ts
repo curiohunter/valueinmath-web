@@ -12,6 +12,7 @@ import {
   getMonthlyAnalytics, 
   generateMonthlyReport, 
   getStudentsForAnalytics,
+  getTeachersForAnalytics,
   getBookProgressAnalysis 
 } from "@/services/analytics-service"
 
@@ -155,6 +156,46 @@ export function useStudentsForAnalytics() {
   }
 }
 
+// 선생님 목록을 위한 훅
+export function useTeachersForAnalytics() {
+  const [teachers, setTeachers] = useState<{ id: string; name: string }[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  // 데이터 가져오기 함수
+  const fetchData = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const result = await getTeachersForAnalytics()
+      
+      if (result.success && result.data) {
+        setTeachers(result.data)
+        setError(null)
+      } else {
+        throw new Error(result.error || "선생님 목록 조회에 실패했습니다.")
+      }
+    } catch (err) {
+      console.error("Error fetching teachers for analytics:", err)
+      setError(err as Error)
+      setTeachers([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // 컴포넌트 마운트 시 데이터 가져오기
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return {
+    teachers,
+    isLoading,
+    error,
+    mutate: fetchData
+  }
+}
+
 // 교재 진도 분석을 위한 훅
 export function useBookProgress(studentId: string, year: number, month: number) {
   const [bookProgresses, setBookProgresses] = useState<BookProgress[]>([])
@@ -208,17 +249,20 @@ export function useAnalyticsData(filters: AnalyticsFilters) {
   // 각각의 훅 사용
   const analyticsResult = useAnalytics(studentId, year, month)
   const studentsResult = useStudentsForAnalytics()
+  const teachersResult = useTeachersForAnalytics()
   const bookProgressResult = useBookProgress(studentId, year, month)
   const reportResult = useMonthlyReport(studentId, year, month)
 
   // 전체 로딩 상태
   const isLoading = analyticsResult.isLoading || 
                    studentsResult.isLoading || 
+                   teachersResult.isLoading ||
                    bookProgressResult.isLoading
 
   // 전체 에러 상태
   const error = analyticsResult.error || 
                studentsResult.error || 
+               teachersResult.error ||
                bookProgressResult.error ||
                reportResult.error
 
@@ -226,9 +270,10 @@ export function useAnalyticsData(filters: AnalyticsFilters) {
   const refreshAll = useCallback(() => {
     analyticsResult.mutate()
     studentsResult.mutate()
+    teachersResult.mutate()
     bookProgressResult.mutate()
     reportResult.clearReport()
-  }, [analyticsResult, studentsResult, bookProgressResult, reportResult])
+  }, [analyticsResult, studentsResult, teachersResult, bookProgressResult, reportResult])
 
   // 현재 선택된 학생 정보
   const selectedStudent = studentsResult.students.find(s => s.id === studentId) || null
@@ -237,6 +282,7 @@ export function useAnalyticsData(filters: AnalyticsFilters) {
     // 개별 데이터
     monthlyData: analyticsResult.data,
     students: studentsResult.students,
+    teachers: teachersResult.teachers,
     bookProgresses: bookProgressResult.bookProgresses,
     reportText: reportResult.reportText,
     
@@ -257,6 +303,7 @@ export function useAnalyticsData(filters: AnalyticsFilters) {
     mutate: {
       analytics: analyticsResult.mutate,
       students: studentsResult.mutate,
+      teachers: teachersResult.mutate,
       bookProgress: bookProgressResult.mutate
     }
   }

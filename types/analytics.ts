@@ -28,6 +28,7 @@ export interface StudyLogSummary {
   focus: number | null             // 1-5 점수
   note: string | null
   created_by?: string | null       // 선생님 ID (employees.id)
+  created_by_name?: string | null  // 선생님 이름
 }
 
 // 시험 기록 요약 (test_logs 기반)
@@ -40,6 +41,7 @@ export interface TestLogSummary {
   test_score: number | null        // 점수
   note: string | null              // 비고 (결석 등)
   created_by?: string | null       // 선생님 ID (employees.id)
+  created_by_name?: string | null  // 선생님 이름
 }
 
 // 월별 통계 집계

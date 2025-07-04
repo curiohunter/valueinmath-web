@@ -19,7 +19,7 @@ type TestLogRow = Database["public"]["Tables"]["test_logs"]["Row"]
 type StudentRow = Database["public"]["Tables"]["students"]["Row"]
 
 // DB 타입을 앱 타입으로 변환하는 함수들
-function mapStudyLogRowToSummary(row: StudyLogRow & { created_by?: string | null }): StudyLogSummary {
+function mapStudyLogRowToSummary(row: StudyLogRow & { created_by?: string | null; created_by_employee?: { id: string; name: string } | null }): StudyLogSummary {
   return {
     id: row.id,
     date: row.date,
@@ -33,10 +33,11 @@ function mapStudyLogRowToSummary(row: StudyLogRow & { created_by?: string | null
     focus: row.focus,
     note: row.note,
     created_by: row.created_by || null,
+    created_by_name: row.created_by_employee?.name || null,
   }
 }
 
-function mapTestLogRowToSummary(row: TestLogRow & { created_by?: string | null }): TestLogSummary {
+function mapTestLogRowToSummary(row: TestLogRow & { created_by?: string | null; created_by_employee?: { id: string; name: string } | null }): TestLogSummary {
   return {
     id: row.id,
     date: row.date,
@@ -46,6 +47,7 @@ function mapTestLogRowToSummary(row: TestLogRow & { created_by?: string | null }
     test_score: row.test_score,
     note: row.note,
     created_by: row.created_by || null,
+    created_by_name: row.created_by_employee?.name || null,
   }
 }
 
@@ -198,7 +200,11 @@ export async function getMonthlyAnalytics(
     // 2. study_logs 데이터 조회 (created_by 포함)
     const { data: studyLogsData, error: studyError } = await supabase
       .from("study_logs")
-      .select("*, created_by")
+      .select(`
+        *,
+        created_by,
+        created_by_employee:employees!study_logs_created_by_fkey(id, name)
+      `)
       .eq("student_id", studentId)
       .gte("date", startDate)
       .lte("date", endDate)
@@ -211,7 +217,11 @@ export async function getMonthlyAnalytics(
     // 3. test_logs 데이터 조회 (created_by 포함)
     const { data: testLogsData, error: testError } = await supabase
       .from("test_logs")
-      .select("*, created_by")
+      .select(`
+        *,
+        created_by,
+        created_by_employee:employees!test_logs_created_by_fkey(id, name)
+      `)
       .eq("student_id", studentId)
       .gte("date", startDate)
       .lte("date", endDate)
@@ -475,6 +485,32 @@ export async function getStudentsForAnalytics(): Promise<AnalyticsApiResponse<St
     return { 
       success: false, 
       error: "학생 목록 조회 중 오류가 발생했습니다." 
+    }
+  }
+}
+
+// 선생님 목록 조회 (analytics 필터용)
+export async function getTeachersForAnalytics(): Promise<AnalyticsApiResponse<{ id: string; name: string }[]>> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, name")
+      .eq("status", "active")
+      .order("name", { ascending: true })
+    
+    if (error) {
+      return { success: false, error: "선생님 목록 조회 중 오류가 발생했습니다." }
+    }
+    
+    return { success: true, data: data || [] }
+    
+  } catch (error) {
+    console.error("getTeachersForAnalytics 오류:", error)
+    return { 
+      success: false, 
+      error: "선생님 목록 조회 중 오류가 발생했습니다." 
     }
   }
 }
