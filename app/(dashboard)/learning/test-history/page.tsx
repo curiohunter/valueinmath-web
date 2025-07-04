@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Edit, Trash2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 // 점수 색상 스타일 함수 (시험 점수용)
 const scoreColor = (score: number) => {
@@ -152,7 +152,7 @@ export default function TestHistoryPage() {
     try {
       let query = supabase
         .from("test_logs")
-        .select("class_id,student_id,date,test,test_type,test_score,note");
+        .select("id,class_id,student_id,date,test,test_type,test_score,note,created_by");
       
       // 날짜 필터
       if (dateRange.from) {
@@ -250,7 +250,7 @@ export default function TestHistoryPage() {
     try {
       let query = supabase
         .from("test_logs")
-        .select("class_id,student_id,date,test,test_type,test_score,note");
+        .select("id,class_id,student_id,date,test,test_type,test_score,note,created_by");
       
       if (dateRange.from) query = query.gte("date", dateRange.from);
       if (dateRange.to) query = query.lte("date", dateRange.to);
@@ -440,22 +440,37 @@ export default function TestHistoryPage() {
   async function handleDelete(rowId: string, row: any) {
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from("test_logs")
-        .delete()
-        .match({
-          class_id: row.class_id,
-          student_id: row.student_id,
-          date: row.date
-        });
+      // id가 있으면 id로 삭제, 없으면 unique constraint로 삭제
+      let deleteQuery;
+      if (row.id) {
+        deleteQuery = supabase
+          .from("test_logs")
+          .delete()
+          .eq("id", row.id);
+      } else {
+        // unique constraint (student_id, date, test)로 삭제
+        deleteQuery = supabase
+          .from("test_logs")
+          .delete()
+          .match({
+            student_id: row.student_id,
+            date: row.date,
+            test: row.test
+          });
+      }
+      
+      const { error } = await deleteQuery;
       if (error) throw error;
-      toast({ title: "삭제 완료", description: "시험 기록이 성공적으로 삭제되었습니다." });
+      
+      // Sonner toast 사용
+      toast.success("시험 기록이 성공적으로 삭제되었습니다.");
       setIsEditModalOpen(false);
       setEditingRow(null);
       setPage(1);
       fetchLogs();
     } catch (e) {
-      toast({ title: "삭제 실패", description: "DB 삭제 중 오류가 발생했습니다.", variant: "destructive" });
+      console.error("삭제 오류:", e);
+      toast.error("DB 삭제 중 오류가 발생했습니다.");
     } finally {
       setIsDeleting(false);
     }
