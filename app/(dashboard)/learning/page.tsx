@@ -95,6 +95,7 @@ export default function LearningPage() {
   
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalRows, setOriginalRows] = useState<typeof rows>([]);
+  const [deletedRowIds, setDeletedRowIds] = useState<string[]>([]); // 삭제된 행의 ID 추적
   
   // 교재/진도 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
@@ -193,12 +194,12 @@ export default function LearningPage() {
         setOriginalRows([]);
       }
     } catch (error) {
-      console.error("날짜별 데이터 불러오기 실패:", error);
     }
   };
 
   // 오늘 날짜의 학습 기록 불러오기
   const fetchTodayLogs = async () => {
+    setDeletedRowIds([]); // 새로 불러올 때 삭제 목록 초기화
     try {
       const { data: todayLogs, error } = await supabase
         .from("today_study_logs")
@@ -232,7 +233,6 @@ export default function LearningPage() {
         setOriginalRows(mappedRows);
       }
     } catch (error) {
-      console.error("오늘 날짜 데이터 불러오기 실패:", error);
     }
   };
 
@@ -336,16 +336,26 @@ export default function LearningPage() {
 
   // 저장 버튼 클릭
   const handleSave = async () => {
-    if (rows.length === 0) {
+    if (rows.length === 0 && deletedRowIds.length === 0) {
       alert("저장할 데이터가 없습니다.");
       return;
     }
     
     try {
+      // 먼저 삭제된 항목들을 DB에서 삭제
+      if (deletedRowIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("study_logs")
+          .delete()
+          .in("id", deletedRowIds);
+        
+        if (deleteError) {
+          throw deleteError;
+        }
+      }
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
-        console.error("User fetch error:", userError);
         alert("사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.");
         return;
       }
@@ -420,15 +430,14 @@ export default function LearningPage() {
       }
       
       if (error) {
-        console.error("Supabase error:", error);
         throw error;
       }
       
       alert("저장되었습니다.");
       await fetchTodayLogs();
       setHasUnsavedChanges(false);
+      setDeletedRowIds([]); // 삭제 목록 초기화
     } catch (e) {
-      console.error("저장 오류:", e);
       alert("저장 중 오류가 발생했습니다.");
     }
   };
@@ -1003,7 +1012,14 @@ export default function LearningPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
-                                  onClick={() => setRows(rows => rows.filter((_, i) => i !== originalIdx))}
+                                  onClick={() => {
+                                    const rowToDelete = rows[originalIdx];
+                                    if (rowToDelete.id) {
+                                      // 기존 DB에 있는 행이면 삭제 목록에 추가
+                                      setDeletedRowIds(prev => [...prev, rowToDelete.id!]);
+                                    }
+                                    setRows(rows => rows.filter((_, i) => i !== originalIdx));
+                                  }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>

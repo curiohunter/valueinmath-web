@@ -39,7 +39,7 @@ export async function GET() {
       approval_status: profile.approval_status
     } : null).filter(Boolean) || [];
 
-    console.log("Available users for linking:", users);
+    // console.log removed for security - do not log user data
 
     return NextResponse.json({ users, error: null });
   } catch (error: any) {

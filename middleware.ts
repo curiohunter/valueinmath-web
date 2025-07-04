@@ -9,6 +9,17 @@ export async function middleware(request: NextRequest) {
   // 응답 객체 생성
   const res = NextResponse.next()
 
+  // 정적 리소스, API 경로, 이미지 등은 인증 체크 스킵
+  if (
+    path.startsWith('/_next') || 
+    path.startsWith('/api') || 
+    path.includes('.') || 
+    path.startsWith('/static') ||
+    path.startsWith('/favicon')
+  ) {
+    return res
+  }
+
   // 개발 환경에서 오래된 쿠키 정리
   if (process.env.NODE_ENV === 'development') {
     // Supabase auth 쿠키가 깨졌을 가능성이 있는 경우 정리
@@ -21,10 +32,45 @@ export async function middleware(request: NextRequest) {
   // Supabase 클라이언트 생성
   const supabase = createMiddlewareClient({ req: request, res })
 
+  // 캐시된 인증 정보 확인 (5분간 유효)
+  const authCache = request.cookies.get('auth-cache')
+  const now = Date.now()
+  
+  if (authCache?.value) {
+    try {
+      const cached = JSON.parse(authCache.value)
+      if (cached.timestamp && now - cached.timestamp < 5 * 60 * 1000) {
+        // 캐시가 유효하면 세션 체크 스킵
+        if (!cached.session && path !== "/login" && path !== "/signup") {
+          const redirectUrl = new URL("/login", request.url)
+          redirectUrl.searchParams.set("redirect", path)
+          return NextResponse.redirect(redirectUrl)
+        }
+        return res
+      }
+    } catch (e) {
+      // 캐시 파싱 실패 시 무시
+    }
+  }
+
   // 세션 가져오기
   const {
     data: { session },
   } = await supabase.auth.getSession()
+  
+  // 디버깅용 로그 (개발 환경에서만)
+  if (process.env.NODE_ENV === 'development' && path.startsWith('/dashboard')) {
+    console.log('Middleware - Path:', path, 'Session:', !!session, 'User:', session?.user?.email)
+  }
+  
+  // 캐시 업데이트
+  res.cookies.set('auth-cache', JSON.stringify({
+    session: !!session,
+    timestamp: now
+  }), {
+    httpOnly: true,
+    maxAge: 5 * 60 // 5분
+  })
 
   // 인증이 필요한 경로 목록
   const authRequiredPaths = [

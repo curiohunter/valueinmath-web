@@ -95,6 +95,58 @@ NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
 ### Path Aliases
 - `@/*` maps to root directory (configured in tsconfig.json)
 
+## Common Issues & Solutions
+
+### 1. **Authentication Rate Limit 문제**
+- **문제**: "Request rate limit reached" 오류로 로그인 실패
+- **원인**: 
+  - Middleware가 모든 페이지 이동마다 2-3번의 API 호출
+  - 여러 컴포넌트가 독립적으로 인증 확인
+  - 짧은 재시도 간격과 공격적인 재시도 로직
+- **해결방법**:
+  ```typescript
+  // 1. AuthContext로 중앙화된 인증 상태 관리
+  // contexts/AuthContext.tsx 생성
+  
+  // 2. Middleware에 캐싱 추가 (5분)
+  res.cookies.set('auth-cache', JSON.stringify({
+    session: !!session,
+    timestamp: now
+  }), { maxAge: 5 * 60 });
+  
+  // 3. 재시도 간격 증가
+  // 2/4/8초 → 10/20/40초
+  
+  // 4. 폴링 간격 증가
+  // 10초 → 60초
+  ```
+
+### 2. **일괄 편집 모드에서 행 삭제 시 저장 안 되는 문제**
+- **문제**: learning, test-logs 페이지에서 행을 삭제하고 저장해도 DB에 반영되지 않음
+- **원인**: UI에서만 삭제하고 DB 삭제를 추적하지 않음
+- **해결방법**:
+  ```typescript
+  // 1. 삭제된 행 ID 추적 state 추가
+  const [deletedRowIds, setDeletedRowIds] = useState<string[]>([]);
+  
+  // 2. 삭제 버튼 클릭 시 ID 추가
+  onClick={() => {
+    const rowToDelete = rows[originalIdx];
+    if (rowToDelete.id) {
+      setDeletedRowIds(prev => [...prev, rowToDelete.id!]);
+    }
+    setRows(rows => rows.filter((_, i) => i !== originalIdx));
+  }}
+  
+  // 3. 저장 시 먼저 삭제 처리
+  if (deletedRowIds.length > 0) {
+    await supabase.from("table_name").delete().in("id", deletedRowIds);
+  }
+  
+  // 4. 성공 후 초기화
+  setDeletedRowIds([]);
+  ```
+
 ## Development Guidelines
 
 1. **Component Creation**
@@ -137,16 +189,19 @@ NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
 
 7. **Supabase Client Best Practices**
    - **IMPORTANT**: Use `createClientComponentClient` from `@supabase/auth-helpers-nextjs` for client components
+   - **API Routes**: Use `createRouteHandlerClient` instead of `createServerComponentClient`
    - **Avoid**: Direct `supabaseClient` from `@/lib/supabase/client` (causes auth session issues)
    - **Pattern**: 
      ```typescript
+     // Client Component
      import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-     import type { Database } from "@/types/database";
+     const supabase = createClientComponentClient<Database>();
      
-     export default function Component() {
-       const supabase = createClientComponentClient<Database>();
-       // ... component logic
-     }
+     // API Route
+     import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+     const supabase = createRouteHandlerClient<Database>({ 
+       cookies: () => cookieStore as any 
+     });
      ```
    - **Auth Session**: Always check if user exists before making authenticated requests
 
@@ -175,6 +230,15 @@ NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
 1. **Build Warnings**: ESLint and TypeScript errors ignored in production build
 2. ✅ **Calendar Migration**: Successfully completed - FullCalendar with 48 Google events imported
 3. **Multi-tenancy**: Single-tenant currently, SaaS migration planned
+4. ✅ **Authentication Rate Limit**: Fixed by implementing AuthContext and middleware caching
+
+## Recent Major Changes (2025-07-04)
+
+### 1. Authentication System Overhaul
+- **AuthContext Implementation**: Centralized auth state management to reduce API calls
+- **Middleware Caching**: Added 5-minute auth cache to prevent rate limiting
+- **Login Flow Fix**: Fixed redirect loop issue in login action
+- **API Route Client Fix**: Changed from `createServerComponentClient` to `createRouteHandlerClient`
 
 ## Recent Major Changes (2025-07-01)
 

@@ -80,7 +80,6 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
   try {
     const cookieStore = await cookies()
     const supabase = createServerActionClient({ cookies: () => cookieStore as any })
-    console.log('🔄 linkEmployeeToUser 시작:', { employeeId, userId })
 
     // 1. 기존 연결 해제: 이전에 이 직원과 연결된 사용자가 있다면 해제
     const { data: currentEmployee } = await supabase
@@ -89,10 +88,8 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
       .eq("id", employeeId)
       .single()
 
-    console.log('📋 현재 직원 정보:', currentEmployee)
 
     if (currentEmployee?.auth_id) {
-      console.log('🔄 기존 연결 해제 중:', currentEmployee.auth_id)
       // 기존 연결된 사용자의 승인 상태를 pending으로 되돌리고 직원 정보 제거
       const { error: profileUpdateError } = await supabase.from("profiles").update({
         approval_status: "pending",
@@ -103,9 +100,7 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
       }).eq("id", currentEmployee.auth_id)
       
       if (profileUpdateError) {
-        console.error('❌ 기존 프로필 업데이트 오류:', profileUpdateError)
       } else {
-        console.log('✅ 기존 프로필 업데이트 성공')
       }
 
       // pending_registrations 테이블도 pending으로 되돌리기
@@ -115,39 +110,30 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
       }).eq("user_id", currentEmployee.auth_id)
       
       if (pendingUpdateError) {
-        console.error('❌ 대기 등록 상태 업데이트 오류:', pendingUpdateError)
       } else {
-        console.log('✅ 대기 등록 상태 업데이트 성공')
       }
     }
 
     // 2. 다른 직원이 같은 사용자와 연결되어 있다면 해제
     if (userId) {
-      console.log('🔄 중복 연결 해제 중:', userId)
       const { error: duplicateUnlinkError } = await supabase.from("employees").update({ auth_id: null }).eq("auth_id", userId)
       if (duplicateUnlinkError) {
-        console.error('❌ 중복 연결 해제 오류:', duplicateUnlinkError)
       } else {
-        console.log('✅ 중복 연결 해제 성공')
       }
     }
 
     // 3. 직원 테이블의 auth_id 업데이트
-    console.log('🔄 직원 테이블 업데이트 중...')
     const { error } = await supabase
       .from("employees")
       .update({ auth_id: userId, updated_at: new Date().toISOString() })
       .eq("id", employeeId)
     
     if (error) {
-      console.error('❌ 직원 테이블 업데이트 오류:', error)
       throw error
     }
-    console.log('✅ 직원 테이블 업데이트 성공')
 
     // 4. 새로운 계정 연결 시 자동 승인 및 직원 정보 동기화
     if (userId) {
-      console.log('🔄 직원 정보 조회 중...')
       const { data: employee, error: employeeError } = await supabase
         .from("employees")
         .select("name, position, department")
@@ -155,14 +141,11 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
         .single()
       
       if (employeeError) {
-        console.error('❌ 직원 정보 조회 오류:', employeeError)
         throw employeeError
       }
       
-      console.log('📋 조회된 직원 정보:', employee)
       
       if (employee) {
-        console.log('🔄 프로필 업데이트 중...')
         const { error: profileError } = await supabase.from("profiles").update({
           name: employee.name,
           position: employee.position,
@@ -172,10 +155,8 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
         }).eq("id", userId)
         
         if (profileError) {
-          console.error('❌ 프로필 업데이트 오류:', profileError)
           throw profileError
         }
-        console.log('✅ 프로필 업데이트 성공')
 
         // pending_registrations 테이블도 approved로 업데이트
         const { error: pendingUpdateError } = await supabase.from("pending_registrations").update({
@@ -184,9 +165,7 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
         }).eq("user_id", userId)
         
         if (pendingUpdateError) {
-          console.error('❌ 대기 등록 상태 업데이트 오류:', pendingUpdateError)
         } else {
-          console.log('✅ 대기 등록 상태 업데이트 성공')
         }
       }
     }
@@ -195,10 +174,8 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
     revalidatePath("/employees")
     revalidatePath("/dashboard")
 
-    console.log('🎉 linkEmployeeToUser 완료!')
     return { success: true }
   } catch (error: any) {
-    console.error("❌ Error linking employee to user:", error)
     return { success: false, error: error.message }
   }
 }
@@ -231,7 +208,6 @@ export async function listUsers() {
       error: null,
     }
   } catch (error: any) {
-    console.error("Error listing users:", error)
     return { users: [], error: error.message }
   }
 }

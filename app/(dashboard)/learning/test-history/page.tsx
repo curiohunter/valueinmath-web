@@ -85,6 +85,12 @@ export default function TestHistoryPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // 일괄 편집 모드 상태
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [localData, setLocalData] = useState<any[]>([]);
+  const [deletedRowIds, setDeletedRowIds] = useState<string[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // 반/학생 이름 매핑 fetch
   useEffect(() => {
@@ -141,7 +147,6 @@ export default function TestHistoryPage() {
     setLoading(true);
     setError(null);
     
-    console.log("검색 조건:", {
       dateRange,
       filteredClassId,
       filteredStudentId,
@@ -157,30 +162,25 @@ export default function TestHistoryPage() {
       // 날짜 필터
       if (dateRange.from) {
         query = query.gte("date", dateRange.from);
-        console.log("날짜 시작 필터 적용:", dateRange.from);
       }
       if (dateRange.to) {
         query = query.lte("date", dateRange.to);
-        console.log("날짜 종료 필터 적용:", dateRange.to);
       }
       
       // 반 필터
       if (filteredClassId) {
         query = query.eq("class_id", filteredClassId);
-        console.log("반 필터 적용:", filteredClassId, classMap[filteredClassId]);
       }
       
       // 학생 필터
       if (filteredStudentId) {
         query = query.eq("student_id", filteredStudentId);
-        console.log("학생 필터 적용:", filteredStudentId, studentMap[filteredStudentId]);
       }
       
       // 시험유형 필터
       if (testTypeFilter) {
         // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
         query = query.eq("test_type", testTypeFilter as any);
-        console.log("시험유형 필터 적용:", testTypeFilter);
       }
 
       // 날짜순 정렬 추가 (오래된 것이 위로)
@@ -188,13 +188,14 @@ export default function TestHistoryPage() {
       
       const { data, error } = await query;
       
-      console.log("쿼리 결과:", { data, error, count: data?.length });
       
       if (error) throw error;
       setData(data || []);
+      setLocalData(data || []); // 편집용 로컬 데이터도 설정
+      setDeletedRowIds([]); // 삭제 목록 초기화
+      setHasUnsavedChanges(false);
       setPage(1); // 새 검색 시 첫 페이지로
     } catch (e) {
-      console.error("데이터 fetch 에러:", e);
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -203,8 +204,6 @@ export default function TestHistoryPage() {
 
   // 검색 버튼 클릭 시 - 검색어를 ID로 변환 후 검색
   function handleSearch() {
-    console.log("검색 버튼 클릭");
-    console.log("검색어:", { classSearch, studentSearch });
     
     // 반 검색어를 ID로 변환
     const classObj = classOptions.find(c => 
@@ -216,7 +215,6 @@ export default function TestHistoryPage() {
       studentSearch ? s.name.toLowerCase().includes(studentSearch.toLowerCase()) : false
     );
     
-    console.log("찾은 결과:", { classObj, studentObj });
     
     // 필터 ID 설정
     const newClassId = classObj?.id || "";
@@ -225,7 +223,6 @@ export default function TestHistoryPage() {
     setFilteredClassId(newClassId);
     setFilteredStudentId(newStudentId);
     
-    console.log("설정된 필터 ID:", { newClassId, newStudentId });
     
     // 약간의 지연 후 검색 (상태 업데이트 완료 대기)
     setTimeout(() => {
@@ -241,7 +238,6 @@ export default function TestHistoryPage() {
     const useClassId = classId !== undefined ? classId : filteredClassId;
     const useStudentId = studentId !== undefined ? studentId : filteredStudentId;
     
-    console.log("필터로 검색:", {
       dateRange,
       useClassId,
       useStudentId
@@ -267,9 +263,7 @@ export default function TestHistoryPage() {
       setData(data || []);
       setPage(1);
       
-      console.log("검색 완료, 결과 개수:", data?.length);
     } catch (e) {
-      console.error("검색 에러:", e);
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -438,6 +432,7 @@ export default function TestHistoryPage() {
 
   // 삭제 처리 (실제 Supabase delete)
   async function handleDelete(rowId: string, row: any) {
+    
     setIsDeleting(true);
     try {
       // id가 있으면 id로 삭제, 없으면 unique constraint로 삭제
@@ -459,8 +454,12 @@ export default function TestHistoryPage() {
           });
       }
       
-      const { error } = await deleteQuery;
-      if (error) throw error;
+      const { data, error, status, statusText } = await deleteQuery;
+      
+      if (error) {
+        throw error;
+      }
+      
       
       // Sonner toast 사용
       toast.success("시험 기록이 성공적으로 삭제되었습니다.");
@@ -468,9 +467,8 @@ export default function TestHistoryPage() {
       setEditingRow(null);
       setPage(1);
       fetchLogs();
-    } catch (e) {
-      console.error("삭제 오류:", e);
-      toast.error("DB 삭제 중 오류가 발생했습니다.");
+    } catch (e: any) {
+      toast.error(`DB 삭제 중 오류가 발생했습니다: ${e.message || '알 수 없는 오류'}`);
     } finally {
       setIsDeleting(false);
     }
@@ -704,7 +702,6 @@ export default function TestHistoryPage() {
                                 </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon">
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                       <span className="sr-only">삭제</span>
                                     </Button>
@@ -718,7 +715,9 @@ export default function TestHistoryPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
                                       <AlertDialogCancel>취소</AlertDialogCancel>
-                                      <AlertDialogAction onClick={() => handleDelete(row.class_id + row.student_id + row.date, row)} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                      <AlertDialogAction onClick={() => {
+                                        handleDelete(row.class_id + row.student_id + row.date, row);
+                                      }} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                                         {isDeleting ? "삭제 중..." : "삭제"}
                                       </AlertDialogAction>
                                     </AlertDialogFooter>

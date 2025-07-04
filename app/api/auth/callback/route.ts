@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs"
 import { createClient } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
 
@@ -12,11 +12,17 @@ export async function GET(request: NextRequest) {
 
     if (code) {
       const cookieStore = await cookies()
-      const supabase = createServerComponentClient<Database>({ 
+      const supabase = createRouteHandlerClient<Database>({ 
         cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
       })
 
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+      
+      console.log('Auth callback - Code exchange result:', { 
+        hasSession: !!data?.session, 
+        error: error?.message,
+        user: data?.session?.user?.email 
+      })
       
       if (!error && data.session) {
         // 프로필 확인 및 생성
@@ -41,6 +47,8 @@ export async function GET(request: NextRequest) {
         
         // 승인된 사용자는 바로 대시보드로, 그렇지 않으면 승인 대기 페이지로
         const redirectPath = existingProfile?.approval_status === 'approved' ? '/dashboard' : '/pending-approval'
+        console.log('Auth callback - Profile status:', existingProfile?.approval_status, 'Redirecting to:', redirectPath)
+        
         const response = NextResponse.redirect(new URL(redirectPath, requestUrl.origin))
         
         // 세션 쿠키를 명시적으로 설정
@@ -50,13 +58,15 @@ export async function GET(request: NextRequest) {
             access_token: data.session.access_token,
             refresh_token: data.session.refresh_token,
             expires_at: data.session.expires_at,
+            expires_in: data.session.expires_in,
             token_type: data.session.token_type,
             user: data.session.user
           }),
           path: '/',
           httpOnly: false,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax' as const
+          sameSite: 'lax' as const,
+          maxAge: 60 * 60 * 24 * 7 // 7 days
         }
         
         response.cookies.set(cookieOptions)

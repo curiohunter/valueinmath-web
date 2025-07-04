@@ -54,6 +54,7 @@ export default function TestLogsPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalRows, setOriginalRows] = useState<typeof rows>([]);
+  const [deletedRowIds, setDeletedRowIds] = useState<string[]>([]); // 삭제된 행의 ID 추적
   
   // 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
@@ -96,6 +97,7 @@ export default function TestLogsPage() {
   };
 
   const fetchTodayTestLogs = async () => {
+    setDeletedRowIds([]); // 새로 불러올 때 삭제 목록 초기화
     try {
       const today = new Date().toISOString().slice(0, 10);
       const { data: todayLogs, error } = await supabase
@@ -145,7 +147,6 @@ export default function TestLogsPage() {
         setOriginalRows(mappedLogs);
       }
     } catch (error) {
-      console.error("오늘 날짜 테스트 데이터 불러오기 실패:", error);
     }
   };
 
@@ -164,7 +165,6 @@ export default function TestLogsPage() {
           table: 'test_logs'
         }, 
         (payload: any) => {
-          console.log('Test log changed:', payload);
           // 현재 편집 중인 날짜들의 데이터만 다시 불러오기
           const uniqueDates = [...new Set(rows.map(r => r.date))];
           if (uniqueDates.includes((payload.new as any)?.date || (payload.old as any)?.date)) {
@@ -191,7 +191,6 @@ export default function TestLogsPage() {
       const currentDate = new Date().toISOString().slice(0, 10);
       
       if (currentDate !== date && rows.length > 0) {
-        console.log("날짜가 변경되어 자동 저장합니다.");
         
         handleSave().then(() => {
           setDate(currentDate);
@@ -217,7 +216,6 @@ export default function TestLogsPage() {
     setRows(prev => [
       ...prev,
       ...classStudentList
-        .filter(s => !prev.some(r => r.studentId === s.id && r.classId === classId))
         .map(s => ({
           classId,
           studentId: s.id,
@@ -232,26 +230,20 @@ export default function TestLogsPage() {
   };
 
   const handleAddStudent = (classId: string, student: { id: string; name: string }) => {
-    setRows(prev => {
-      const existingRow = prev.find(r => r.studentId === student.id && r.date === date);
-      if (existingRow) {
-        return prev;
-      } else {
-        return [
-          ...prev,
-          {
-            classId,
-            studentId: student.id,
-            name: student.name,
-            date,
-            test: "",
-            testType: "",
-            testScore: null,
-            note: "",
-          },
-        ];
-      }
-    });
+    // 중복 체크 없이 바로 추가 - 같은 학생이 여러 시험을 볼 수 있도록
+    setRows(prev => [
+      ...prev,
+      {
+        classId,
+        studentId: student.id,
+        name: student.name,
+        date,
+        test: "",
+        testType: "",
+        testScore: null,
+        note: "",
+      },
+    ]);
   };
 
   const handleApplyAllDate = () => {
@@ -295,15 +287,25 @@ export default function TestLogsPage() {
   };
 
   const handleSave = async () => {
-    if (rows.length === 0) {
+    if (rows.length === 0 && deletedRowIds.length === 0) {
       alert("저장할 데이터가 없습니다.");
       return;
     }
     try {
+      // 먼저 삭제된 항목들을 DB에서 삭제
+      if (deletedRowIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("test_logs")
+          .delete()
+          .in("id", deletedRowIds);
+        
+        if (deleteError) {
+          throw deleteError;
+        }
+      }
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
-        console.error("User fetch error:", userError);
         alert("사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.");
         return;
       }
@@ -380,8 +382,8 @@ export default function TestLogsPage() {
       
       await fetchTodayTestLogs();
       setHasUnsavedChanges(false);
+      setDeletedRowIds([]); // 삭제 목록 초기화
     } catch (e) {
-      console.error("저장 오류:", e);
       alert("저장 중 오류가 발생했습니다.");
     }
   };
@@ -528,7 +530,6 @@ export default function TestLogsPage() {
                     {isOpen && (
                       <div className="mt-2 ml-4 space-y-2">
                         {classStudentList
-                          .filter(s => !addedStudentIds.includes(s.id))
                           .map(s => (
                             <Card 
                               key={s.id}
@@ -555,9 +556,9 @@ export default function TestLogsPage() {
                             </Card>
                           ))}
                           
-                        {classStudentList.filter(s => !addedStudentIds.includes(s.id)).length === 0 && (
+                        {classStudentList.length === 0 && (
                           <div className="text-center py-4 text-gray-400 text-sm">
-                            이미 모든 학생이 추가됨
+                            학생이 없습니다
                           </div>
                         )}
                       </div>
@@ -728,9 +729,9 @@ export default function TestLogsPage() {
                         </tr>
                         {/* 그룹 내 학생들 */}
                         {classRows.map((row, idx) => {
-                          const originalIdx = rows.findIndex(r => r.studentId === row.studentId && r.classId === row.classId);
+                          const originalIdx = rows.indexOf(row);
                           return (
-                          <tr key={row.classId + row.studentId} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+                          <tr key={originalIdx} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
                             <td className="px-4 py-3 text-sm text-gray-600">
                               {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
                             </td>
@@ -793,7 +794,14 @@ export default function TestLogsPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
-                                onClick={() => setRows(rows => rows.filter((_, i) => i !== originalIdx))}
+                                onClick={() => {
+                                  const rowToDelete = rows[originalIdx];
+                                  if (rowToDelete.id) {
+                                    // 기존 DB에 있는 행이면 삭제 목록에 추가
+                                    setDeletedRowIds(prev => [...prev, rowToDelete.id!]);
+                                  }
+                                  setRows(rows => rows.filter((_, i) => i !== originalIdx));
+                                }}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

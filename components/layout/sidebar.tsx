@@ -79,7 +79,7 @@ export function Sidebar() {
     fetchUnreadCount()
 
     // 10초마다 업데이트
-    const interval = setInterval(fetchUnreadCount, 10000)
+    const interval = setInterval(fetchUnreadCount, 60000) // 10초 -> 60초로 증가
     
     // 실시간 구독
     const channel = supabase

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/database"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface GlobalChatButtonProps {
   user?: any
@@ -18,7 +19,7 @@ interface GlobalChatButtonProps {
 }
 
 export default function GlobalChatButton({ 
-  user,
+  user: propUser,
   asHeaderIcon = false,
   chatOpen,
   setChatOpen,
@@ -28,6 +29,8 @@ export default function GlobalChatButton({
 }: GlobalChatButtonProps) {
   const [unreadCount, setUnreadCount] = useState(0)
   const supabase = createClientComponentClient<Database>()
+  const { user: contextUser } = useAuth()
+  const user = propUser || contextUser
 
   // 읽지 않은 메시지 수 가져오기
   useEffect(() => {
@@ -101,8 +104,8 @@ export default function GlobalChatButton({
             // 재시도 로직 (최대 3번)
             if (retryCount < 3 && !isCleanedUp) {
               retryCount++
-              // 지수 백오프: 2초, 4초, 8초
-              const delay = Math.min(2000 * Math.pow(2, retryCount - 1), 8000)
+              // 지수 백오프: 10초, 20초, 40초 (기존보다 5배 증가)
+              const delay = Math.min(10000 * Math.pow(2, retryCount - 1), 40000)
               console.log(`[GlobalChatButton] Retrying in ${delay}ms (attempt ${retryCount}/3)...`)
               
               retryTimeout = setTimeout(() => {

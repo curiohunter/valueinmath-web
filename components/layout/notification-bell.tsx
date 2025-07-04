@@ -35,14 +35,11 @@ export function NotificationBell({ user }: NotificationBellProps) {
   // 관리자 권한 및 데이터 로드
   useEffect(() => {
     async function loadData() {
-      console.log('🔍 알림 벨: loadData 시작, 사용자:', user)
       if (!user) {
-        console.log('🔍 알림 벨: 사용자 없음, 종료')
         return
       }
 
       try {
-        console.log('🔍 알림 벨: 사용자 ID:', user.id)
         
         // 관리자 권한 확인
         const { data: employee, error: employeeError } = await supabase
@@ -51,36 +48,28 @@ export function NotificationBell({ user }: NotificationBellProps) {
           .eq("auth_id", user.id)
           .single()
 
-        console.log('🔍 알림 벨: 직원 조회 결과:', { employee, employeeError })
         
         const adminStatus = employee?.position === "원장" || employee?.position === "부원장"
-        console.log('🔍 알림 벨: 관리자 여부:', adminStatus)
         
         setIsAdmin(adminStatus)
 
         if (!adminStatus) {
-          console.log('🔍 알림 벨: 관리자 아님, 종료')
           return
         }
 
         // 승인 대기 중인 사용자 목록 가져오기
-        console.log('🔍 알림 벨: pending 사용자 조회 시작')
         const { data: pendingUsersData, error } = await supabase
           .from("profiles")
           .select("id, name, email, approval_status, created_at")
           .eq("approval_status", "pending")
           .order("created_at", { ascending: false })
 
-        console.log('🔍 알림 벨: 조회 결과:', { pendingUsersData, error })
         
         if (error) {
-          console.error("❌ 알림 벨: pending 사용자 조회 오류:", error)
         } else {
-          console.log('✅ 알림 벨: pending 사용자 설정:', pendingUsersData?.length || 0, '명')
           setPendingUsers(pendingUsersData || [])
         }
       } catch (error) {
-        console.error("❌ 알림 벨: 전체 오류:", error)
       }
     }
 
@@ -120,11 +109,9 @@ export function NotificationBell({ user }: NotificationBellProps) {
           table: "profiles",
         },
         (payload) => {
-          console.log('📨 알림 벨: UPDATE 이벤트 수신:', payload)
           
           // pending으로 변경된 경우 목록에 추가
           if (payload.new.approval_status === "pending") {
-            console.log('📨 알림 벨: pending 상태 추가')
             setPendingUsers(prev => {
               // 중복 확인
               const exists = prev.some(user => user.id === payload.new.id)
@@ -138,7 +125,6 @@ export function NotificationBell({ user }: NotificationBellProps) {
           }
           // 승인/거부 시 목록에서 제거
           else if (payload.new.approval_status !== "pending") {
-            console.log('📨 알림 벨: pending 아닌 상태로 변경, 목록에서 제거')
             setPendingUsers(prev => prev.filter(user => user.id !== payload.new.id))
           }
         }
@@ -155,18 +141,14 @@ export function NotificationBell({ user }: NotificationBellProps) {
     if (!isAdmin) return
     
     try {
-      console.log('🔄 알림 벨: 수동 새로고침')
       
       // 먼저 서버 사이드 테스트
       const serverResult = await testGetPendingUsers()
-      console.log('🧪 서버 사이드 테스트 결과:', serverResult)
       
       // 클라이언트 사이드 조회 (대체 방법)
-      console.log('🔄 알림 벨: 대체 방법 시도 - 서버 데이터 사용')
       
       // 서버 사이드 데이터가 있으면 그것을 사용
       if (serverResult.success && serverResult.pendingUsers) {
-        console.log('✅ 알림 벨: 서버 데이터 사용:', serverResult.pendingUsers.length, '명')
         setPendingUsers(serverResult.pendingUsers)
         return
       }
@@ -178,16 +160,12 @@ export function NotificationBell({ user }: NotificationBellProps) {
         .eq("approval_status", "pending")
         .order("created_at", { ascending: false })
 
-      console.log('🖥️ 클라이언트 사이드 결과:', { pendingUsersData, error })
       
       if (error) {
-        console.error("❌ 알림 벨: 새로고침 오류:", error)
       } else {
-        console.log('🔄 알림 벨: 새로고침 완료:', pendingUsersData?.length || 0, '명')
         setPendingUsers(pendingUsersData || [])
       }
     } catch (error) {
-      console.error("❌ 알림 벨: 새로고침 전체 오류:", error)
     }
   }
 
