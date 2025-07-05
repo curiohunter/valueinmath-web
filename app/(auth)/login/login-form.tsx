@@ -15,7 +15,7 @@ export function LoginForm() {
     try {
       await signIn(formData)
     } catch (error) {
-      console.error('로그인 오류:', error)
+      // Server action will handle redirect with error
     } finally {
       setIsLoading(false)
     }
@@ -26,7 +26,7 @@ export function LoginForm() {
     try {
       await signInWithGoogle()
     } catch (error) {
-      console.error('구글 로그인 오류:', error)
+      // Server action will handle redirect with error
     } finally {
       setIsGoogleLoading(false)
     }

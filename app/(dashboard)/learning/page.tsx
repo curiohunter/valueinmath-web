@@ -152,6 +152,7 @@ export default function LearningPage() {
 
   // 특정 날짜의 학습 기록 불러오기
   const fetchLogsForDate = async (targetDate: string) => {
+    setDeletedRowIds([]); // 날짜 변경 시 삭제 목록 초기화
     try {
       const { data: logs, error } = await supabase
         .from("study_logs")
@@ -304,7 +305,12 @@ export default function LearningPage() {
   // 학생별 추가
   const handleAddStudent = (classId: string, student: { id: string; name: string }) => {
     setRows(prev => {
-      const existingRow = prev.find(r => r.studentId === student.id && r.date === date);
+      // 같은 반, 같은 학생, 같은 날짜인 경우만 중복 체크
+      const existingRow = prev.find(r => 
+        r.classId === classId && 
+        r.studentId === student.id && 
+        r.date === date
+      );
       if (existingRow) {
         return prev;
       } else {

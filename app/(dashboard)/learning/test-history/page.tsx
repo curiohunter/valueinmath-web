@@ -231,11 +231,6 @@ export default function TestHistoryPage() {
     const useClassId = classId !== undefined ? classId : filteredClassId;
     const useStudentId = studentId !== undefined ? studentId : filteredStudentId;
     
-      dateRange,
-      useClassId,
-      useStudentId
-    });
-
     try {
       let query = supabase
         .from("test_logs")
@@ -412,12 +407,12 @@ export default function TestHistoryPage() {
         }
       }
 
-      toast({ title: "수정 완료", description: "시험 기록이 성공적으로 수정되었습니다." });
+      toast.success("시험 기록이 성공적으로 수정되었습니다.");
       setIsEditModalOpen(false);
       setEditingRow(null);
       fetchLogs();
     } catch (e) {
-      toast({ title: "수정 실패", description: "DB 수정 중 오류가 발생했습니다.", variant: "destructive" });
+      toast.error("DB 수정 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
     }
@@ -695,6 +690,7 @@ export default function TestHistoryPage() {
                                 </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon">
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                       <span className="sr-only">삭제</span>
                                     </Button>

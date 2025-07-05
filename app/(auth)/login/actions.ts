@@ -48,7 +48,6 @@ export async function signInWithGoogle() {
   })
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://valueinmath.vercel.app'
-  console.log('Google login - Site URL:', siteUrl)
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -58,11 +57,9 @@ export async function signInWithGoogle() {
   })
 
   if (error) {
-    console.error('Google login error:', error)
     redirect('/login?error=' + encodeURIComponent(error.message))
   }
 
-  console.log('Google login - OAuth data:', data)
   if (data.url) {
     redirect(data.url)
   }
