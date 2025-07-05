@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/database"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/providers/auth-provider"
 
 interface GlobalChatButtonProps {
   user?: any
@@ -44,7 +44,7 @@ export default function GlobalChatButton({
         if (error) throw error
         setUnreadCount(data || 0)
       } catch (error) {
-        console.error('[GlobalChatButton] Error fetching unread count:', error)
+        // Silent fail
       }
     }
 
@@ -100,21 +100,17 @@ export default function GlobalChatButton({
               retryTimeout = null
             }
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error(`[GlobalChatButton] ${status}:`, error)
             // 재시도 로직 (최대 3번)
             if (retryCount < 3 && !isCleanedUp) {
               retryCount++
               // 지수 백오프: 10초, 20초, 40초 (기존보다 5배 증가)
               const delay = Math.min(10000 * Math.pow(2, retryCount - 1), 40000)
-              console.log(`[GlobalChatButton] Retrying in ${delay}ms (attempt ${retryCount}/3)...`)
               
               retryTimeout = setTimeout(() => {
                 if (!isCleanedUp) {
                   setupChannel()
                 }
               }, delay)
-            } else if (retryCount >= 3) {
-              console.error('[GlobalChatButton] Max retries reached. Stopping reconnection attempts.')
             }
           }
         })

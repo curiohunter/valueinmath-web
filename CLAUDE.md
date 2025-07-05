@@ -36,13 +36,16 @@ This is a Next.js 15 academy management system built with:
 
 ### Key Architectural Patterns
 
-1. **Authentication Flow**
-   - Middleware (`middleware.ts`) protects routes
-   - New users require admin approval via `profiles.is_approved`
+1. **Authentication Flow (Updated 2025-07-05)**
+   - Centralized AuthProvider in `providers/auth-provider.tsx`
+   - Middleware (`middleware.ts`) protects routes without caching
+   - New users require admin approval via `profiles.approval_status`
    - Auth routes under `app/(auth)`
+   - Client components use `useAuth` hook from AuthProvider
+   - Server components use `createServerClient` from `lib/auth/server.ts`
 
 2. **Data Access**
-   - Supabase clients in `lib/supabase/` (browser, server, admin)
+   - Supabase clients in `lib/auth/` (separate client and server helpers)
    - Services in `services/` for business logic
    - Custom hooks in `hooks/` for data fetching with SWR
 
@@ -58,10 +61,11 @@ This is a Next.js 15 academy management system built with:
 
 ## Important Context
 
-### Current Development Focus (Updated 2025-07-01)
+### Current Development Focus (Updated 2025-07-05)
 - ✅ **Calendar System Completed**: Successfully migrated from n8n to FullCalendar with Google Calendar integration
 - ✅ **Google OAuth Integration**: Production deployment with proper redirect URIs configured
 - ✅ **Vercel Auto-deployment**: GitHub integration working (requires public repository)
+- ✅ **Authentication System Redesign**: Fixed hydration issues with new AuthProvider pattern
 - 🚧 **SaaS Multi-tenancy**: Preparing for transformation
 - 🚧 **Database Schema**: Simplification in progress
 
@@ -97,28 +101,30 @@ NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
 
 ## Common Issues & Solutions
 
-### 1. **Authentication Rate Limit 문제**
-- **문제**: "Request rate limit reached" 오류로 로그인 실패
+### 1. **Hydration 및 렌더링 문제**
+- **문제**: 로그인 후 화면이 간헐적으로 렌더링되지 않음
 - **원인**: 
-  - Middleware가 모든 페이지 이동마다 2-3번의 API 호출
+  - Server/Client 간 인증 상태 불일치
+  - Hydration mismatch로 인한 React 렌더링 실패
   - 여러 컴포넌트가 독립적으로 인증 확인
-  - 짧은 재시도 간격과 공격적인 재시도 로직
 - **해결방법**:
   ```typescript
-  // 1. AuthContext로 중앙화된 인증 상태 관리
-  // contexts/AuthContext.tsx 생성
+  // 1. 새로운 AuthProvider 구조
+  // providers/auth-provider.tsx
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   
-  // 2. Middleware에 캐싱 추가 (5분)
-  res.cookies.set('auth-cache', JSON.stringify({
-    session: !!session,
-    timestamp: now
-  }), { maxAge: 5 * 60 });
+  if (!mounted || loading) {
+    return <LoadingSpinner />
+  }
   
-  // 3. 재시도 간격 증가
-  // 2/4/8초 → 10/20/40초
+  // 2. 중앙화된 auth 상태 관리
+  const { user, loading } = useAuth()
   
-  // 4. 폴링 간격 증가
-  // 10초 → 60초
+  // 3. Middleware 단순화 - 캐시 제거
+  const { data: { session } } = await supabase.auth.getSession()
   ```
 
 ### 2. **일괄 편집 모드에서 행 삭제 시 저장 안 되는 문제**
@@ -231,6 +237,18 @@ NEXT_PUBLIC_SITE_URL=https://valueinmath.vercel.app
 2. ✅ **Calendar Migration**: Successfully completed - FullCalendar with 48 Google events imported
 3. **Multi-tenancy**: Single-tenant currently, SaaS migration planned
 4. ✅ **Authentication Rate Limit**: Fixed by implementing AuthContext and middleware caching
+
+## Recent Major Changes (2025-07-05)
+
+### 1. Authentication System Complete Redesign
+- **New AuthProvider Pattern**: Created `providers/auth-provider.tsx` with hydration-safe implementation
+- **Removed Old AuthContext**: Deleted `contexts/AuthContext.tsx` to avoid confusion
+- **Middleware Simplification**: Removed caching logic that was causing state inconsistencies
+- **Client/Server Separation**: 
+  - Client: `lib/auth/client.ts` with `createClient()`
+  - Server: `lib/auth/server.ts` with `createServerClient()`
+- **Dashboard Layout Fix**: Added `mounted` state check to prevent hydration mismatches
+- **Console Log Security**: Removed all sensitive data logging for public GitHub repo
 
 ## Recent Major Changes (2025-07-04)
 

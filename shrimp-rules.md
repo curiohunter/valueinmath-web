@@ -39,25 +39,30 @@
 
 ## Supabase 통합 패턴
 
-### 클라이언트별 사용 규칙 (2025-07-03 업데이트)
+### 클라이언트별 사용 규칙 (2025-07-05 업데이트)
 ```typescript
-// Client Component에서 - 반드시 이 패턴 사용
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import type { Database } from "@/types/database";
+// Client Component에서 - AuthProvider 사용
+import { useAuth } from "@/providers/auth-provider";
+import { createClient } from "@/lib/auth/client";
 
 export default function Component() {
-  const supabase = createClientComponentClient<Database>();
+  const { user, loading } = useAuth();
+  const supabase = createClient();
   // ... component logic
 }
 
 // Server Component에서
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient } from '@/lib/auth/server'
 
-// API Route나 Server Action에서
-import { createAdminClient } from '@/lib/supabase/admin'
+// API Route에서 - createRouteHandlerClient 사용
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+const supabase = createRouteHandlerClient<Database>({ 
+  cookies: () => cookieStore as any 
+});
 
 // ⚠️ 절대 사용 금지
 import { supabaseClient } from "@/lib/supabase/client"; // Auth session 문제 발생
+import { useAuth } from "@/contexts/AuthContext"; // 이전 버전, 제거됨
 ```
 
 ### 데이터 작업 규칙
@@ -277,34 +282,54 @@ components/
 - [ ] 데이터베이스 마이그레이션 완료
 - [ ] Supabase 타입 최신화
 
-## 최근 해결된 주요 이슈 (2025-07-03 업데이트)
+## 최근 해결된 주요 이슈 (2025-07-05 업데이트)
 
-### 1. Google Calendar 형식 변환
+### 1. Hydration 및 렌더링 문제 (2025-07-05)
+- **문제**: 로그인 후 간헐적으로 화면이 렌더링되지 않음
+- **원인**: Server/Client 간 인증 상태 불일치로 인한 hydration mismatch
+- **해결**: 
+  - 새로운 AuthProvider 구조로 전면 재설계
+  - Dashboard layout에 `mounted` 상태 체크 추가
+  - Middleware에서 캐시 제거로 단순화
+- **영향**: 모든 인증 관련 컴포넌트
+
+### 2. 학습관리 테이블 중복 학생 추가 문제 (2025-07-05)
+- **문제**: 같은 학생이 다른 반에 속할 때 추가 안됨
+- **원인**: study_logs 테이블의 unique constraint가 (student_id, date)로 설정
+- **해결**: unique constraint를 (class_id, student_id, date)로 변경
+- **SQL**: `ALTER TABLE study_logs DROP CONSTRAINT study_logs_student_id_date_key; ALTER TABLE study_logs ADD CONSTRAINT study_logs_class_student_date_key UNIQUE (class_id, student_id, date);`
+
+### 3. Console Log 보안 문제 (2025-07-05)
+- **문제**: Public GitHub에 민감한 사용자 정보 로깅
+- **해결**: 모든 console.log, console.error 제거
+- **영향**: GlobalChatButton, auth-actions, login 관련 파일들
+
+### 4. Google Calendar 형식 변환 (2025-07-03)
 - **문제**: `2025-07-02T10:00:00+09:00` → `2025-07-02 10:00:00+09`
 - **해결**: `.replace('T', ' ').replace('+09:00', '+09')`
 
-### 2. FullCalendar More Events 투명 모달
+### 5. FullCalendar More Events 투명 모달
 - **문제**: 배경이 투명해서 글씨가 안 보임
 - **해결**: `.fc-more-popover` 스타일에 흰색 배경 추가
 
-### 3. 대시보드 캘린더 Timezone 
+### 6. 대시보드 캘린더 Timezone 
 - **문제**: UTC 기준으로 계산해서 날짜가 틀어짐
 - **해결**: 로컬 시간 기준으로 변경
 
-### 4. Vercel 자동배포 안됨
+### 7. Vercel 자동배포 안됨
 - **문제**: Private 리포지토리는 webhook 생성 안됨
 - **해결**: Public 리포지토리로 전환
 
-### 5. Google OAuth Redirect
+### 8. Google OAuth Redirect
 - **문제**: Production에서 localhost로 리다이렉트
 - **해결**: NEXT_PUBLIC_SITE_URL 환경변수 추가
 
-### 6. Auth Session Missing 오류 (2025-07-03)
+### 9. Auth Session Missing 오류 (2025-07-03)
 - **문제**: `supabaseClient`로 직접 클라이언트 생성 시 인증 세션 없음
 - **해결**: `createClientComponentClient` 사용으로 변경
 - **영향**: learning, test-logs, history 페이지 모두 수정
 
-### 7. Supabase Upsert ID null 제약조건 위반 (2025-07-03)
+### 10. Supabase Upsert ID null 제약조건 위반 (2025-07-03)
 - **문제**: 새 레코드에 `id: undefined`가 포함되어 null로 변환됨
 - **원인**: upsert에서 기존/새 레코드를 구분 없이 처리
 - **해결**: 기존 레코드(ID 있음)와 새 레코드(ID 없음) 분리 처리
