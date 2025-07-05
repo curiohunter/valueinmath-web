@@ -6,7 +6,7 @@ import { ClassesTable } from "@/app/(dashboard)/students/classes/classes-table"
 import { Card, CardContent } from "@/components/ui/card"
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal"
 import { useEffect, useState as useClientState } from "react"
-import { createClient } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/database"
 
 export default function ClassesPage() {
@@ -23,10 +23,7 @@ export default function ClassesPage() {
   // 데이터 로드 함수
   const loadData = async () => {
     setLoading(true)
-    const supabase = createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = createClientComponentClient<Database>()
     
     const [classesRes, teachersRes, studentsRes, classStudentsRes] = await Promise.all([
       supabase.from("classes").select("*, monthly_fee").order("teacher_id", { ascending: true }).order("name", { ascending: true }),
@@ -37,7 +34,6 @@ export default function ClassesPage() {
       supabase.from("students").select("id, name, status, school_type, grade").order("name", { ascending: true }),
       supabase.from("class_students").select("class_id, student_id")
     ])
-    
     setClasses(classesRes.data ?? [])
     setTeachers(teachersRes.data ?? [])
     setStudents(studentsRes.data ?? [])
@@ -49,9 +45,13 @@ export default function ClassesPage() {
     loadData()
   }, [])
 
-  // 반별 학생 수 매핑
+  // 반별 학생 수 매핑 (재원 상태인 학생만 카운트)
   const studentsCountMap = classStudents.reduce((acc: Record<string, number>, cs: any) => {
-    acc[cs.class_id] = (acc[cs.class_id] || 0) + 1
+    const student = students.find(s => s.id === cs.student_id)
+    // 재원 상태인 학생만 카운트
+    if (student && student.status === '재원') {
+      acc[cs.class_id] = (acc[cs.class_id] || 0) + 1
+    }
     return acc
   }, {})
 

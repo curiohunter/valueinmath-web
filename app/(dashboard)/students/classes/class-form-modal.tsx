@@ -174,10 +174,17 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         return
       }
       // 2. 기존 반-학생 매핑 삭제 후 새로 insert
-      await supabase.from("class_students").delete().eq("class_id", initialData.id)
+      const { error: deleteError } = await supabase.from("class_students").delete().eq("class_id", initialData.id)
+      if (deleteError) {
+        console.error('class_students 삭제 오류:', deleteError)
+      }
+      
       if (selectedStudents.length > 0) {
         const inserts = selectedStudents.map(student => ({ class_id: initialData.id, student_id: student.id }))
-        await supabase.from("class_students").insert(inserts)
+        const { error: insertError } = await supabase.from("class_students").insert(inserts)
+        if (insertError) {
+          console.error('class_students 추가 오류:', insertError)
+        }
       }
     }
     setLoading(false)

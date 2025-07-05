@@ -18,6 +18,7 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { calendarService } from "@/services/calendar"
 import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
 import type { Database } from "@/types/database"
+import { toast } from "sonner"
 
 type Student = Database['public']['Tables']['students']['Row']
 type EntranceTest = Database['public']['Tables']['entrance_tests']['Row']
@@ -249,34 +250,55 @@ export default function DashboardPage() {
 
   const handleConsultationSave = async (consultationData: Partial<ConsultationData>) => {
     try {
+      // 인증 확인
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('로그인이 필요합니다. 다시 로그인해주세요.')
+        return
+      }
+
       // name 등 필수 필드 보장
-      const cleanData = {
+      const cleanData: any = {
         ...cleanObj(consultationData),
         name: consultationData.name ?? '',
         parent_phone: consultationData.parent_phone ?? '',
         school: consultationData.school ?? '',
         grade: consultationData.grade ?? 1,
         department: consultationData.department ?? '',
-        lead_source: consultationData.lead_source ?? '',
         status: consultationData.status ?? '신규상담',
         notes: consultationData.notes ?? '',
         first_contact_date: consultationData.first_contact_date ?? new Date().toISOString().split('T')[0]
+      }
+      
+      // lead_source는 값이 있을 때만 포함
+      if (consultationData.lead_source && consultationData.lead_source.trim() !== '') {
+        cleanData.lead_source = consultationData.lead_source
       }
       
       const originalStatus = editingConsultation?.status
       const newStatus = cleanData.status
       
       if (editingConsultation) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('students')
           .update(cleanData)
           .eq('id', editingConsultation.id)
+          .select()
         if (error) throw error
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('students')
           .insert(cleanData)
-        if (error) throw error
+          .select()
+        if (error) {
+          console.error('Insert error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          })
+          throw error
+        }
       }
       
       // 상담 저장 후 필요한 데이터만 새로고침
@@ -293,9 +315,15 @@ export default function DashboardPage() {
       
       // 상태 변경 알림 (신규상담 -> 다른 상태로 변경 시)
       if (originalStatus === '신규상담' && newStatus !== '신규상담') {
+        toast.success(`${cleanData.name}님의 상태가 ${newStatus}으로 변경되었습니다.`)
+      } else if (editingConsultation) {
+        toast.success('상담 정보가 수정되었습니다.')
+      } else {
+        toast.success('신규 상담이 등록되었습니다.')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('신규상담 저장 오류:', error)
+      toast.error(`저장 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`)
     }
   }
 
@@ -936,8 +964,10 @@ function ConsultationModal({
       }
       
       await onSave(submitData)
-    } catch (error) {
+      // 성공 시에만 모달 닫기 (onSave 내부에서 처리)
+    } catch (error: any) {
       console.error('신규상담 저장 오류:', error)
+      // 에러는 onSave 함수에서 처리
     } finally {
       setIsSubmitting(false)
     }
