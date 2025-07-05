@@ -146,13 +146,6 @@ export default function TestHistoryPage() {
   async function fetchLogs() {
     setLoading(true);
     setError(null);
-    
-      dateRange,
-      filteredClassId,
-      filteredStudentId,
-      classSearch,
-      studentSearch
-    });
 
     try {
       let query = supabase
