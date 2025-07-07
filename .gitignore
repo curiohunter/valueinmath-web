@@ -29,3 +29,10 @@ pnpm-debug.log*
 .taskmaster-data/
 .cursor/
 .vercel
+
+# Claude 관련 문서 (민감한 프로젝트 정보 포함)
+CLAUDE.md
+LEARNED_FROM_ERRORS.md
+PROJECT_INSTRUCTIONS_CLAUDE.md
+PROJECT_STATUS.md
+shrimp-rules.md
