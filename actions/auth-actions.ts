@@ -1,14 +1,12 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 
 // 로그아웃 처리
 export async function signOut() {
-  const cookieStore = await cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore as any })
+  const supabase = await createServerClient()
 
   const { error } = await supabase.auth.signOut()
 
@@ -24,22 +22,21 @@ export async function signOut() {
 
 // 사용자 정보 가져오기
 export async function getCurrentUser() {
-  const cookieStore = await cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore as any })
+  const supabase = await createServerClient()
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     return { user: null }
   }
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
   return {
     user: {
-      ...session.user,
+      ...user,
       profile,
     },
   }
@@ -52,18 +49,17 @@ export async function updateUserProfile(profileData: {
   position?: string
   department?: string
 }) {
-  const cookieStore = await cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore as any })
+  const supabase = await createServerClient()
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     return { success: false, error: "인증되지 않은 사용자입니다." }
   }
 
-  const { error } = await supabase.from("profiles").update(profileData).eq("id", session.user.id)
+  const { error } = await supabase.from("profiles").update(profileData).eq("id", user.id)
 
   if (error) {
     return { success: false, error: error.message }
@@ -214,16 +210,16 @@ export async function listUsers() {
 
 // 회원 탈퇴(계정 삭제)
 export async function withdrawUser() {
-  const supabase = createServerActionClient({ cookies })
+  const supabase = await createServerClient()
   // 1. 현재 로그인 유저 정보
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession()
-  if (sessionError || !session) {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+  if (userError || !user) {
     return { success: false, error: "로그인 정보가 없습니다." }
   }
-  const userId = session.user.id
+  const userId = user.id
 
   // 2. Supabase Admin Client로 인증 계정 삭제
   const admin = getSupabaseAdmin()

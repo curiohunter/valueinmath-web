@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import type { User } from "@supabase/supabase-js";
 
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient();
 
   const loadAuthState = useCallback(async () => {
     try {

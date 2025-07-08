@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import type { Database } from "@/types/database"
 import { useAuth } from "@/providers/auth-provider"
 
@@ -28,7 +28,7 @@ export default function GlobalChatButton({
   onClick 
 }: GlobalChatButtonProps) {
   const [unreadCount, setUnreadCount] = useState(0)
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
   const { user: contextUser } = useAuth()
   const user = propUser || contextUser
 

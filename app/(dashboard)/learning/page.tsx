@@ -8,7 +8,7 @@ import { ScoreLegendBox } from "@/components/ui/score-legend-box";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -54,7 +54,7 @@ const focusMap: Record<string, number> = {
 };
 
 export default function LearningPage() {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient();
   
   // 입력 상태
   const [date, setDate] = useState(today);

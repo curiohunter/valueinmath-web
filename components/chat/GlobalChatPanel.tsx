@@ -5,7 +5,7 @@ import { X, Send, Bot, User, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import type { Database } from "@/types/database"
 
 interface Message {
@@ -29,7 +29,7 @@ export default function GlobalChatPanel({ user, isOpen, onClose }: GlobalChatPan
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   // 메시지 로드 및 읽음 처리
   useEffect(() => {

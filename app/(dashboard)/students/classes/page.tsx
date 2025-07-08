@@ -6,7 +6,7 @@ import { ClassesTable } from "@/app/(dashboard)/students/classes/classes-table"
 import { Card, CardContent } from "@/components/ui/card"
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal"
 import { useEffect, useState as useClientState } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import type { Database } from "@/types/database"
 
 export default function ClassesPage() {
@@ -23,7 +23,7 @@ export default function ClassesPage() {
   // 데이터 로드 함수
   const loadData = async () => {
     setLoading(true)
-    const supabase = createClientComponentClient<Database>()
+    const supabase = createClient()
     
     const [classesRes, teachersRes, studentsRes, classStudentsRes] = await Promise.all([
       supabase.from("classes").select("*, monthly_fee").order("teacher_id", { ascending: true }).order("name", { ascending: true }),

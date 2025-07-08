@@ -14,7 +14,7 @@ import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import ConsultationCard from "@/components/dashboard/ConsultationCard"
 import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
 import { useState, useEffect } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import { calendarService } from "@/services/calendar"
 import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
 import type { Database } from "@/types/database"
@@ -44,7 +44,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
   const [consultations, setConsultations] = useState<ConsultationData[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -85,15 +85,21 @@ export default function DashboardPage() {
   // 통계 데이터 로딩
   const loadStats = async () => {
     try {
+          
       // 한국시간 기준 월간 범위 계산
       const { start: monthStart, end: monthEnd } = getKoreanMonthRange()
 
 
       // 재원생 수
-      const { data: activeStudents } = await supabase
+      const { data: activeStudents, error: activeError } = await supabase
         .from('students')
         .select('*')
         .eq('status', '재원')
+      
+      if (activeError) {
+        console.error('재원생 조회 오류:', activeError)
+        toast.error(`데이터 로딩 실패: ${activeError.message}`)
+      }
 
       // 이번달 신규상담 (first_contact_date 기준) - 상태 무관하게 수정
       const { data: consultationsData } = await supabase
@@ -250,12 +256,6 @@ export default function DashboardPage() {
 
   const handleConsultationSave = async (consultationData: Partial<ConsultationData>) => {
     try {
-      // 인증 확인
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        toast.error('로그인이 필요합니다. 다시 로그인해주세요.')
-        return
-      }
 
       // name 등 필수 필드 보장
       const cleanData: any = {
@@ -576,33 +576,9 @@ export default function DashboardPage() {
     }
   }
 
-  // 사용자 인증 상태 초기화
+  // 데이터 로딩만 수행 (인증은 미들웨어에서 처리)
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        if (session?.user) {
-          setCurrentUser(session.user)
-        } else {
-        }
-      } catch (error) {
-        console.error('인증 초기화 오류:', error)
-      }
-    }
-    
-    initAuth()
-    
-    // 인증 상태 변경 리스너
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        setCurrentUser(session.user)
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null)
-      }
-    })
-    
-    return () => subscription.unsubscribe()
+    // 미들웨어에서 이미 인증을 확인했으므로 여기서는 데이터만 로드
   }, [])
 
   // 모든 데이터 새로고침 함수
@@ -651,6 +627,7 @@ export default function DashboardPage() {
       </div>
     )
   }
+
 
   return (
     <div className="space-y-6">
@@ -1221,7 +1198,7 @@ function TestModal({
   onSave: (data: Partial<EntranceTestData>) => void
   onStatusChange?: () => void
 }) {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
   const [formData, setFormData] = useState({
     test_date: '',
     test_hour: '14',

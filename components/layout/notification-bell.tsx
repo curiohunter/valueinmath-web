@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import { testGetPendingUsers } from "@/actions/test-pending-users"
 
 interface PendingUser {
@@ -30,7 +30,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
 
   // 관리자 권한 및 데이터 로드
   useEffect(() => {
