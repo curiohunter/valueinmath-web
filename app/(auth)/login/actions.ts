@@ -1,17 +1,31 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import type { Database } from '@/types/database'
 
 export async function signIn(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
   const cookieStore = await cookies()
-  const supabase = createServerActionClient({ 
-    cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-  })
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -39,6 +53,9 @@ export async function signIn(formData: FormData) {
       .eq('id', data.user.id)
       .single()
 
+    // 쿠키가 제대로 설정되도록 약간의 딜레이
+    await new Promise(resolve => setTimeout(resolve, 100))
+
     // 승인 상태에 따라 리디렉션
     if (profile?.approval_status === 'approved') {
       redirect('/dashboard')
@@ -52,9 +69,22 @@ export async function signIn(formData: FormData) {
 
 export async function signInWithGoogle() {
   const cookieStore = await cookies()
-  const supabase = createServerActionClient({ 
-    cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-  })
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://valueinmath.vercel.app'
 

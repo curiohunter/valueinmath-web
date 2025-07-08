@@ -14,6 +14,8 @@ import Link from "next/link"
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { getCurrentUser, withdrawUser } from "@/actions/auth-actions"
+import { useRouter } from "next/navigation"
+import { getSupabaseBrowserClient, resetSupabaseBrowserClient } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import GlobalChatButton from "@/components/chat/GlobalChatButton"
 import { Badge } from "@/components/ui/badge"
@@ -32,7 +34,7 @@ export function Header({
 }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
-  
+  const router = useRouter()
 
   useEffect(() => {
     (async () => {
@@ -40,6 +42,17 @@ export function Header({
       setUser(user)
     })()
   }, [])
+
+  const handleLogout = async () => {
+    try {
+      const supabase = getSupabaseBrowserClient()
+      await supabase.auth.signOut()
+      resetSupabaseBrowserClient() // 싱글턴 클라이언트 리셋
+      router.push('/login')
+    } catch (error) {
+      console.error('로그아웃 오류:', error)
+    }
+  }
 
   return (
     <>
@@ -74,7 +87,7 @@ export function Header({
                   프로필
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => {/* TODO: 로그아웃 함수 연결 */}}>
+                <DropdownMenuItem onClick={handleLogout}>
                   로그아웃
                 </DropdownMenuItem>
               </DropdownMenuContent>
