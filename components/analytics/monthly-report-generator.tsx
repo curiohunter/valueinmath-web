@@ -26,8 +26,7 @@ export function MonthlyReportGenerator({
   onClearReport
 }: MonthlyReportGeneratorProps) {
   const [showPreview, setShowPreview] = useState(false)
-  const [editingSections, setEditingSections] = useState<{ [key: number]: boolean }>({})
-  const [editedContent, setEditedContent] = useState<{ [key: number]: string }>({})
+  // Section-based editing removed - using full text editing instead
   const [isSaving, setIsSaving] = useState(false)
   const [savedReports, setSavedReports] = useState<any[]>([])
   const [isLoadingReports, setIsLoadingReports] = useState(false)
@@ -38,11 +37,14 @@ export function MonthlyReportGenerator({
     year: number
     month: number
     monthlyStats?: any
+    reportId?: string
   } | null>(null)
   const [isLoadingViewReport, setIsLoadingViewReport] = useState(false)
   const [isEditingReport, setIsEditingReport] = useState(false)
   const [editingReportId, setEditingReportId] = useState<string | null>(null)
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null)
+  const [editedFullReport, setEditedFullReport] = useState<string>('')
+  const [isFullEditMode, setIsFullEditMode] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
 
   const handleGenerateReport = async () => {
@@ -50,32 +52,10 @@ export function MonthlyReportGenerator({
     if (result.success) {
       setShowPreview(true)
       // 편집 상태 초기화
-      setEditingSections({})
-      setEditedContent({})
     }
   }
 
-  const handleEditSection = (index: number, content: string) => {
-    setEditingSections(prev => ({ ...prev, [index]: true }))
-    setEditedContent(prev => ({ ...prev, [index]: content }))
-  }
-
-  const handleSaveSection = (index: number) => {
-    setEditingSections(prev => ({ ...prev, [index]: false }))
-  }
-
-  const handleCancelEdit = (index: number) => {
-    setEditingSections(prev => ({ ...prev, [index]: false }))
-    setEditedContent(prev => {
-      const newContent = { ...prev }
-      delete newContent[index]
-      return newContent
-    })
-  }
-
-  const getSectionContent = (index: number, originalContent: string) => {
-    return editedContent[index] !== undefined ? editedContent[index] : originalContent
-  }
+  // Section editing functions removed - using full text editing instead
 
   // 저장된 보고서 목록 가져오기
   useEffect(() => {
@@ -102,23 +82,11 @@ export function MonthlyReportGenerator({
     
     setIsSaving(true)
     try {
-      // 편집된 내용 반영
-      let finalReport = reportText
-      const sections = reportText.split('\n\n').filter(section => section.trim())
-      
-      sections.forEach((section, index) => {
-        if (editedContent[index]) {
-          const lines = section.trim().split('\n')
-          const title = lines[0]
-          finalReport = finalReport.replace(section, `${title}\n${editedContent[index]}`)
-        }
-      })
-      
       const result = await saveMonthlyReport(
         monthlyData.student.id,
         monthlyData.year,
         monthlyData.month,
-        finalReport,
+        reportText,
         undefined, // teacher_comment
         monthlyData.monthlyStats
       )
@@ -153,7 +121,8 @@ export function MonthlyReportGenerator({
           student: result.data.student,
           year: result.data.year,
           month: result.data.month,
-          monthlyStats: result.data.monthly_stats
+          monthlyStats: result.data.monthly_stats,
+          reportId: reportId // 보고서 ID 저장
         })
         // 탭은 그대로 유지하고 미리보기만 표시
         setShowPreview(true)
@@ -205,31 +174,24 @@ export function MonthlyReportGenerator({
     
     setIsEditingReport(true)
     try {
-      // 편집된 내용 반영
-      let finalReport = viewingReport.content
-      const sections = viewingReport.content.split('\n\n').filter(section => section.trim())
-      
-      sections.forEach((section, index) => {
-        if (editedContent[index]) {
-          const lines = section.trim().split('\n')
-          const title = lines[0]
-          finalReport = finalReport.replace(section, `${title}\n${editedContent[index]}`)
-        }
-      })
-      
-      const result = await updateSavedReport(editingReportId, finalReport)
+      const result = await updateSavedReport(editingReportId, editedFullReport)
       
       if (result.success) {
         alert("보고서가 수정되었습니다.")
         // 수정된 내용으로 업데이트
         setViewingReport({
           ...viewingReport,
-          content: finalReport
+          content: editedFullReport
         })
-        setEditingSections({})
-        setEditedContent({})
+        // 편집 상태 초기화 완료
         setIsEditingReport(false)
         setEditingReportId(null)
+        setIsFullEditMode(false)
+        // 저장된 보고서 목록 새로고침
+        const reportsResult = await getSavedMonthlyReports()
+        if (reportsResult.success && reportsResult.data) {
+          setSavedReports(reportsResult.data)
+        }
       } else {
         alert("보고서 수정에 실패했습니다.")
       }
@@ -345,7 +307,8 @@ export function MonthlyReportGenerator({
   }
 
   const formatReportForDisplay = (text: string, data: MonthlyReportData) => {
-    const sections = text.split('\n\n').filter(section => section.trim())
+    // 전체 편집 모드에서는 섹션 나누기 없이 전체 텍스트 표시
+    const lines = text.split('\n')
     
     return (
       <div className="space-y-6">
@@ -399,143 +362,36 @@ export function MonthlyReportGenerator({
           </div>
         )}
 
-        {/* 보고서 내용 섹션별 표시 */}
-        {sections.map((section, index) => {
-          const lines = section.trim().split('\n')
-          
-          // 종합 평가 섹션 특별 처리
-          if (lines[0]?.includes('────────────────────') && lines[1]?.includes('종합 평가')) {
-            const title = '종합 평가'
-            const content = lines.slice(2).join('\n').trim() || '(선생님이 직접 작성해주세요)'
-            const isEditing = editingSections[index]
-            const displayContent = getSectionContent(index, content)
-            
-            return (
-              <div key={index} className="report-section bg-gray-50 dark:bg-gray-900/20 p-6 rounded-lg border">
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-300">
-                  <h2 className="section-title text-lg font-bold text-gray-800">
-                    {title}
-                  </h2>
-                  {(!isEditing && (editingReportId || (!viewingReport && reportText))) ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditSection(index, content)}
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  ) : isEditing && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleSaveSection(index)}
-                        className="text-green-600 hover:text-green-700"
-                      >
-                        <Save className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCancelEdit(index)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                {isEditing ? (
-                  <Textarea
-                    value={displayContent}
-                    onChange={(e) => setEditedContent(prev => ({ ...prev, [index]: e.target.value }))}
-                    className="min-h-32 font-mono text-sm"
-                    placeholder="종합 평가를 입력하세요..."
-                  />
-                ) : (
-                  <div className="content-text whitespace-pre-line leading-relaxed text-gray-700 dark:text-gray-300">
-                    {displayContent}
+        {/* 보고서 내용 표시 - 섹션별 편집 기능 제거 */}
+        <div className="report-section bg-gray-50 dark:bg-gray-900/20 p-6 rounded-lg border">
+          <div className="content-text whitespace-pre-line leading-relaxed text-gray-700 dark:text-gray-300">
+            {lines.map((line, lineIndex) => {
+              // 제목 스타일 적용
+              if (line.match(/^[■●▶📚📝👨‍🏫]/)) {
+                return (
+                  <h3 key={lineIndex} className="text-lg font-bold text-gray-800 dark:text-gray-200 mt-6 mb-3 pb-2 border-b border-gray-300">
+                    {line}
+                  </h3>
+                )
+              }
+              // 구분선
+              if (line.includes('────────────────────')) {
+                return <hr key={lineIndex} className="my-6 border-t-2 border-gray-300" />
+              }
+              // 리스트 항목
+              if (line.trim().startsWith('- ')) {
+                return (
+                  <div key={lineIndex} className="ml-4 mb-2">
+                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 mt-2"></span>
+                    {line.substring(2)}
                   </div>
-                )}
-              </div>
-            )
-          }
-          
-          const title = lines[0]?.replace(/^[■●▶📚📝👨‍🏫]\s*/, '').trim()
-          const content = lines.slice(1).join('\n').trim()
-          
-          if (!title || !content) return null
-          
-          // 학습 통계 요약은 편집 불가 (index 0은 보통 학습 개요)
-          // 수정 모드일 때는 모든 섹션 편집 가능
-          const isEditable = editingReportId ? true : (!title.includes('학습 개요') && !title.includes('학업 태도 기록'))
-          const isEditing = editingSections[index]
-          const displayContent = getSectionContent(index, content)
-          
-          return (
-            <div key={index} className="report-section bg-gray-50 dark:bg-gray-900/20 p-6 rounded-lg border">
-              <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-300">
-                <h2 className="section-title text-lg font-bold text-gray-800">
-                  {title}
-                </h2>
-                {isEditable && !isEditing && (editingReportId || (!viewingReport && reportText)) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditSection(index, content)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                )}
-                {isEditing && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleSaveSection(index)}
-                      className="text-green-600 hover:text-green-700"
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCancelEdit(index)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              
-              {isEditing ? (
-                <Textarea
-                  value={displayContent}
-                  onChange={(e) => setEditedContent(prev => ({ ...prev, [index]: e.target.value }))}
-                  className="min-h-32 font-mono text-sm"
-                  placeholder="내용을 입력하세요..."
-                />
-              ) : (
-                <div className="content-text whitespace-pre-line leading-relaxed text-gray-700 dark:text-gray-300">
-                  {displayContent.split('\n').map((line, lineIndex) => {
-                    if (line.trim().startsWith('- ')) {
-                      return (
-                        <div key={lineIndex} className="ml-4 mb-2">
-                          <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 mt-2"></span>
-                          {line.substring(2)}
-                        </div>
-                      )
-                    }
-                    return <div key={lineIndex} className="mb-2">{line}</div>
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                )
+              }
+              // 일반 텍스트
+              return line.trim() && <div key={lineIndex} className="mb-2">{line}</div>
+            })}
+          </div>
+        </div>
 
         {/* 생성 시간 */}
         <div className="text-center text-sm text-gray-500 mt-8">
@@ -726,8 +582,9 @@ export function MonthlyReportGenerator({
                           size="sm"
                           onClick={() => {
                             setEditingReportId(null)
-                            setEditingSections({})
-                            setEditedContent({})
+                            // 편집 상태 초기화 완료
+                            setIsFullEditMode(false)
+                            setEditedFullReport('')
                           }}
                         >
                           취소
@@ -739,13 +596,11 @@ export function MonthlyReportGenerator({
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const reportId = savedReports.find(r => 
-                              r.student?.id === viewingReport.student.id && 
-                              r.year === viewingReport.year && 
-                              r.month === viewingReport.month
-                            )?.id
-                            if (reportId) {
-                              setEditingReportId(reportId)
+                            // viewingReport에 저장된 reportId 사용
+                            if (viewingReport.reportId) {
+                              setEditingReportId(viewingReport.reportId)
+                              setEditedFullReport(viewingReport.content)
+                              setIsFullEditMode(true)
                             }
                           }}
                           className="flex items-center gap-2"
@@ -771,8 +626,9 @@ export function MonthlyReportGenerator({
                         setViewingReport(null)
                         setShowPreview(false)
                         setEditingReportId(null)
-                        setEditingSections({})
-                        setEditedContent({})
+                        // 편집 상태 초기화 완료
+                        setIsFullEditMode(false)
+                        setEditedFullReport('')
                       }}
                     >
                       <X className="h-4 w-4" />
@@ -783,21 +639,38 @@ export function MonthlyReportGenerator({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div 
-              ref={printRef}
-              className="bg-white dark:bg-gray-900 p-8 rounded-lg border shadow-sm"
-              style={{ fontFamily: "'Malgun Gothic', 'Noto Sans KR', sans-serif" }}
-            >
-              {viewingReport 
-                ? formatReportForDisplay(viewingReport.content, {
-                    student: viewingReport.student,
-                    year: viewingReport.year,
-                    month: viewingReport.month,
-                    monthlyStats: viewingReport.monthlyStats || null
-                  } as MonthlyReportData)
-                : formatReportForDisplay(reportText!, monthlyData!)
-              }
-            </div>
+            {isFullEditMode && editingReportId ? (
+              <div className="space-y-4">
+                <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    전체 보고서를 자유롭게 편집할 수 있습니다. 섹션 제목과 내용을 원하는 대로 수정하세요.
+                  </p>
+                </div>
+                <Textarea
+                  value={editedFullReport}
+                  onChange={(e) => setEditedFullReport(e.target.value)}
+                  className="min-h-[600px] font-mono text-sm p-4 leading-relaxed"
+                  placeholder="보고서 내용을 입력하세요..."
+                  style={{ fontFamily: "'Malgun Gothic', 'Noto Sans KR', sans-serif" }}
+                />
+              </div>
+            ) : (
+              <div 
+                ref={printRef}
+                className="bg-white dark:bg-gray-900 p-8 rounded-lg border shadow-sm"
+                style={{ fontFamily: "'Malgun Gothic', 'Noto Sans KR', sans-serif" }}
+              >
+                {viewingReport 
+                  ? formatReportForDisplay(viewingReport.content, {
+                      student: viewingReport.student,
+                      year: viewingReport.year,
+                      month: viewingReport.month,
+                      monthlyStats: viewingReport.monthlyStats || null
+                    } as MonthlyReportData)
+                  : formatReportForDisplay(reportText!, monthlyData!)
+                }
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

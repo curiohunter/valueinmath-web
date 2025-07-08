@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { redirect } from "next/navigation"
+import { requireRole } from "@/lib/auth/get-user"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { EmployeesTable } from "./employees-table"
 import { EmployeesHeader } from "./employees-header"
@@ -13,49 +13,10 @@ import type { Database } from "@/types/database"
 type EmployeeRow = Database["public"]["Tables"]["employees"]["Row"]
 
 export default async function EmployeesPage() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) {
-    throw new Error("로그인이 필요합니다.")
-  }
-
-  // 예시: 직원 데이터 가져오기
-  const { data, error } = await supabase.from("employees").select("*")
-  if (error) {
-    throw new Error("직원 데이터를 불러오는 중 오류가 발생했습니다.")
-  }
-  if (!data || !Array.isArray(data)) {
-    throw new Error("직원 데이터가 올바르지 않습니다.")
-  }
-
-  // 안전하게 직원 데이터 접근 예시
-  const safeEmployees = data.filter(row => row && typeof row === 'object' && 'position' in row)
-
-  // 사용자의 직원 정보 확인 - 간단한 접근 방식
-  let isAdmin = false
+  // 원장 또는 부원장 권한 확인
+  const roleResult = await requireRole(["원장", "부원장"])
   
-  try {
-    // @ts-ignore - Supabase type complexity 해결을 위한 임시 처리
-    const { data: employees } = await supabase
-      .from("employees")
-      .select("position")
-      // @ts-ignore
-      .eq("auth_id", session.user.id)
-    
-    if (employees && employees.length > 0) {
-      // @ts-ignore
-      const position = employees[0]?.position
-      isAdmin = position === "원장" || position === "부원장"
-    }
-  } catch (error) {
-    console.error("Error fetching employee:", error)
-    isAdmin = false
-  }
-
-  if (!isAdmin) {
+  if ('error' in roleResult) {
     return (
       <div className="space-y-6">
         <div>
@@ -73,6 +34,20 @@ export default async function EmployeesPage() {
       </div>
     )
   }
+
+  const supabase = await createServerSupabaseClient()
+  
+  // 예시: 직원 데이터 가져오기
+  const { data, error } = await supabase.from("employees").select("*")
+  if (error) {
+    throw new Error("직원 데이터를 불러오는 중 오류가 발생했습니다.")
+  }
+  if (!data || !Array.isArray(data)) {
+    throw new Error("직원 데이터가 올바르지 않습니다.")
+  }
+
+  // 안전하게 직원 데이터 접근 예시
+  const safeEmployees = data.filter(row => row && typeof row === 'object' && 'position' in row)
 
   return (
     <div className="space-y-6">

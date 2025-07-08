@@ -13,6 +13,7 @@ import type {
   BookProgress,
   ScoreAnalysis
 } from "@/types/analytics"
+import { ReportStatus, type ReportTableRow } from "@/types/reports"
 
 type StudyLogRow = Database["public"]["Tables"]["study_logs"]["Row"]
 type TestLogRow = Database["public"]["Tables"]["test_logs"]["Row"]
@@ -429,8 +430,7 @@ export async function generateMonthlyReport(
           .slice(-5)  // 최근 5개만 표시
           .forEach(log => {
             if (log.test_score !== null) {
-              const icon = log.test_score >= 90 ? '✅' : log.test_score >= 80 ? '⚠️' : '❌'
-              report += `• ${log.date.slice(5)} ${log.test || '시험'}: ${log.test_score}점 ${icon}\n`
+              report += `• ${log.date.slice(5)} ${log.test || '시험'}: ${log.test_score}점\n`
             }
           })
       }
@@ -806,8 +806,7 @@ export async function deleteSavedReport(
 // 저장된 보고서 수정
 export async function updateSavedReport(
   reportId: string,
-  reportContent: string,
-  teacherComment?: string
+  reportContent: string
 ): Promise<AnalyticsApiResponse<void>> {
   try {
     const supabase = await createServerSupabaseClient()
@@ -816,7 +815,6 @@ export async function updateSavedReport(
       .from("monthly_reports")
       .update({
         report_content: reportContent,
-        teacher_comment: teacherComment,
         updated_at: new Date().toISOString()
       })
       .eq("id", reportId)
@@ -832,6 +830,135 @@ export async function updateSavedReport(
     return { 
       success: false, 
       error: "보고서 수정 중 오류가 발생했습니다." 
+    }
+  }
+}
+
+// 학생들의 보고서 상태 조회 (보고서 테이블용)
+export async function getStudentReportsStatus(
+  year: number,
+  month: number,
+  filters: {
+    classIds?: string[]
+    searchTerm?: string
+    schoolType?: "all" | "초등학교" | "중학교" | "고등학교"
+    grade?: number | "all"
+  } = {}
+): Promise<AnalyticsApiResponse<ReportTableRow[]>> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    
+    // 1. 학생 목록 조회 (필터 적용)
+    let studentsQuery = supabase
+      .from("students")
+      .select(`
+        id,
+        name,
+        grade,
+        school,
+        school_type,
+        department,
+        class_students!inner(
+          class_id,
+          classes(
+            id,
+            name
+          )
+        )
+      `)
+      .eq("status", "재원")
+    
+    // 필터 적용
+    if (filters.classIds && filters.classIds.length > 0) {
+      // @ts-ignore - Supabase의 복잡한 필터 타입
+      studentsQuery = studentsQuery.in("class_students.class_id", filters.classIds)
+    }
+    
+    if (filters.searchTerm) {
+      studentsQuery = studentsQuery.ilike("name", `%${filters.searchTerm}%`)
+    }
+    
+    if (filters.schoolType && filters.schoolType !== "all") {
+      studentsQuery = studentsQuery.eq("school_type", filters.schoolType)
+    }
+    
+    if (filters.grade && filters.grade !== "all") {
+      studentsQuery = studentsQuery.eq("grade", filters.grade)
+    }
+    
+    const { data: students, error: studentsError } = await studentsQuery
+    
+    if (studentsError) {
+      throw studentsError
+    }
+    
+    if (!students || students.length === 0) {
+      return { success: true, data: [] }
+    }
+    
+    // 2. 학생 ID 목록 추출
+    const studentIds = students.map(s => s.id)
+    
+    // 3. 해당 학생들의 보고서 조회
+    const { data: reports, error: reportsError } = await supabase
+      .from("monthly_reports")
+      .select("id, student_id, created_at, updated_at")
+      .in("student_id", studentIds)
+      .eq("year", year)
+      .eq("month", month)
+    
+    if (reportsError) {
+      throw reportsError
+    }
+    
+    // 4. 보고서 맵 생성 (빠른 조회를 위해)
+    const reportMap = new Map(
+      reports?.map(r => [r.student_id, r]) || []
+    )
+    
+    // 5. 결과 데이터 생성
+    const result: ReportTableRow[] = students.map(student => {
+      const report = reportMap.get(student.id)
+      
+      // 보고서 상태 결정
+      let reportStatus: ReportStatus
+      if (!report) {
+        reportStatus = ReportStatus.NOT_GENERATED
+      } else if (report.updated_at > report.created_at) {
+        reportStatus = ReportStatus.MODIFIED
+      } else {
+        reportStatus = ReportStatus.GENERATED
+      }
+      
+      // 학생의 첫 번째 반 정보 가져오기
+      const classInfo = student.class_students?.[0]?.classes
+      
+      return {
+        studentId: student.id,
+        studentName: student.name,
+        grade: student.grade,
+        school: student.school,
+        department: student.department,
+        className: classInfo?.name,
+        reportId: report?.id,
+        reportStatus,
+        generatedAt: report?.created_at,
+        updatedAt: report?.updated_at,
+        year,
+        month
+      }
+    })
+    
+    // 6. 정렬 (이름 순)
+    result.sort((a, b) => a.studentName.localeCompare(b.studentName, 'ko'))
+    
+    return { success: true, data: result }
+    
+  } catch (error) {
+    console.error("getStudentReportsStatus 오류:", error)
+    return { 
+      success: false, 
+      error: "학생 보고서 상태 조회 중 오류가 발생했습니다." 
     }
   }
 }

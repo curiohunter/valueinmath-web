@@ -90,6 +90,12 @@ export function SignupForm() {
       })
 
       if (error) {
+        // 에러 메시지 한국어 변환
+        if (error.message.includes('User already registered')) {
+          error.message = '이미 등록된 이메일입니다.'
+        } else if (error.message.includes('rate limit')) {
+          error.message = '너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.'
+        }
         throw error
       }
 

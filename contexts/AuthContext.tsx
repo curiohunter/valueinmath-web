@@ -53,29 +53,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadAuthState = useCallback(async () => {
     try {
-      // 1. 사용자 확인 (보안 강화)
-      const { data: { user } } = await supabase.auth.getUser();
+      // 1. 세션 확인 (클라이언트 컴포넌트 최적화)
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (!user) {
+      if (!session) {
         setUser(null);
         setProfile(null);
         setEmployee(null);
         return;
       }
 
-      setUser(user);
+      setUser(session.user);
 
       // 2. 프로필 조회 (병렬 처리)
       const [profileResult, employeeResult] = await Promise.all([
         supabase
           .from("profiles")
           .select("*")
-          .eq("id", user.id)
+          .eq("id", session.user.id)
           .single(),
         supabase
           .from("employees")
           .select("*")
-          .eq("auth_id", user.id)
+          .eq("auth_id", session.user.id)
           .maybeSingle()
       ]);
 

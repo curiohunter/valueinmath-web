@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/auth/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PendingApprovalClient } from "./pending-approval-client"
 import { LogoutButton } from "./logout-button"
@@ -13,18 +12,16 @@ export const metadata: Metadata = {
 }
 
 export default async function PendingApprovalPage() {
-  const cookieStore = await cookies()
-  const supabase = createServerComponentClient({ 
-    cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-  })
+  const supabase = await createServerClient()
   
-  // 세션 확인
+  // 사용자 확인 (getUser로 변경 - 더 안전)
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+    error
+  } = await supabase.auth.getUser()
 
   // 로그인하지 않은 경우 로그인 페이지로 리디렉션
-  if (!session) {
+  if (error || !user) {
     redirect("/login")
   }
 
@@ -32,7 +29,7 @@ export default async function PendingApprovalPage() {
   const { data: employee } = await supabase
     .from("employees")
     .select("position, approval_status")
-    .eq("auth_id", session.user.id)
+    .eq("auth_id", user.id)
     .single()
 
   // 직원이면서 승인된 경우 대시보드로 리디렉션
@@ -44,7 +41,7 @@ export default async function PendingApprovalPage() {
   const { data: registration } = await supabase
     .from("pending_registrations")
     .select("*")
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single()
 
   // 등록 신청이 승인된 경우 대시보드로 리디렉션
@@ -76,7 +73,7 @@ export default async function PendingApprovalPage() {
       {!registration ? (
         // 등록 신청이 없는 경우 - 등록 폼 표시
         <RegistrationForm 
-          user={session.user} 
+          user={user} 
         />
       ) : (
         // 등록 신청이 있는 경우 - 대기 상태 표시
@@ -127,7 +124,7 @@ export default async function PendingApprovalPage() {
       )}
 
       {/* 클라이언트 컴포넌트로 실시간 상태 확인 */}
-      <PendingApprovalClient userId={session.user.id} />
+      <PendingApprovalClient userId={user.id} />
     </>
   )
 }

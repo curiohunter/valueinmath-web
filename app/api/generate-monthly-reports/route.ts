@@ -1,31 +1,15 @@
 import { NextResponse } from "next/server"
 import { generateAllMonthlyReports } from "@/services/analytics-service"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { requireAuthForAPI } from "@/lib/auth/get-user"
 
 export async function POST(request: Request) {
   try {
     // 인증 확인
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient({ 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
-    const { data: { session } } = await supabase.auth.getSession()
+    const authResult = await requireAuthForAPI()
     
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status })
     }
-    
-    // 관리자 권한 확인 (필요시)
-    // const { data: profile } = await supabase
-    //   .from("profiles")
-    //   .select("role")
-    //   .eq("id", session.user.id)
-    //   .single()
-    
-    // if (profile?.role !== "admin") {
-    //   return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    // }
     
     const { year, month } = await request.json()
     

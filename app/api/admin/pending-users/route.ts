@@ -1,33 +1,17 @@
 import { NextResponse } from "next/server"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/auth/server"
+import { requireRoleForAPI } from "@/lib/auth/get-user"
 
 export async function GET() {
   try {
-    const supabase = createServerComponentClient({ cookies })
+    // 1. 관리자 권한 확인 (원장, 부원장만 허용)
+    const authResult = await requireRoleForAPI(["원장", "부원장"])
     
-    // 1. 현재 사용자 세션 확인
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status })
     }
 
-    // 2. 관리자 권한 확인
-    const { data: employee, error: employeeError } = await supabase
-      .from("employees")
-      .select("position")
-      .eq("auth_id", session.user.id)
-      .single()
-
-    if (employeeError || !employee) {
-      return NextResponse.json({ error: "Employee not found" }, { status: 403 })
-    }
-
-    const isAdmin = employee.position === "원장" || employee.position === "부원장"
-    if (!isAdmin) {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 })
-    }
+    const supabase = await createServerClient()
 
     // 3. pending 사용자 조회 (서버 사이드 RLS 적용)
     const { data: pendingUsers, error } = await supabase

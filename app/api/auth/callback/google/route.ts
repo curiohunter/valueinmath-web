@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient } from "@/lib/auth/server"
 import { oauth2Client } from "@/lib/google/client"
 import { google } from "googleapis"
 import type { Database } from "@/types/database"
@@ -22,10 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 현재 사용자 인증 확인
-    const cookieStore = await cookies()
-    const supabase = createServerComponentClient<Database>({ 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
     const {
       data: { session },
     } = await supabase.auth.getSession()

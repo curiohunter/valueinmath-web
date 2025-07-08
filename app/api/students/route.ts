@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient } from "@/lib/auth/server"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
+import { requireAuthForAPI } from "@/lib/auth/get-user"
 import type { Database } from "@/types/database"
 import type { Student, StudentFilters } from "@/types/student"
 
@@ -31,13 +31,10 @@ function mapStudentRowToStudent(row: Database["public"]["Tables"]["students"]["R
 export async function GET(request: NextRequest) {
   try {
     // 인증 확인
-    const supabase = createServerComponentClient<Database>({ cookies })
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authResult = await requireAuthForAPI()
+    
+    if ('error' in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status })
     }
 
     // 쿼리 파라미터 가져오기

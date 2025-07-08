@@ -1,6 +1,7 @@
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient } from "@supabase/ssr"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import type { User } from "@supabase/supabase-js"
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -17,8 +18,53 @@ export async function middleware(request: NextRequest) {
     return res
   }
 
-  const supabase = createMiddlewareClient({ req: request, res })
-  const { data: { session } } = await supabase.auth.getSession()
+  // Create Supabase client with proper cookie handling
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          request.cookies.set({
+            name,
+            value,
+            ...options
+          })
+          res.cookies.set({
+            name,
+            value,
+            ...options
+          })
+        },
+        remove(name: string, options: any) {
+          request.cookies.set({
+            name,
+            value: '',
+            ...options
+          })
+          res.cookies.set({
+            name,
+            value: '',
+            ...options
+          })
+        },
+      },
+    }
+  )
+  
+  // Use getUser() instead of getSession() for server validation
+  const { data: { user }, error } = await supabase.auth.getUser()
+  
+  // Handle auth errors (rate limit, invalid token)
+  if (error) {
+    // Ignore cookie parsing errors (Supabase internal issue)
+    if (!error.message?.includes('Failed to parse cookie')) {
+      console.error('Auth error in middleware:', error.message)
+    }
+  }
 
   // Public routes that don't require authentication
   const publicRoutes = ["/", "/login", "/signup", "/reset-password"]
@@ -41,7 +87,7 @@ export async function middleware(request: NextRequest) {
   )
 
   // Redirect unauthenticated users from protected routes
-  if (isProtectedRoute && !session) {
+  if (isProtectedRoute && !user) {
     const redirectUrl = new URL("/login", request.url)
     redirectUrl.searchParams.set("redirect", path)
     return NextResponse.redirect(redirectUrl)
@@ -49,18 +95,19 @@ export async function middleware(request: NextRequest) {
 
   // Special handling for pending-approval page
   if (path === "/pending-approval") {
-    if (!session) {
+    if (!user) {
       return NextResponse.redirect(new URL("/login", request.url))
     }
     return res
   }
 
   // Check user approval status for protected routes
-  if (session && isProtectedRoute) {
+  if (user && isProtectedRoute) {
+    // Cache user info to avoid multiple DB calls
     const { data: profile } = await supabase
       .from("profiles")
       .select("approval_status, name")
-      .eq("id", session.user.id)
+      .eq("id", user.id)
       .single()
 
     if (!profile || !profile.name || profile.name.trim() === "" || profile.approval_status !== "approved") {
@@ -72,7 +119,8 @@ export async function middleware(request: NextRequest) {
       const { data: employee } = await supabase
         .from("employees")
         .select("position")
-        .eq("auth_id", session.user.id)
+        // @ts-ignore
+        .eq("auth_id", user.id)
         .single()
       
       if (!employee || (employee.position !== "원장" && employee.position !== "부원장")) {

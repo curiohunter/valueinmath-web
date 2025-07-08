@@ -1,18 +1,11 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
+import { requireAuth } from "@/lib/auth/get-user"
 import { StudentsPageClient } from "@/app/(dashboard)/students/students-page-client"
 
 export default async function StudentsPage() {
-  const cookieStore = await cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore as any })
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  if (!session) redirect("/login")
+  await requireAuth()
 
-  // 필요한 데이터 fetch 예시 (실제 데이터 구조에 맞게 수정)
-  // const { data: students } = await supabase.from("students").select("*")
+  // 권한 체크 - 필요시 특정 역할만 접근 허용
+  // await requireRole(["admin", "teacher"])
 
   return <StudentsPageClient />
 }
