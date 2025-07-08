@@ -4,7 +4,8 @@ import React, { useState, useEffect, Fragment, useRef } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Calendar, Users, Search, RotateCcw, FileText, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
@@ -25,7 +26,8 @@ const scoreColor = (score: number) => {
 };
 
 export default function TestLogsPage() {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient<Database>();
+  const { user, loading: authLoading } = useAuth();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<Array<{
     id?: string;
@@ -411,12 +413,20 @@ export default function TestLogsPage() {
     setModalOpen(false);
   };
 
-  if (loading) return (
+  if (authLoading || loading) return (
     <div className="p-8 text-center">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
       <div className="text-gray-400">로딩 중...</div>
     </div>
   );
+  
+  if (!user) return (
+    <div className="p-8 text-center">
+      <div className="text-red-400 text-4xl mb-4">🔒</div>
+      <div className="text-red-500">로그인이 필요합니다</div>
+    </div>
+  );
+  
   if (error) return (
     <div className="p-8 text-center">
       <div className="text-red-400 text-4xl mb-4">⚠️</div>

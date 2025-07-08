@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { Button } from "@/components/ui/button";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -51,7 +52,8 @@ const TEST_TYPE_OPTIONS = [
 ];
 
 export default function TestHistoryPage() {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient<Database>();
+  const { user, loading: authLoading } = useAuth();
   
   // 필터 상태
   const [datePreset, setDatePreset] = useState("custom");
@@ -462,6 +464,20 @@ export default function TestHistoryPage() {
       setIsDeleting(false);
     }
   }
+
+  if (authLoading) return (
+    <div className="p-8 text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+      <div className="text-gray-400">로딩 중...</div>
+    </div>
+  );
+  
+  if (!user) return (
+    <div className="p-8 text-center">
+      <div className="text-red-400 text-4xl mb-4">🔒</div>
+      <div className="text-red-500">로그인이 필요합니다</div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

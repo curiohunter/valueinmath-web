@@ -5,12 +5,13 @@ import StudentClassTabs from "@/components/StudentClassTabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { TuitionTable } from "@/components/tuition/tuition-table";
 import { Save, Trash2, Download, Filter, Calendar } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput } from "@/types/tuition";
 
 // 금액 포맷팅 함수
@@ -39,7 +40,8 @@ const calculateStats = (data: TuitionRow[]) => {
 };
 
 export default function TuitionHistoryPage() {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient<Database>();
+  const { user, loading: authLoading } = useAuth();
   
   // 필터 상태
   const [datePreset, setDatePreset] = useState("custom");
@@ -297,20 +299,13 @@ export default function TuitionHistoryPage() {
 
       if (error) throw error;
 
-      toast({
-        title: "저장 완료",
-        description: `${row.studentName}의 학원비가 저장되었습니다.`,
-      });
+      toast.success(`${row.studentName}의 학원비가 저장되었습니다.`);
       
       // 데이터 새로고침
       fetchTuitionHistoryWithFilters();
     } catch (error) {
       console.error("학원비 저장 에러:", error);
-      toast({
-        title: "저장 실패",
-        description: "학원비 저장 중 오류가 발생했습니다.",
-        variant: "destructive"
-      });
+      toast.error("학원비 저장 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
     }
@@ -334,31 +329,20 @@ export default function TuitionHistoryPage() {
 
       if (error) throw error;
 
-      toast({
-        title: "삭제 완료",
-        description: `${row.studentName}의 학원비가 성공적으로 삭제되었습니다.`,
-      });
+      toast.success(`${row.studentName}의 학원비가 성공적으로 삭제되었습니다.`);
 
       // 데이터 새로고침
       fetchTuitionHistoryWithFilters();
     } catch (error) {
       console.error("학원비 삭제 에러:", error);
-      toast({
-        title: "삭제 실패",
-        description: "학원비 삭제 중 오류가 발생했습니다.",
-        variant: "destructive"
-      });
+      toast.error("학원비 삭제 중 오류가 발생했습니다.");
     }
   };
 
   // 전체 저장 핸들러 (수정된 데이터 일괄 저장)
   const handleSave = async () => {
     if (paginatedData.length === 0) {
-      toast({
-        title: "저장할 데이터 없음",
-        description: "저장할 학원비 데이터가 없습니다.",
-        variant: "destructive"
-      });
+      toast.error("저장할 학원비 데이터가 없습니다.");
       return;
     }
 
@@ -384,20 +368,13 @@ export default function TuitionHistoryPage() {
         if (error) throw error;
       }
 
-      toast({
-        title: "저장 완료",
-        description: `${paginatedData.length}개의 학원비가 저장되었습니다.`,
-      });
+      toast.success(`${paginatedData.length}개의 학원비가 저장되었습니다.`);
       
       // 데이터 새로고침
       fetchTuitionHistoryWithFilters();
     } catch (error) {
       console.error("학원비 저장 에러:", error);
-      toast({
-        title: "저장 실패",
-        description: "학원비 저장 중 오류가 발생했습니다.",
-        variant: "destructive"
-      });
+      toast.error("학원비 저장 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
     }
@@ -407,6 +384,20 @@ export default function TuitionHistoryPage() {
   useEffect(() => {
     fetchTuitionHistoryWithFilters();
   }, [dateRange, filteredClassId, filteredStudentId, selectedPaymentStatus]);
+
+  if (authLoading) return (
+    <div className="p-8 text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+      <div className="text-gray-400">로딩 중...</div>
+    </div>
+  );
+  
+  if (!user) return (
+    <div className="p-8 text-center">
+      <div className="text-red-400 text-4xl mb-4">🔒</div>
+      <div className="text-red-500">로그인이 필요합니다</div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { Button } from "@/components/ui/button";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Edit, Trash2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 // 점수 색상 스타일 함수 (노션 스타일)
 const scoreColor = (score: number) => {
@@ -23,7 +24,8 @@ const scoreColor = (score: number) => {
 };
 
 export default function LearningHistoryPage() {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient<Database>();
+  const { user, loading: authLoading } = useAuth();
   
   // 필터 상태
   const [datePreset, setDatePreset] = useState("custom");
@@ -387,12 +389,12 @@ export default function LearningHistoryPage() {
         }
       }
 
-      toast({ title: "수정 완료", description: "기록이 성공적으로 수정되었습니다." });
+      toast.success("기록이 성공적으로 수정되었습니다.");
       setIsEditModalOpen(false);
       setEditingRow(null);
       fetchLogs();
     } catch (e) {
-      toast({ title: "수정 실패", description: "DB 수정 중 오류가 발생했습니다.", variant: "destructive" });
+      toast.error("DB 수정 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);
     }
@@ -410,17 +412,31 @@ export default function LearningHistoryPage() {
           date: row.date
         });
       if (error) throw error;
-      toast({ title: "삭제 완료", description: "기록이 성공적으로 삭제되었습니다." });
+      toast.success("기록이 성공적으로 삭제되었습니다.");
       setIsEditModalOpen(false);
       setEditingRow(null);
       setPage(1);
       fetchLogs();
     } catch (e) {
-      toast({ title: "삭제 실패", description: "DB 삭제 중 오류가 발생했습니다.", variant: "destructive" });
+      toast.error("DB 삭제 중 오류가 발생했습니다.");
     } finally {
       setIsDeleting(false);
     }
   }
+
+  if (authLoading) return (
+    <div className="p-8 text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+      <div className="text-gray-400">로딩 중...</div>
+    </div>
+  );
+  
+  if (!user) return (
+    <div className="p-8 text-center">
+      <div className="text-red-400 text-4xl mb-4">🔒</div>
+      <div className="text-red-500">로그인이 필요합니다</div>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
