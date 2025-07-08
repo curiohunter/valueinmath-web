@@ -4,7 +4,7 @@ import React, { useState, useEffect, Fragment, useRef } from "react";
 import LearningTabs from "@/components/LearningTabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -26,7 +26,7 @@ const scoreColor = (score: number) => {
 };
 
 export default function TestLogsPage() {
-  const supabase = createClient<Database>();
+  const supabase = getSupabaseBrowserClient();
   const { user, loading: authLoading } = useAuth();
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<Array<{
@@ -90,7 +90,7 @@ export default function TestLogsPage() {
       setStudents(studentData || []);
       if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
       
-      await fetchTodayTestLogs();
+      await fetchTestLogsByDate();
     } catch (e) {
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
     } finally {
@@ -98,14 +98,14 @@ export default function TestLogsPage() {
     }
   };
 
-  const fetchTodayTestLogs = async () => {
+  const fetchTestLogsByDate = async () => {
     setDeletedRowIds([]); // 새로 불러올 때 삭제 목록 초기화
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      // 현재 선택된 날짜 사용 (오늘이 아닌 date state 사용)
       const { data: todayLogs, error } = await supabase
         .from("test_logs")
         .select("*")
-        .eq("date", today);
+        .eq("date", date);
       
       if (error) throw error;
       
@@ -156,6 +156,13 @@ export default function TestLogsPage() {
     fetchData();
   }, []);
 
+  // 날짜가 변경될 때 해당 날짜의 데이터 불러오기
+  useEffect(() => {
+    if (date) {
+      fetchTestLogsByDate();
+    }
+  }, [date]);
+
   useEffect(() => {
     // 모든 날짜의 test_logs 변경사항 구독 (여러 날짜를 동시에 편집할 수 있으므로)
     const channel = supabase
@@ -170,7 +177,7 @@ export default function TestLogsPage() {
           // 현재 편집 중인 날짜들의 데이터만 다시 불러오기
           const uniqueDates = [...new Set(rows.map(r => r.date))];
           if (uniqueDates.includes((payload.new as any)?.date || (payload.old as any)?.date)) {
-            fetchTodayTestLogs();
+            fetchTestLogsByDate();
           }
         }
       )
@@ -293,6 +300,22 @@ export default function TestLogsPage() {
       alert("저장할 데이터가 없습니다.");
       return;
     }
+    
+    // 유효한 데이터만 필터링 (최소한 학생과 날짜가 있어야 함)
+    const validRows = rows.filter(r => r.studentId && r.date);
+    const invalidRowCount = rows.length - validRows.length;
+    
+    if (validRows.length === 0 && deletedRowIds.length === 0) {
+      alert("저장할 수 있는 유효한 데이터가 없습니다. 최소한 학생과 날짜 정보가 필요합니다.");
+      return;
+    }
+    
+    if (invalidRowCount > 0) {
+      if (!confirm(`${invalidRowCount}개의 불완전한 행이 있습니다. 이 행들은 저장되지 않습니다. 계속하시겠습니까?`)) {
+        return;
+      }
+    }
+    
     try {
       // 먼저 삭제된 항목들을 DB에서 삭제
       if (deletedRowIds.length > 0) {
@@ -305,21 +328,26 @@ export default function TestLogsPage() {
           throw deleteError;
         }
       }
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        alert("사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.");
+      // useAuth hook에서 가져온 user 사용 (세션 만료 방지)
+      if (!user) {
+        alert("로그인 세션이 만료되었습니다. 페이지를 새로고침해주세요.");
+        window.location.reload();
         return;
       }
       
-      const { data: currentEmployee } = await supabase
+      const { data: currentEmployee, error: employeeError } = await supabase
         .from("employees")
         .select("id")
         .eq("auth_id", user.id)
         .single();
+      
+      if (employeeError) {
+        console.error("직원 정보 조회 오류:", employeeError);
+        // 직원 정보가 없어도 저장은 계속 진행 (last_modified_by만 null로 설정됨)
+      }
 
       // 반별 담당 선생님 정보 가져오기
-      const classIds = [...new Set(rows.map(r => r.classId).filter(Boolean))];
+      const classIds = [...new Set(validRows.map(r => r.classId).filter(Boolean))];
       const { data: classData } = await supabase
         .from("classes")
         .select("id, teacher_id")
@@ -328,8 +356,8 @@ export default function TestLogsPage() {
       const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
 
       // 기존 레코드와 새 레코드 분리
-      const existingRows = rows.filter(r => r.id);
-      const newRows = rows.filter(r => !r.id);
+      const existingRows = validRows.filter(r => r.id);
+      const newRows = validRows.filter(r => !r.id);
       
       let error = null;
       
@@ -340,8 +368,8 @@ export default function TestLogsPage() {
           class_id: r.classId || null,
           student_id: r.studentId,
           date: r.date,
-          test: r.test,
-          test_type: r.testType as any,
+          test: r.test && r.test.trim() ? r.test : null,  // 빈 값은 null로 처리
+          test_type: r.testType || null,  // null로 처리
           test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
           note: r.note || null,
           last_modified_by: currentEmployee?.id || null
@@ -357,14 +385,14 @@ export default function TestLogsPage() {
       
       // 새 레코드 삽입
       if (!error && newRows.length > 0) {
-        const insertData = newRows.map(r => {
+        const insertData = newRows.map((r, index) => {
           const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
           return {
             class_id: r.classId || null,
             student_id: r.studentId,
             date: r.date,
-            test: r.test,
-            test_type: r.testType as any,
+            test: r.test && r.test.trim() ? r.test : null,  // 빈 값은 null로 처리
+            test_type: r.testType || null,  // null로 처리
             test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
             note: r.note || null,
             created_by: teacherId || null
@@ -382,11 +410,12 @@ export default function TestLogsPage() {
       
       alert("저장되었습니다.");
       
-      await fetchTodayTestLogs();
+      await fetchTestLogsByDate();
       setHasUnsavedChanges(false);
       setDeletedRowIds([]); // 삭제 목록 초기화
-    } catch (e) {
-      alert("저장 중 오류가 발생했습니다.");
+    } catch (e: any) {
+      console.error("저장 오류:", e);
+      alert(`저장 중 오류가 발생했습니다: ${e.message || '알 수 없는 오류'}`);
     }
   };
 

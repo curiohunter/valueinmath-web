@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
-import { createClient } from '@/lib/auth/client'
+import { getSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 interface AuthState {
@@ -19,7 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     // Check active sessions
@@ -40,6 +40,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.refresh()
       } else if (_event === 'SIGNED_OUT') {
         router.push('/login')
+      } else if (_event === 'TOKEN_REFRESHED') {
+        // 토큰이 갱신되었을 때 user 정보 업데이트
+        setUser(session?.user ?? null)
       }
     })
 
