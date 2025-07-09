@@ -24,7 +24,7 @@ import { StudentFormModal } from "./student-form-modal"
 import { Pagination } from "@/components/ui/pagination"
 import type { Student, StudentFilters } from "@/types/student"
 import { useStudents } from "@/hooks/use-students"
-import { updateStudentNotes } from "@/services/student-service"
+import { updateStudentNotes } from "@/lib/student-client"
 
 export function StudentsTable() {
   const router = useRouter()

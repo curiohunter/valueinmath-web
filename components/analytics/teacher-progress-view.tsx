@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -21,7 +21,7 @@ interface TeacherProgress {
 }
 
 export function TeacherProgressView({ year, month, teacherId = "all" }: TeacherProgressViewProps) {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseBrowserClient()
   const [selectedTeacher, setSelectedTeacher] = useState("all")
   const [progressData, setProgressData] = useState<Record<string, TeacherProgress>>({})
   const [loading, setLoading] = useState(true)

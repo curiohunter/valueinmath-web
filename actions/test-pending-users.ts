@@ -1,13 +1,11 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/auth/server"
 
 // 서버 사이드에서 pending 사용자 조회 테스트
 export async function testGetPendingUsers() {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
+    const supabase = await createServerClient()
     
     // 현재 사용자 확인
     const { data: { session } } = await supabase.auth.getSession()

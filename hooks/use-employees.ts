@@ -2,7 +2,7 @@
 
 import useSWR from "swr"
 import { useCallback } from "react"
-import { getEmployeesClient, deleteEmployee as deleteEmployeeService } from "@/services/employee-service"
+import { getEmployeesClient, deleteEmployeeClient } from "@/lib/employee-client"
 import type { Employee, EmployeeFilters } from "@/types/employee"
 
 export function useEmployees(page = 1, pageSize = 10, filters: EmployeeFilters) {
@@ -17,7 +17,7 @@ export function useEmployees(page = 1, pageSize = 10, filters: EmployeeFilters) 
   const deleteEmployee = useCallback(
     async (id: string) => {
       try {
-        const result = await deleteEmployeeService(id)
+        const result = await deleteEmployeeClient(id)
 
         if (!result.error) {
           // 삭제 성공 시 캐시 업데이트

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/auth/server'
 import type { Database } from '@/types/database'
 import type { ClaudeRecommendation } from '@/types/claude'
 import { z } from 'zod'
@@ -31,8 +30,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
+    const supabase = await createServerClient() 
       cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
     })
 
@@ -134,8 +132,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
+    const supabase = await createServerClient() 
       cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
     })
 

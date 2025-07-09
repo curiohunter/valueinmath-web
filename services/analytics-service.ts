@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/auth/server"
 import type { Database } from "@/types/database"
 import type {
   MonthlyReportData,
@@ -181,7 +181,7 @@ export async function getMonthlyAnalytics(
   month: number
 ): Promise<AnalyticsApiResponse<MonthlyReportData>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     // 해당 월의 시작일과 종료일 계산
     const startDate = `${year}-${month.toString().padStart(2, '0')}-01`
@@ -281,7 +281,7 @@ export async function generateMonthlyReport(
     const { student, studyLogs, testLogs, monthlyStats, specialNotes } = analyticsResult.data
     
     // 학생의 반 정보 조회
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { data: classData } = await supabase
       .from("class_students")
       .select("class_id, classes(name)")
@@ -464,7 +464,7 @@ export async function generateMonthlyReport(
 // 학생 목록 조회 (analytics 필터용)
 export async function getStudentsForAnalytics(): Promise<AnalyticsApiResponse<StudentInfo[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { data, error } = await supabase
       .from("students")
@@ -492,7 +492,7 @@ export async function getStudentsForAnalytics(): Promise<AnalyticsApiResponse<St
 // 선생님 목록 조회 (analytics 필터용)
 export async function getTeachersForAnalytics(): Promise<AnalyticsApiResponse<{ id: string; name: string }[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { data, error } = await supabase
       .from("employees")
@@ -616,7 +616,7 @@ export async function saveMonthlyReport(
   monthlyStats?: MonthlyStats
 ): Promise<AnalyticsApiResponse<{ id: string }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     // 기존 보고서가 있는지 확인
     const { data: existing, error: checkError } = await supabase
@@ -684,7 +684,7 @@ export async function getSavedMonthlyReports(
   month?: number
 ): Promise<AnalyticsApiResponse<any[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     let query = supabase
       .from("monthly_reports")
@@ -735,7 +735,7 @@ export async function getSavedReportById(
   monthly_stats?: MonthlyStats
 }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { data, error } = await supabase
       .from("monthly_reports")
@@ -781,7 +781,7 @@ export async function deleteSavedReport(
   reportId: string
 ): Promise<AnalyticsApiResponse<void>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { error } = await supabase
       .from("monthly_reports")
@@ -809,7 +809,7 @@ export async function updateSavedReport(
   reportContent: string
 ): Promise<AnalyticsApiResponse<void>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { error } = await supabase
       .from("monthly_reports")
@@ -846,7 +846,7 @@ export async function getStudentReportsStatus(
   } = {}
 ): Promise<AnalyticsApiResponse<ReportTableRow[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     // 1. 학생 목록 조회 (필터 적용)
     let studentsQuery = supabase
@@ -1079,7 +1079,7 @@ export async function getClassAnalytics(
   }>
 }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     // 해당 월의 시작일과 종료일 계산
     const startDate = `${year}-${month.toString().padStart(2, '0')}-01`
@@ -1161,7 +1161,7 @@ export async function generateAllMonthlyReports(
   month: number
 ): Promise<AnalyticsApiResponse<{ total: number, success: number, failed: number }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     // 재원 상태의 모든 학생 조회
     const { data: students, error: studentsError } = await supabase

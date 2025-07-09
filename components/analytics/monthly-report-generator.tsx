@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { saveMonthlyReport, getSavedMonthlyReports, getSavedReportById, deleteSavedReport, updateSavedReport } from "@/services/analytics-service"
+import { saveMonthlyReport, getSavedMonthlyReports, getSavedReportById, deleteSavedReport, updateSavedReport } from "@/lib/analytics-client"
 import type { MonthlyReportData } from "@/types/analytics"
 
 interface MonthlyReportGeneratorProps {

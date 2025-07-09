@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 
 interface PendingApprovalClientProps {
@@ -11,7 +11,7 @@ interface PendingApprovalClientProps {
 
 export function PendingApprovalClient({ userId }: PendingApprovalClientProps) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseBrowserClient()
 
   useEffect(() => {
     // 승인 상태 실시간 구독

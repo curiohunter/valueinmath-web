@@ -209,14 +209,14 @@ export function EmployeesTable() {
       .filter(emp => emp.auth_id)
       .map(emp => emp.auth_id)
     
-    console.log('현재 연결된 사용자 ID:', connectedUserIds)
+    // console.log('현재 연결된 사용자 ID:', connectedUserIds)
     
     // 이미 연결된 사용자 제외 (현재 선택된 직원이 연결된 사용자는 포함)
     const availableUsers = users.filter(user => 
       !connectedUserIds.includes(user.id) || user.id === linkingEmployee?.auth_id
     )
     
-    console.log('사용 가능한 사용자:', availableUsers)
+    // console.log('사용 가능한 사용자:', availableUsers)
     
     return availableUsers
   }, [users, employees, linkingEmployee?.auth_id])
@@ -291,10 +291,10 @@ export function EmployeesTable() {
   }
 
   // 디버깅용 로그
-  console.log(
-    "Employees with auth_id:",
-    employees.map((e) => ({ name: e.name, auth_id: e.auth_id })),
-  )
+  // console.log(
+  //   "Employees with auth_id:",
+  //   employees.map((e) => ({ name: e.name, auth_id: e.auth_id })),
+  // )
 
   // 데이터 필터링
   const safeEmployees = Array.isArray(employees) ? employees.filter(isEmployeeRow) : []

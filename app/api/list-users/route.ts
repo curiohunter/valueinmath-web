@@ -1,10 +1,10 @@
 // @ts-nocheck
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/auth/server";
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createServerClient();
     
     // 1. Get all users from profiles (including those who haven't submitted registration yet)
     const { data: profiles, error: profilesError } = await supabase
@@ -28,7 +28,11 @@ export async function GET() {
       return NextResponse.json({ users: [], error: employeesError.message }, { status: 500 });
     }
 
-    const linkedAuthIds = linkedEmployees?.map(emp => emp.auth_id).filter(Boolean) || [];
+    const linkedAuthIds = linkedEmployees
+  ?.map(e => e.auth_id)
+  // ✅ (id): id is string 타입 가드를 사용하여 null 값을 걸러내고 타입을 string[]으로 확정합니다.
+  .filter((id): id is string => id !== null && id !== undefined) 
+  || [];
 
     // 3. Format users for the dropdown
     const users = profiles?.map(profile => profile ? {

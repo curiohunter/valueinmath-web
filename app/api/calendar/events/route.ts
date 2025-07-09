@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@/lib/auth/server'
 import { createGoogleEvent, updateGoogleEvent, deleteGoogleEvent, refreshAccessToken } from '@/lib/google/calendar'
 import type { Database } from '@/types/database'
-import { cookies } from 'next/headers'
 
 // Google 토큰 자동 갱신 함수
 async function getValidAccessToken(): Promise<string | null> {
@@ -47,10 +46,7 @@ async function getValidAccessToken(): Promise<string | null> {
 // GET - 이벤트 조회 (전체 또는 특정 기간)
 export async function GET(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
@@ -89,10 +85,7 @@ export async function POST(request: NextRequest) {
     const eventData = await request.json()
     console.log('⏱️ JSON 파싱 완료:', Date.now() - startTime, 'ms')
     
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
     console.log('⏱️ Supabase 클라이언트 생성:', Date.now() - startTime, 'ms')
     
     // 현재 사용자 정보 가져오기 (optional - 에러 무시)

@@ -1,12 +1,11 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/auth/server"
 
 // 테스트용 함수 - 디버깅 목적
 export async function testProfileUpdate(userId: string, employeeName: string) {
   try {
-    const supabase = createServerActionClient({ cookies })
+    const supabase = await createServerClient()
     
     console.log('🧪 테스트 시작:', { userId, employeeName })
     

@@ -7,13 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { getCurrentUser } from "@/actions/auth-actions"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client" // 1. Supabase 클라이언트 변경
 
 interface PendingRegistration {
   id: string
@@ -22,48 +20,57 @@ interface PendingRegistration {
   email: string
   student_name: string | null
   created_at: string
+  user_id: string; // 승인 로직에 필요
 }
 
-export function NotificationButton() {
+// 2. user 객체를 props로 받기 위한 인터페이스 추가
+interface NotificationButtonProps {
+  user: any
+}
+
+export function NotificationButton({ user }: NotificationButtonProps) { // 3. props로 user 받기
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistration[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  // const [user, setUser] = useState<any>(null) // 더 이상 필요 없으므로 삭제
 
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseBrowserClient() // 1. Supabase 클라이언트 변경
 
-  // 관리자 권한 확인
+  // 4. 관리자 권한 확인 로직 변경
   useEffect(() => {
-    const checkAdminStatus = async () => {
-      try {
-        const { user } = await getCurrentUser()
-        setUser(user)
-        
-        if (!user) return
+    async function checkAdminStatus() {
+      // user 객체가 없으면 관리자가 아니므로 바로 종료
+      if (!user) {
+        setIsAdmin(false)
+        return
+      }
 
+      try {
         const { data: employee, error } = await supabase
           .from("employees")
           .select("position")
           .eq("auth_id", user.id)
-          .maybeSingle()
+          .single() // 한 명의 직원 정보만 가져옴
 
         if (error) {
-          console.error("직원 정보 조회 오류:", error)
+          // 일치하는 직원이 없거나 에러 발생 시 관리자가 아님
           setIsAdmin(false)
           return
         }
 
-        const isAdminUser = employee?.position === "원장" || employee?.position === "부원장"
-        setIsAdmin(isAdminUser)
+        const adminStatus = employee?.position === "원장" || employee?.position === "부원장"
+        setIsAdmin(adminStatus)
+
       } catch (error) {
-        console.error("관리자 권한 확인 오류:", error)
+        console.error("관리자 권한 확인 중 오류:", error)
+        setIsAdmin(false)
       }
     }
 
     checkAdminStatus()
-  }, [])
+  }, [user, supabase]) // user 객체가 바뀔 때마다 실행
 
-  // 대기 중인 등록 신청 조회
+  // 대기 중인 등록 신청 조회 (기존 로직 유지)
   useEffect(() => {
     if (!isAdmin) return
 
@@ -74,6 +81,7 @@ export function NotificationButton() {
           .select("*")
           .eq("status", "pending")
           .order("created_at", { ascending: false })
+          .returns<PendingRegistration[]>() // ✨ 이 부분을 추가하여 반환 타입을 명시합니다.
 
         if (error) throw error
 
@@ -101,7 +109,7 @@ export function NotificationButton() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [isAdmin])
+  }, [isAdmin, supabase]) // supabase를 의존성 배열에 추가
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -112,113 +120,75 @@ export function NotificationButton() {
     }
   }
 
-  const handleApproval = async (registrationId: string, approve: boolean) => {
+  // 승인/거부 로직 (기존과 거의 동일)
+  const handleApproval = async (registration: PendingRegistration, approve: boolean) => {
     try {
       if (!approve) {
-        // 거부의 경우 단순히 상태만 변경
+        // 거부
         const { error } = await supabase
           .from("pending_registrations")
           .update({ status: "rejected" })
-          .eq("id", registrationId)
-
+          .eq("id", registration.id)
         if (error) throw error
       } else {
-        // 승인의 경우 복잡한 로직 수행
-        
-        // 1. pending_registrations에서 정보 가져오기
-        const { data: registration, error: regError } = await supabase
-          .from("pending_registrations")
-          .select("*")
-          .eq("id", registrationId)
-          .single()
-
-        if (regError || !registration) {
-          throw new Error("등록 정보를 찾을 수 없습니다.")
-        }
-
+        // 승인
         if (registration.role === "teacher") {
-          // 직원인 경우 기존 직원과 연결
-          
-          // 2. employees 테이블에서 이름이 일치하는 직원 찾기
+          // 직원 연결
           const { data: employee, error: empError } = await supabase
             .from("employees")
-            .select("*")
+            .select("id, name, position, department")
             .eq("name", registration.name)
-            .is("auth_id", null) // 아직 계정이 연결되지 않은 직원
-            .maybeSingle()
+            .is("auth_id", null)
+            .single()
 
           if (empError || !employee) {
-            alert(`이름이 '${registration.name}'인 직원을 찾을 수 없거나 이미 계정이 연결되어 있습니다.`)
-            return
+            throw new Error(`이름이 '${registration.name}'인 직원(미연결 상태)을 찾을 수 없습니다.`)
           }
 
-          // 3. 해당 직원의 auth_id를 신청자의 user_id로 업데이트
           const { error: updateEmpError } = await supabase
             .from("employees")
-            .update({ 
-              auth_id: registration.user_id
-            })
+            .update({ auth_id: registration.user_id })
             .eq("id", employee.id)
-
           if (updateEmpError) throw updateEmpError
 
-          // 4. profiles 테이블에 직원 정보와 함께 업데이트
           const { error: profileError } = await supabase
             .from("profiles")
-            .upsert({ 
-              id: registration.user_id,
+            .update({
               name: employee.name,
               position: employee.position,
               department: employee.department,
               approval_status: "approved",
-              email: registration.email
             })
-
+            .eq('id', registration.user_id)
           if (profileError) throw profileError
 
         } else {
-          // 학생/학부모인 경우 (향후 구현)
-          // 현재는 profiles 테이블만 업데이트
+          // 학생/학부모 (profiles 테이블의 상태만 변경)
           const { error: profileError } = await supabase
             .from("profiles")
-            .upsert({ 
-              id: registration.user_id,
-              approval_status: "approved",
-              email: registration.email
-            })
-
+            .update({ approval_status: "approved" })
+            .eq('id', registration.user_id)
           if (profileError) throw profileError
         }
 
-        // 5. pending_registrations.status = 'approved'로 변경
+        // pending_registrations 상태 변경
         const { error: finalError } = await supabase
           .from("pending_registrations")
           .update({ status: "approved" })
-          .eq("id", registrationId)
-
+          .eq("id", registration.id)
         if (finalError) throw finalError
       }
 
-      // 목록 새로고침
-      const { data, error: fetchError } = await supabase
-        .from("pending_registrations")
-        .select("*")
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-
-      if (!fetchError) {
-        setPendingRegistrations(data || [])
-        setPendingCount(data?.length || 0)
-      }
+      // 상태 업데이트 후 목록에서 제거 (UI 즉시 반영)
+      setPendingRegistrations(prev => prev.filter(p => p.id !== registration.id))
+      setPendingCount(prev => prev - 1)
 
       alert(approve ? "승인이 완료되었습니다." : "거부가 완료되었습니다.")
-      
-      // 페이지 새로고침으로 업데이트된 내용 반영
-      window.location.reload()
+      // window.location.reload()는 사용자 경험에 좋지 않으므로, 상태 관리로 대체했습니다.
 
     } catch (error) {
       console.error("승인 처리 오류:", error)
-      alert("처리 중 오류가 발생했습니다: " + (error as any).message)
+      alert("처리 중 오류가 발생했습니다: " + (error as Error).message)
     }
   }
 
@@ -227,15 +197,15 @@ export function NotificationButton() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
         >
           <Bell className="h-4 w-4" />
           {pendingCount > 0 && (
-            <Badge 
-              variant="destructive" 
+            <Badge
+              variant="destructive"
               className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
             >
               {pendingCount > 9 ? '9+' : pendingCount}
@@ -272,7 +242,7 @@ export function NotificationButton() {
                     <Button
                       size="sm"
                       className="h-6 px-2 text-xs bg-green-500 hover:bg-green-600"
-                      onClick={() => handleApproval(registration.id, true)}
+                      onClick={() => handleApproval(registration, true)}
                     >
                       승인
                     </Button>
@@ -280,7 +250,7 @@ export function NotificationButton() {
                       size="sm"
                       variant="destructive"
                       className="h-6 px-2 text-xs"
-                      onClick={() => handleApproval(registration.id, false)}
+                      onClick={() => handleApproval(registration, false)}
                     >
                       거부
                     </Button>

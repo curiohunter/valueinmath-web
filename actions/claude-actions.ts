@@ -1,14 +1,12 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createServerClient } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // Claude 인사이트 삭제
 export async function deleteClaudeInsight(id: string) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
+    const supabase = await createServerClient()
 
     const {
       data: { session },

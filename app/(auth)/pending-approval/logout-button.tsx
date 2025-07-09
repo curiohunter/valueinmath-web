@@ -3,13 +3,13 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { getSupabaseBrowserClient, resetSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 export function LogoutButton() {
   const [isLoading, setIsLoading] = useState(false)
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseBrowserClient()
   const router = useRouter()
 
   const handleLogout = async () => {
@@ -23,6 +23,9 @@ export function LogoutButton() {
       }
 
       toast.success("로그아웃되었습니다")
+      
+      // 싱글턴 클라이언트 리셋
+      resetSupabaseBrowserClient()
       
       // 강제 새로고침으로 완전한 로그아웃
       window.location.href = "/login"

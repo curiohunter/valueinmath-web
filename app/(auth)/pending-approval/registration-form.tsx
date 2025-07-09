@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient } from "@/lib/supabase/client"
 import { User } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
 
@@ -21,7 +21,7 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClient()
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -64,9 +64,18 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
 
       // 페이지 새로고침으로 상태 업데이트
       window.location.reload()
-    } catch (error) {
+    } catch (error: any) {
       console.error('등록 실패:', error)
-      alert('등록 중 오류가 발생했습니다. 다시 시도해주세요.')
+      const errorMessage = error.message || '등록 중 오류가 발생했습니다.'
+      
+      // Supabase 에러 메시지 한국어로 변환
+      if (error.message?.includes('duplicate key')) {
+        alert('이미 등록 신청이 완료되었습니다.')
+      } else if (error.message?.includes('violates row-level security')) {
+        alert('권한이 없습니다. 다시 로그인해주세요.')
+      } else {
+        alert(`등록 중 오류가 발생했습니다: ${errorMessage}`)
+      }
     } finally {
       setIsSubmitting(false)
     }

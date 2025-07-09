@@ -72,6 +72,11 @@ export default function TuitionHistoryPage() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [classTypeFilter, setClassTypeFilter] = useState("all");
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  
+  // 변경사항 추적
+  const [originalData, setOriginalData] = useState<TuitionRow[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // 반/학생 이름 매핑 fetch
   useEffect(() => {
@@ -98,7 +103,7 @@ export default function TuitionHistoryPage() {
   }, []);
 
   // 데이터 페칭 함수
-  async function fetchTuitionHistoryWithFilters() {
+  async function fetchTuitionHistoryWithFilters(resetPage: boolean = true) {
     setLoading(true);
     setError(null);
 
@@ -174,8 +179,24 @@ export default function TuitionHistoryPage() {
         paymentDate: item.payment_date || undefined
       }));
 
+      // 클라이언트 사이드에서 반 이름으로 추가 정렬
+      transformedData.sort((a, b) => {
+        // 먼저 년도로 비교 (내림차순)
+        if (a.year !== b.year) return b.year - a.year;
+        // 같은 년도면 월로 비교 (내림차순)
+        if (a.month !== b.month) return b.month - a.month;
+        // 같은 년월이면 반 이름으로 비교 (오름차순)
+        return a.className.localeCompare(b.className, 'ko');
+      });
+
       setData(transformedData);
-      setPage(1); // 새 검색 시 첫 페이지로
+      setOriginalData(JSON.parse(JSON.stringify(transformedData))); // 깊은 복사
+      setHasUnsavedChanges(false); // 데이터 로드 시 변경사항 없음
+      
+      // resetPage가 true일 때만 페이지를 1로 리셋
+      if (resetPage) {
+        setPage(1);
+      }
     } catch (e) {
       console.error("데이터 fetch 에러:", e);
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
@@ -186,6 +207,12 @@ export default function TuitionHistoryPage() {
 
   // 검색 버튼 클릭 시
   function handleSearch() {
+    // 변경사항이 있으면 경고
+    if (hasUnsavedChanges) {
+      const confirmChange = window.confirm("저장하지 않은 변경사항이 있습니다. 계속하시겠습니까?");
+      if (!confirmChange) return;
+    }
+    
     // 반 검색어를 ID로 변환
     const classObj = classOptions.find(c => 
       classSearch ? c.name.toLowerCase().includes(classSearch.toLowerCase()) : false
@@ -221,6 +248,7 @@ export default function TuitionHistoryPage() {
     setPaymentStatusFilter("all");
     setClassTypeFilter("all");
     setDatePreset("custom");
+    setSelectedRows([]);
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth() + 1;
@@ -266,9 +294,9 @@ export default function TuitionHistoryPage() {
       const originalDataIndex = data.findIndex(item => item.id === rowToUpdate.id);
       
       if (originalDataIndex !== -1) {
-        const newData = [...data];
-        newData[originalDataIndex] = { ...newData[originalDataIndex], [field]: value };
-        setData(newData);
+        setData(prev => prev.map((row, i) => 
+          i === originalDataIndex ? { ...row, [field]: value } : row
+        ));
       }
     }
   };
@@ -301,8 +329,8 @@ export default function TuitionHistoryPage() {
 
       toast.success(`${row.studentName}의 학원비가 저장되었습니다.`);
       
-      // 데이터 새로고침
-      fetchTuitionHistoryWithFilters();
+      // 데이터 새로고침 (페이지 유지)
+      fetchTuitionHistoryWithFilters(false);
     } catch (error) {
       console.error("학원비 저장 에러:", error);
       toast.error("학원비 저장 중 오류가 발생했습니다.");
@@ -331,25 +359,99 @@ export default function TuitionHistoryPage() {
 
       toast.success(`${row.studentName}의 학원비가 성공적으로 삭제되었습니다.`);
 
-      // 데이터 새로고침
-      fetchTuitionHistoryWithFilters();
+      // 데이터 새로고침 (페이지 유지)
+      fetchTuitionHistoryWithFilters(false);
     } catch (error) {
       console.error("학원비 삭제 에러:", error);
       toast.error("학원비 삭제 중 오류가 발생했습니다.");
     }
   };
 
-  // 전체 저장 핸들러 (수정된 데이터 일괄 저장)
+  // 행 선택 핸들러
+  const handleRowSelect = (index: number, selected: boolean) => {
+    const actualIndex = (page - 1) * pageSize + index;
+    if (selected) {
+      setSelectedRows([...selectedRows, actualIndex]);
+    } else {
+      setSelectedRows(selectedRows.filter(i => i !== actualIndex));
+    }
+  };
+
+  // 전체 선택 핸들러
+  const handleSelectAll = (selected: boolean) => {
+    if (selected) {
+      const pageIndices = paginatedData.map((_, index) => (page - 1) * pageSize + index);
+      setSelectedRows([...new Set([...selectedRows, ...pageIndices])]);
+    } else {
+      const pageStart = (page - 1) * pageSize;
+      const pageEnd = pageStart + pageSize;
+      setSelectedRows(selectedRows.filter(i => i < pageStart || i >= pageEnd));
+    }
+  };
+
+  // 선택 삭제 핸들러
+  const handleBulkDelete = async () => {
+    if (selectedRows.length === 0) {
+      toast.error("선택된 항목이 없습니다.");
+      return;
+    }
+
+    const confirmDelete = window.confirm(`선택한 ${selectedRows.length}개의 학원비를 삭제하시겠습니까?`);
+    
+    if (!confirmDelete) return;
+    
+    setIsSaving(true);
+    try {
+      // 선택된 행들의 ID 수집
+      const idsToDelete = selectedRows
+        .map(index => filteredData[index]?.id)
+        .filter(id => id);
+
+      if (idsToDelete.length === 0) {
+        toast.error("삭제할 항목을 찾을 수 없습니다.");
+        return;
+      }
+
+      // 일괄 삭제
+      const { error } = await supabase
+        .from("tuition_fees")
+        .delete()
+        .in("id", idsToDelete);
+
+      if (error) throw error;
+
+      toast.success(`${idsToDelete.length}개의 학원비가 삭제되었습니다.`);
+      
+      // 선택 초기화
+      setSelectedRows([]);
+      
+      // 데이터 새로고침 (페이지 유지)
+      fetchTuitionHistoryWithFilters(false);
+    } catch (error) {
+      console.error("일괄 삭제 에러:", error);
+      toast.error("학원비 삭제 중 오류가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 전체 저장 핸들러 (모든 변경된 데이터 저장)
   const handleSave = async () => {
-    if (paginatedData.length === 0) {
-      toast.error("저장할 학원비 데이터가 없습니다.");
+    // 변경된 데이터만 찾기
+    const changedRows = data.filter((row, index) => {
+      const originalRow = originalData[index];
+      return JSON.stringify(row) !== JSON.stringify(originalRow);
+    });
+
+    if (changedRows.length === 0) {
+      toast.info("변경된 데이터가 없습니다.");
       return;
     }
 
     setIsSaving(true);
     try {
-      // 수정된 데이터 일괄 저장
-      for (const row of paginatedData) {
+      // 변경된 데이터 일괄 저장
+      for (const row of changedRows) {
         const updateData: Partial<TuitionFeeInput> = {
           year: row.year,
           month: row.month,
@@ -368,10 +470,10 @@ export default function TuitionHistoryPage() {
         if (error) throw error;
       }
 
-      toast.success(`${paginatedData.length}개의 학원비가 저장되었습니다.`);
+      toast.success(`${changedRows.length}개의 학원비가 저장되었습니다.`);
       
-      // 데이터 새로고침
-      fetchTuitionHistoryWithFilters();
+      // 데이터 새로고침 (페이지 유지)
+      fetchTuitionHistoryWithFilters(false);
     } catch (error) {
       console.error("학원비 저장 에러:", error);
       toast.error("학원비 저장 중 오류가 발생했습니다.");
@@ -384,6 +486,12 @@ export default function TuitionHistoryPage() {
   useEffect(() => {
     fetchTuitionHistoryWithFilters();
   }, [dateRange, filteredClassId, filteredStudentId, selectedPaymentStatus]);
+
+  // 데이터 변경 감지
+  useEffect(() => {
+    const hasChanges = JSON.stringify(data) !== JSON.stringify(originalData);
+    setHasUnsavedChanges(hasChanges);
+  }, [data, originalData]);
 
   if (authLoading) return (
     <div className="p-8 text-center">
@@ -439,6 +547,34 @@ export default function TuitionHistoryPage() {
         </div>
       )}
 
+      {/* 저장 버튼 및 경고 메시지 */}
+      {hasUnsavedChanges && (
+        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <div className="text-amber-600">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <span className="text-amber-800 font-medium">변경사항이 있습니다. 저장하지 않으면 변경사항이 사라집니다.</span>
+          </div>
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-medium"
+          >
+            {isSaving ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                저장 중...
+              </div>
+            ) : (
+              "전체 저장"
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* 메인 테이블 */}
       {loading ? (
         <Card className="p-12">
@@ -464,6 +600,10 @@ export default function TuitionHistoryPage() {
             onRowSave={handleRowSave}
             onSave={handleSave}
             isSaving={isSaving}
+            selectedRows={selectedRows.filter(i => i >= (page - 1) * pageSize && i < page * pageSize).map(i => i - (page - 1) * pageSize)}
+            onRowSelect={handleRowSelect}
+            onSelectAll={handleSelectAll}
+            onBulkDelete={handleBulkDelete}
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             paymentStatusFilter={paymentStatusFilter}
@@ -493,6 +633,19 @@ export default function TuitionHistoryPage() {
             >
               이전
             </Button>
+            {page > 2 && (
+              <>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(1)} 
+                  title="첫 페이지로"
+                >
+                  1
+                </Button>
+                {page > 3 && <span className="text-gray-400">...</span>}
+              </>
+            )}
             <div className="flex items-center space-x-1">
               {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
                 const pageNum = Math.max(1, Math.min(totalPages - 4, page - 2)) + i;
@@ -509,6 +662,19 @@ export default function TuitionHistoryPage() {
                 );
               })}
             </div>
+            {page < totalPages - 1 && (
+              <>
+                {page < totalPages - 2 && <span className="text-gray-400">...</span>}
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(totalPages)} 
+                  title="마지막 페이지로"
+                >
+                  {totalPages}
+                </Button>
+              </>
+            )}
             <Button 
               variant="outline"
               size="sm"

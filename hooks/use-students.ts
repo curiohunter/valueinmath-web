@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import type { Student, StudentFilters } from "@/types/student"
-import { getStudents, deleteStudent } from "@/services/student-service"
+import { getStudents, deleteStudent } from "@/lib/student-client"
 
 export function useStudents(
   page = 1,

@@ -78,22 +78,23 @@ export function TuitionRow({
 
   // 형제할인 체크박스 변경 핸들러
   const handleSiblingDiscountChange = (checked: boolean) => {
-    onChange?.(index, 'isSibling', checked)
+    if (!onChange || isReadOnly) return
+    
+    // 상태 변경
+    onChange(index, 'isSibling', checked)
     
     // 할인 적용/해제에 따른 금액 자동 조정
-    if (!isReadOnly) {
-      const currentAmount = row.amount
-      let newAmount: number
-      
-      if (checked) {
-        // 할인 적용: 현재 금액이 할인 전 금액이라고 가정하고 5% 할인
-        newAmount = Math.floor(currentAmount * 0.95)
-      } else {
-        // 할인 해제: 현재 금액이 할인된 금액이라고 가정하고 원래 금액으로 복원
-        newAmount = Math.floor(currentAmount / 0.95)
-      }
-      
-      onChange?.(index, 'amount', newAmount)
+    const currentAmount = row.amount
+    let newAmount: number
+    
+    if (checked && !row.isSibling) {
+      // 할인 적용: 현재 금액에서 5% 할인
+      newAmount = Math.round(currentAmount * 0.95)
+      onChange(index, 'amount', newAmount)
+    } else if (!checked && row.isSibling) {
+      // 할인 해제: 현재 금액을 5% 할인된 금액으로 보고 원래 금액 계산
+      newAmount = Math.round(currentAmount / 0.95)
+      onChange(index, 'amount', newAmount)
     }
   }
 
@@ -109,8 +110,8 @@ export function TuitionRow({
       "hover:shadow-sm hover:border-blue-200",
       isSelected && "bg-gradient-to-r from-blue-50 via-indigo-50/50 to-purple-50/30 border-blue-200 shadow-sm"
     )}>
-      {/* 선택 체크박스 - 이력 모드에서는 숨김 */}
-      {!isReadOnly && !isHistoryMode && (
+      {/* 선택 체크박스 */}
+      {!isReadOnly && onSelect && (
         <td className="w-12 px-3 py-3 text-center">
           <Checkbox
             checked={isSelected}
@@ -161,8 +162,8 @@ export function TuitionRow({
       <td className="min-w-[80px] w-[10%] px-3 py-3 text-center">
         <div className="flex items-center justify-center gap-2">
           <Checkbox
-            checked={row.isSibling}
-            onCheckedChange={(checked) => handleSiblingDiscountChange(checked as boolean)}
+            checked={row.isSibling || false}
+            onCheckedChange={handleSiblingDiscountChange}
             disabled={isReadOnly}
             className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
           />

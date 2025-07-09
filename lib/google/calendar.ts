@@ -191,9 +191,9 @@ export async function deleteGoogleEvent(
       throw new Error('Google Calendar 인증이 만료되었습니다. 다시 로그인해주세요.')
     }
     
-    if ((error as any)?.code === 404) {
+    if ((error as any)?.code === 404 || (error as any)?.code === 410) {
       console.warn('Google Calendar에서 이벤트를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.')
-      return // 404는 에러로 처리하지 않음 (이미 삭제된 경우)
+      return // 404, 410은 에러로 처리하지 않음 (이미 삭제된 경우)
     }
     
     throw new Error('Google Calendar 이벤트 삭제에 실패했습니다.')

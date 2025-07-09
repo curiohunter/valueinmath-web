@@ -325,75 +325,77 @@ export function TuitionTable({
           </div>
 
           {/* 하단 액션 바 */}
-          {!isHistoryMode && (
-            <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-4 border-t border-slate-200">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="text-sm text-slate-600">
-                    총 <span className="font-semibold text-blue-600">{rows.length}</span>개의 학원비 기록
-                  </div>
-                  {selectedRows.length > 0 && (
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                      {selectedRows.length}개 선택됨
-                    </Badge>
-                  )}
+          <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-4 border-t border-slate-200">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-slate-600">
+                  총 <span className="font-semibold text-blue-600">{rows.length}</span>개의 학원비 기록
                 </div>
-                
-                <div className="flex items-center gap-3">
-                  {!isReadOnly && (
-                    <>
-                      {selectedRows.length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={onBulkDelete}
-                          className="text-red-600 border-red-200 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          선택 삭제
-                        </Button>
-                      )}
-                      
+                {selectedRows.length > 0 && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                    {selectedRows.length}개 선택됨
+                  </Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-3">
+                {!isReadOnly && (
+                  <>
+                    {selectedRows.length > 0 && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={onDeleteAll}
-                        className="border-slate-200 hover:bg-slate-50"
+                        onClick={onBulkDelete}
+                        className="text-red-600 border-red-200 hover:bg-red-50"
                       >
-                        전체 삭제
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        선택 삭제
                       </Button>
-                      
-                      <Button
-                        onClick={onSave}
-                        disabled={isSaving || rows.length === 0}
-                        size="sm"
-                        className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium shadow-md transition-all duration-200 hover:shadow-lg"
-                      >
-                        {isSaving ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            저장 중...
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4" />
-                            저장
-                          </div>
-                        )}
-                      </Button>
-                    </>
-                  )}
-                  
-                  {/* 읽기 전용 모드 안내 */}
-                  {isReadOnly && (
-                    <div className="text-sm text-gray-500 italic">
-                      📖 읽기 전용 모드 - 데이터 조회만 가능합니다
-                    </div>
-                  )}
-                </div>
+                    )}
+                    
+                    {!isHistoryMode && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={onDeleteAll}
+                          className="border-slate-200 hover:bg-slate-50"
+                        >
+                          전체 삭제
+                        </Button>
+                        
+                        <Button
+                          onClick={onSave}
+                          disabled={isSaving || rows.length === 0}
+                          size="sm"
+                          className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium shadow-md transition-all duration-200 hover:shadow-lg"
+                        >
+                          {isSaving ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              저장 중...
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              저장
+                            </div>
+                          )}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+                
+                {/* 읽기 전용 모드 안내 */}
+                {isReadOnly && (
+                  <div className="text-sm text-gray-500 italic">
+                    📖 읽기 전용 모드 - 데이터 조회만 가능합니다
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

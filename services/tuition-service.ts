@@ -1,7 +1,7 @@
 "use server"
 
 // @ts-nocheck
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/auth/server"
 import type { Database } from "@/types/database"
 import type {
   TuitionFee,
@@ -89,7 +89,7 @@ export async function getTuitionFees(
   studentId?: string
 ): Promise<TuitionApiResponse<TuitionRow[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     let query = supabase
       .from("tuition_fees")
@@ -154,7 +154,7 @@ export async function getTuitionFeesByRange(
   studentId?: string
 ): Promise<TuitionApiResponse<TuitionRow[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     let query = supabase
       .from("tuition_fees")
@@ -230,7 +230,7 @@ export async function saveTuitionFee(
   data: TuitionFeeInput
 ): Promise<TuitionApiResponse<{ id: string }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { error } = await supabase
       .from("tuition_fees")
@@ -269,7 +269,7 @@ export async function saveTuitionFees(
   tuitionFees: TuitionFeeInput[]
 ): Promise<TuitionApiResponse<{ saved: number }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const insertData = tuitionFees.map(data => ({
       class_id: data.class_id,
@@ -309,7 +309,7 @@ export async function saveTuitionFees(
 // 반별 학생 조회 (학원비 생성용)
 export async function getClassesWithStudents(): Promise<TuitionApiResponse<ClassWithStudents[]>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     // 활성 반 조회
     const { data: classesData, error: classesError } = await supabase
@@ -457,7 +457,7 @@ export async function generateMonthlyTuition(
 // 학원비 삭제
 export async function deleteTuitionFee(id: string): Promise<TuitionApiResponse<{ deleted: boolean }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     
     const { error } = await supabase
       .from("tuition_fees")

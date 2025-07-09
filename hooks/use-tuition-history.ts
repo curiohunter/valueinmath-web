@@ -218,6 +218,16 @@ export function useTuitionHistoryWithFilters(
         paymentDate: item.payment_date || undefined
       }))
 
+      // 클라이언트 사이드에서 반 이름으로 추가 정렬
+      transformedData.sort((a, b) => {
+        // 먼저 년도로 비교 (내림차순)
+        if (a.year !== b.year) return b.year - a.year;
+        // 같은 년도면 월로 비교 (내림차순)
+        if (a.month !== b.month) return b.month - a.month;
+        // 같은 년월이면 반 이름으로 비교 (오름차순)
+        return a.className.localeCompare(b.className, 'ko');
+      })
+
       setAllData(transformedData)
       setPage(1) // 새 검색 시 첫 페이지로
     } catch (e) {

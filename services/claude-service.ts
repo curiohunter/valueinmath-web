@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/auth/server"
 import type { 
   ClaudeInsight, 
   ClaudeInsightInsert,
@@ -43,7 +43,7 @@ export async function getClaudeInsights(
   filters?: ClaudeSearchFilters
 ): Promise<{ data: ClaudeInsightWithDetails[]; count: number }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
@@ -122,7 +122,7 @@ export async function getClaudeInsightById(
   id: string
 ): Promise<ClaudeInsightWithDetails | null> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const { data: insight, error: insightError } = await supabase
       .from("claude_insights")
@@ -148,7 +148,7 @@ export async function createClaudeInsight(
   data: ClaudeInsightInsert
 ): Promise<ClaudeInsightWithDetails | null> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const { data: insight, error } = await supabase
       .from("claude_insights")
@@ -174,7 +174,7 @@ export async function updateClaudeInsight(
   data: ClaudeInsightUpdate
 ): Promise<ClaudeInsightWithDetails | null> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const { data: insight, error } = await supabase
       .from("claude_insights")
@@ -198,7 +198,7 @@ export async function updateClaudeInsight(
 // Claude 인사이트 삭제
 export async function deleteClaudeInsight(id: string): Promise<boolean> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const { error } = await supabase
       .from("claude_insights")
@@ -223,7 +223,7 @@ export async function updateClaudeInsightStatus(
   status: 'active' | 'archived'
 ): Promise<boolean> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const { error } = await supabase
       .from("claude_insights")
@@ -248,7 +248,7 @@ export async function updateClaudeInsightStatus(
 // Claude 태그 통계 조회
 export async function getClaudeTags(): Promise<Array<{ tag: string; count: number }>> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await supabase
       .from("claude_insights")
@@ -282,7 +282,7 @@ export async function getClaudeTags(): Promise<Array<{ tag: string; count: numbe
 // Claude 대시보드 통계 조회
 export async function getClaudeDashboardStats() {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     // 인사이트 통계만 조회
     const { data: insights, error: insightsError } = await supabase

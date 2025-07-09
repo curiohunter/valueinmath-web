@@ -1,12 +1,12 @@
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 
 // 직원과 사용자 계정 연결
 export async function linkEmployeeToUser(employeeId: string, userId: string | null) {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     // 직원 테이블 업데이트
     // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
@@ -29,7 +29,7 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
 // 관리자 권한 확인
 export async function checkAdminAccess() {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     // 현재 로그인한 사용자 가져오기
     const {

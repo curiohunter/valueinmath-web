@@ -20,7 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import type { Database } from "@/types/database"
 import type { ReportFilters } from "@/types/reports"
 import { useDebounce } from "@/hooks/use-debounce"
@@ -41,7 +41,7 @@ export function ReportsFilters({
   onFiltersChange,
   isLoading = false
 }: ReportsFiltersProps) {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseBrowserClient()
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [classesLoading, setClassesLoading] = useState(true)
   const [searchInput, setSearchInput] = useState(filters.searchTerm)

@@ -74,9 +74,7 @@ export async function updateUserProfile(profileData: {
 // 직원과 사용자 계정 연결
 export async function linkEmployeeToUser(employeeId: string, userId: string | null) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
-
+    const supabase = await createServerClient(); // ✅ 이렇게 변경
     // 1. 기존 연결 해제: 이전에 이 직원과 연결된 사용자가 있다면 해제
     const { data: currentEmployee } = await supabase
       .from("employees")
@@ -177,34 +175,48 @@ export async function linkEmployeeToUser(employeeId: string, userId: string | nu
 }
 
 // 사용자 목록 가져오기 (auth.users와 profiles 테이블 조인)
+// actions/auth-actions.ts 파일의 listUsers 함수
+
 export async function listUsers() {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerActionClient({ cookies: () => cookieStore as any })
+    const supabaseAdmin = getSupabaseAdmin();
 
-    // 전체 유저 목록 가져오기 (관리자 권한 필요)
-    const { data: { users }, error } = await supabase.auth.admin.listUsers()
+    const {
+      data: { users },
+      error: userError,
+    } = await supabaseAdmin.auth.admin.listUsers();
 
-    if (error) {
-      return { users: [], error: error.message }
+    if (userError) {
+      throw userError;
     }
 
-    // 직원 테이블에서 이미 연결된 auth_id 목록 가져오기
-    const { data: employees } = await supabase.from("employees").select("auth_id")
-    const linkedAuthIds = employees?.map(e => e.auth_id).filter(Boolean) || []
+    // ✨ 1. { data, error } 형태로 결과를 받고, 변수명을 employees로 지정합니다.
+    const { data: employees, error: employeeError } = await supabaseAdmin
+      .from("employees")
+      .select("auth_id");
 
-    // 전체 유저 반환 (연결된/연결되지 않은 계정 모두)
+    // ✨ 2. 직원 목록 조회에 대한 오류 처리를 추가합니다.
+    if (employeeError) {
+      throw employeeError;
+    }
+
+    const linkedAuthIds =
+      employees
+        ?.map((e) => e.auth_id)
+        .filter((id): id is string => id !== null && id !== undefined) || [];
+
     return {
-      users: users.map(user => ({
+      users: users.map((user) => ({
         id: user.id,
         name: user.user_metadata?.name || "이름 없음",
-        email: user.email,
+        email: user.email || "",
         isLinked: linkedAuthIds.includes(user.id),
       })),
       error: null,
-    }
+    };
   } catch (error: any) {
-    return { users: [], error: error.message }
+    console.error("Server Action Error in listUsers:", error.message);
+    return { users: [], error: { message: "사용자 목록을 가져오는 데 실패했습니다." } };
   }
 }
 

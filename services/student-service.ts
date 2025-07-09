@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/auth/server"
 import type { Student, StudentFilters } from "@/types/student"
 import type { Database } from "@/types/database"
 
@@ -39,7 +39,7 @@ export async function getStudents(
   filters: StudentFilters = { search: "", department: "all", status: "all" },
 ): Promise<{ data: Student[]; count: number }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
@@ -98,7 +98,7 @@ export async function getStudents(
 // 학생 상세 조회
 export async function getStudentById(id: string): Promise<Student | null> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { data, error } = await supabase.from("students").select("*").eq("id", id).single()
 
     if (error) throw error
@@ -116,7 +116,7 @@ export async function createStudent(
   student: Omit<Student, "id" | "created_at" | "updated_at">,
 ): Promise<{ data: Student | null; error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const studentData: StudentInsert = {
       name: student.name,
@@ -152,7 +152,7 @@ export async function updateStudent(
   student: Partial<Student>,
 ): Promise<{ data: Student | null; error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     const studentData: StudentUpdate = {
       name: student.name,
@@ -185,7 +185,7 @@ export async function updateStudent(
 // 학생 삭제
 export async function deleteStudent(id: string): Promise<{ error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { error } = await supabase.from("students").delete().eq("id", id)
 
     if (error) throw error
@@ -200,7 +200,7 @@ export async function deleteStudent(id: string): Promise<{ error: Error | null }
 // 학생 soft delete (상태를 '삭제됨'으로 변경)
 export async function softDeleteStudent(id: string): Promise<{ error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { error } = await supabase
       .from("students")
       .update({ status: "삭제됨" })
@@ -221,7 +221,7 @@ export async function updateStudentNotes(
   notes: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { error } = await supabase.from("students").update({ notes }).eq("id", id)
 
     if (error) throw error

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@/lib/auth/server'
 import { updateGoogleEvent, deleteGoogleEvent, refreshAccessToken } from '@/lib/google/calendar'
 import type { Database } from '@/types/database'
-import { cookies } from 'next/headers'
 
 // Google 토큰 자동 갱신 함수 (메인 route.ts와 동일)
 async function getValidAccessToken(): Promise<string | null> {
@@ -50,10 +49,7 @@ export async function PUT(
   try {
     const params = await props.params
     const eventData = await request.json()
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
     
     // 메인 DB 작업 - 이벤트 수정
     const { data, error } = await supabase
@@ -108,10 +104,7 @@ export async function DELETE(
 ) {
   try {
     const params = await props.params
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
     
     // 삭제하기 전에 Google Calendar ID 가져오기
     const { data: eventToDelete } = await supabase

@@ -1,7 +1,6 @@
 "use server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { createServerClient } from "@/lib/auth/server"
 import type { Employee, EmployeeFilters } from "@/types/employee"
 import type { Database } from "@/types/database"
 
@@ -35,7 +34,7 @@ export async function getEmployees(
   filters: EmployeeFilters = { search: "", department: "all", position: "all", status: "all" },
 ): Promise<{ data: Employee[]; count: number }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
@@ -85,7 +84,7 @@ export async function getEmployees(
 // 직원 상세 조회
 export async function getEmployeeById(id: string): Promise<Employee | null> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { data, error } = await supabase.from("employees").select("*").eq("id", id as string).single()
 
     if (error) throw error
@@ -103,7 +102,7 @@ export async function createEmployee(
   employee: Omit<Employee, "id" | "created_at" | "updated_at">,
 ): Promise<{ data: Employee | null; error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     // undefined 필드 제거 (스프레드 + 조건부)
     const employeeData: EmployeeInsert = {
@@ -136,7 +135,7 @@ export async function updateEmployee(
   employee: Partial<Employee>,
 ): Promise<{ data: Employee | null; error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
 
     // undefined 필드 제거 (스프레드 + 조건부)
     const employeeData: EmployeeUpdate = {
@@ -166,7 +165,7 @@ export async function updateEmployee(
 // 직원 삭제
 export async function deleteEmployee(id: string): Promise<{ error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { error } = await supabase.from("employees").delete().eq("id", id as string)
 
     if (error) throw error
@@ -184,7 +183,7 @@ export async function updateEmployeeNotes(
   notes: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    const supabase = await createServerSupabaseClient()
+    const supabase = await createServerClient()
     const { error } = await supabase.from("employees").update({ notes: notes ?? null } as EmployeeUpdate).eq("id", id as string)
 
     if (error) throw error
@@ -196,101 +195,10 @@ export async function updateEmployeeNotes(
   }
 }
 
-// 직원 목록 가져오기 (클라이언트 컴포넌트용)
-export async function getEmployeesClient(
-  page = 1,
-  pageSize = 10,
-  filters: {
-    search?: string
-    department?: string
-    position?: string
-    status?: string
-  } = {},
-) {
-  try {
-    const supabase = getSupabaseBrowserClient()
-    const { search, department, position, status } = filters
-
-    // 시작 인덱스 계산
-    const from = (page - 1) * pageSize
-    const to = from + pageSize - 1
-
-    // 기본 쿼리 생성
-    let query = supabase
-      .from("employees")
-      .select(
-        "id, name, phone, position, status, department, hire_date, resign_date, notes, created_at, updated_at, auth_id",
-        { count: "exact" },
-      )
-
-    // 검색어 필터 적용
-    if (search) {
-      query = query.ilike("name", `%${search}%`)
-    }
-
-    // 부서 필터 적용
-    if (department && department !== "all") {
-      query = query.eq("department", department)
-    }
-
-    // 직책 필터 적용
-    if (position && position !== "all") {
-      query = query.eq("position", position)
-    }
-
-    // 상태 필터 적용
-    if (status && status !== "all") {
-      query = query.eq("status", status)
-    }
-
-    // 페이지네이션 적용 및 결과 가져오기
-    const { data, error, count } = await query.order("name", { ascending: true }).range(from, to)
-
-    if (error) {
-      throw error
-    }
-
-    return {
-      employees: data ? (data as EmployeeRow[]).map(mapEmployeeRowToEmployee) : [],
-      totalCount: count || 0,
-      error: null,
-    }
-  } catch (error) {
-    console.error("Error fetching employees:", error)
-    return {
-      employees: [],
-      totalCount: 0,
-      error,
-    }
-  }
-}
-
-// 직원 추가 (클라이언트 컴포넌트용)
-export async function addEmployee(employee: Omit<Employee, "id" | "created_at" | "updated_at">) {
-  try {
-    const supabase = getSupabaseBrowserClient()
-
-    const { data, error } = await supabase.from("employees").insert([
-      {
-        ...employee,
-        last_updated_date: new Date().toISOString(),
-      },
-    ])
-
-    if (error) {
-      throw error
-    }
-
-    return { success: true, data, error: null }
-  } catch (error) {
-    console.error("Error adding employee:", error)
-    return { success: false, data: null, error }
-  }
-}
 
 // 서버 컴포넌트용 직원 목록 가져오기
 export async function getEmployeesServer() {
-  const supabase = await createServerSupabaseClient()
+  const supabase = await createServerClient()
   const { data, error } = await supabase.from("employees").select("*")
 
   if (error) {
