@@ -30,9 +30,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerClient() 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
 
     // 사용자 인증 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -132,9 +130,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createServerClient() 
-      cookies: () => cookieStore as any // Next.js 15 호환성을 위한 타입 캐스팅
-    })
+    const supabase = await createServerClient()
 
     // 사용자 인증 확인
     const { data: { user }, error: authError } = await supabase.auth.getUser()
