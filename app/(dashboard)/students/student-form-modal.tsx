@@ -292,8 +292,8 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
                     }
                   }}
                   disabled={(date) => {
-                    // 미래 날짜 제한 (시작일, 최초 상담일)
-                    if ((name === "start_date" || name === "first_contact_date") && date > new Date()) {
+                    // 최초 상담일만 미래 날짜 제한
+                    if (name === "first_contact_date" && date > new Date()) {
                       return true
                     }
                     // 과거 날짜 제한 (모든 날짜)
