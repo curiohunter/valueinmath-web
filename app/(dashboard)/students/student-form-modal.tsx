@@ -282,26 +282,51 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
                 </FormControl>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={field.value || undefined}
-                  onSelect={(date) => {
-                    field.onChange(date)
-                    if (name === "end_date" && status === "퇴원") {
-                      setEndDateError(null)
-                    }
-                  }}
-                  disabled={(date) => {
-                    // 최초 상담일만 미래 날짜 제한
-                    if (name === "first_contact_date" && date > new Date()) {
-                      return true
-                    }
-                    // 과거 날짜 제한 (모든 날짜)
-                    return date < new Date("1900-01-01")
-                  }}
-                  initialFocus
-                  locale={ko}
-                />
+                <div className="flex flex-col">
+                  <Calendar
+                    mode="single"
+                    selected={field.value || undefined}
+                    onSelect={(date) => {
+                      // 같은 날짜를 다시 클릭하면 선택 해제
+                      if (field.value && date && format(field.value, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")) {
+                        field.onChange(null)
+                      } else {
+                        field.onChange(date)
+                      }
+                      if (name === "end_date" && status === "퇴원") {
+                        setEndDateError(null)
+                      }
+                    }}
+                    disabled={(date) => {
+                      // 최초 상담일만 미래 날짜 제한
+                      if (name === "first_contact_date" && date > new Date()) {
+                        return true
+                      }
+                      // 과거 날짜 제한 (모든 날짜)
+                      return date < new Date("1900-01-01")
+                    }}
+                    initialFocus
+                    locale={ko}
+                  />
+                  {field.value && (
+                    <div className="p-2 border-t">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          field.onChange(null)
+                          if (name === "end_date") {
+                            setEndDateError(null)
+                          }
+                        }}
+                      >
+                        날짜 선택 취소
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
             {name === "end_date" && endDateError && (

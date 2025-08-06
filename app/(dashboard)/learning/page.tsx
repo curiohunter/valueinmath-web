@@ -130,7 +130,7 @@ export default function LearningPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: classData } = await supabase.from("classes").select("id, name");
+      const { data: classData } = await supabase.from("classes").select("id, name, teacher_id");
       const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
       const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type");
       const { data: teacherData } = await supabase.from("employees").select("id, name");
@@ -576,12 +576,58 @@ export default function LearningPage() {
                     </Badge>
                   </div>
                   
-                  <div className="space-y-3">
-                    {classes.map(cls => {
-                      const classStudentList = getClassStudents(cls.id);
-                      const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
-                      const isOpen = openClassIds.includes(cls.id);
-                      return (
+                  <div className="space-y-4">
+                    {/* 담당 선생님별로 반 그룹화 */}
+                    {(() => {
+                      // 담당 선생님별로 반 그룹화
+                      const groupedClasses = classes.reduce((acc: { [key: string]: any[] }, cls) => {
+                        const teacherId = cls.teacher_id || 'unassigned';
+                        if (!acc[teacherId]) acc[teacherId] = [];
+                        acc[teacherId].push(cls);
+                        return acc;
+                      }, {});
+                      
+                      // 각 그룹 내에서 반 이름으로 정렬
+                      Object.values(groupedClasses).forEach(group => {
+                        group.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+                      });
+                      
+                      // 선생님 ID 정렬 (미배정은 맨 아래)
+                      const sortedTeacherIds = Object.keys(groupedClasses).sort((a, b) => {
+                        if (a === 'unassigned') return 1;
+                        if (b === 'unassigned') return -1;
+                        const teacherA = teachers.find(t => t.id === a)?.name || a;
+                        const teacherB = teachers.find(t => t.id === b)?.name || b;
+                        return teacherA.localeCompare(teacherB, 'ko');
+                      });
+                      
+                      return sortedTeacherIds.map(teacherId => {
+                        const teacher = teachers.find(t => t.id === teacherId);
+                        const teacherName = teacher?.name || (teacherId === 'unassigned' ? '미배정' : teacherId);
+                        const teacherClasses = groupedClasses[teacherId];
+                        
+                        return (
+                          <div key={teacherId} className="space-y-2">
+                            {/* 담당 선생님 헤더 */}
+                            <div className="px-2 py-1 bg-gray-100 rounded-md">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <span className="text-sm font-semibold text-gray-700">
+                                  {teacherName} 담당
+                                </span>
+                                <Badge variant="secondary" className="ml-auto text-xs">
+                                  {teacherClasses.length}개 반
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            {/* 해당 선생님의 반 목록 */}
+                            <div className="space-y-2 ml-2">
+                              {teacherClasses.map(cls => {
+                                const classStudentList = getClassStudents(cls.id);
+                                const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
+                                const isOpen = openClassIds.includes(cls.id);
+                                return (
                         <div key={cls.id}>
                           <Card className="border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer hover:shadow-md">
                             <div className="p-3">
@@ -604,8 +650,14 @@ export default function LearningPage() {
                                     <div className="font-semibold text-sm text-gray-800 truncate">
                                       {cls.name}
                                     </div>
-                                    <div className="text-xs text-gray-500 mb-1">
-                                      {classStudentList.length}명
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                                      <span>{classStudentList.length}명</span>
+                                      {teacherId !== 'unassigned' && (
+                                        <>
+                                          <span>•</span>
+                                          <span className="text-blue-600">{teacherName}</span>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -661,10 +713,15 @@ export default function LearningPage() {
                                 </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                                  )}
+                                </div>
+                              );
+                            })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                   
                   {(!classes || classes.length === 0) && (
