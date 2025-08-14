@@ -2,8 +2,85 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import type { Student, StudentFilters } from "@/types/student"
+import { createClient } from "@/lib/supabase/client"
+import type { Student, StudentFilters, StudentStatus, Department, SchoolType, LeadSource } from "@/types/student"
 import { getStudents, deleteStudent } from "@/lib/student-client"
+
+// 특정 상태의 학생만 가져오는 훅 (신규상담용)
+export function useStudentsByStatus(status?: string) {
+  const [students, setStudents] = useState<Student[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  const fetchStudents = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const supabase = createClient()
+      let query = supabase
+        .from('students')
+        .select('*')
+        .order('name', { ascending: true })
+      
+      // 상태 필터링
+      if (status) {
+        query = query.eq('status', status)
+      }
+      
+      const { data, error: fetchError } = await query
+      
+      if (fetchError) {
+        throw fetchError
+      }
+      
+      // 타입 변환 - database 타입을 Student 타입으로 매핑
+      const mappedStudents: Student[] = (data || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        student_phone: row.student_phone,
+        parent_phone: row.parent_phone,
+        status: row.status as StudentStatus,
+        department: row.department as Department | null,
+        school: row.school,
+        school_type: row.school_type as SchoolType | null,
+        grade: row.grade,
+        has_sibling: row.has_sibling || false,
+        lead_source: row.lead_source as LeadSource | null,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        first_contact_date: row.first_contact_date,
+        notes: row.notes,
+        created_at: row.created_at || '',
+        updated_at: row.updated_at || ''
+      }))
+      
+      setStudents(mappedStudents)
+    } catch (err) {
+      console.error("Error fetching students by status:", err)
+      setError(err as Error)
+      setStudents([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [status])
+
+  useEffect(() => {
+    fetchStudents()
+  }, [fetchStudents])
+
+  return {
+    data: students,
+    isLoading,
+    error,
+    refetch: fetchStudents
+  }
+}
+
+// 신규상담 학생만 가져오는 특화 훅
+export function useNewConsultStudents() {
+  return useStudentsByStatus('신규상담')
+}
 
 export function useStudents(
   page = 1,

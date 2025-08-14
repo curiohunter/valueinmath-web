@@ -14,7 +14,7 @@ export const CLASS_TYPE_LABELS: Record<ClassType, string> = {
   '정규': '정규',
   '특강': '특강',
   '모의고사비': '모의고사',
-  '입학테스트비': '입학테스트'
+  '입학테스트비': '입학테스트비'
 }
 
 // 납부 상태 enum
@@ -74,6 +74,7 @@ export interface ClassWithStudents {
   id: string
   name: string
   subject: string
+  teacher_id?: string | null
   monthly_fee: number | null
   students: StudentInfo[]
 }

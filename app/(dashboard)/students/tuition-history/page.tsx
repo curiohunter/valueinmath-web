@@ -46,7 +46,7 @@ export default function TuitionHistoryPage() {
   // 필터 상태
   const [datePreset, setDatePreset] = useState("custom");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
-  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]); // 반별 중복선택
   const [selectedStudent, setSelectedStudent] = useState("");
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState("");
   const [selectedClassType, setSelectedClassType] = useState("");
@@ -63,8 +63,7 @@ export default function TuitionHistoryPage() {
   const [classSearch, setClassSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   
-  // 실제 필터에 적용할 id
-  const [filteredClassId, setFilteredClassId] = useState("");
+  // 실제 필터에 적용할 id (학생 ID만 필요, 반은 selectedClasses 사용)
   const [filteredStudentId, setFilteredStudentId] = useState("");
   
   // 테이블 상태
@@ -122,29 +121,46 @@ export default function TuitionHistoryPage() {
           note,
           payment_status,
           payment_date,
-          classes!inner(name),
-          students!inner(name)
+          classes!left(name),
+          students!left(name, status)
         `);
       
-      // 년월 범위 필터
-      if (dateRange.from) {
+      // 연월 범위 필터 - 정확한 필터링 로직
+      if (dateRange.from && dateRange.to) {
         const [fromYear, fromMonth] = dateRange.from.split('-').map(Number);
-        query = query.gte("year", fromYear);
-        if (fromYear) {
-          query = query.gte("month", fromMonth);
-        }
-      }
-      if (dateRange.to) {
         const [toYear, toMonth] = dateRange.to.split('-').map(Number);
-        query = query.lte("year", toYear);
-        if (toYear) {
-          query = query.lte("month", toMonth);
+        
+        if (fromYear && fromMonth && toYear && toMonth) {
+          if (fromYear === toYear) {
+            // 같은 연도 내에서 월 범위
+            query = query
+              .eq("year", fromYear)
+              .gte("month", fromMonth)
+              .lte("month", toMonth);
+          } else {
+            // 연도를 넘나드는 범위
+            query = query.or(
+              `and(year.eq.${fromYear},month.gte.${fromMonth}),` +
+              `and(year.eq.${toYear},month.lte.${toMonth})` +
+              (toYear - fromYear > 1 ? `,and(year.gt.${fromYear},year.lt.${toYear})` : '')
+            );
+          }
+        }
+      } else if (dateRange.from) {
+        const [fromYear, fromMonth] = dateRange.from.split('-').map(Number);
+        if (fromYear && fromMonth) {
+          query = query.or(`year.gt.${fromYear},and(year.eq.${fromYear},month.gte.${fromMonth})`);
+        }
+      } else if (dateRange.to) {
+        const [toYear, toMonth] = dateRange.to.split('-').map(Number);
+        if (toYear && toMonth) {
+          query = query.or(`year.lt.${toYear},and(year.eq.${toYear},month.lte.${toMonth})`);
         }
       }
       
-      // 반 필터
-      if (filteredClassId) {
-        query = query.eq("class_id", filteredClassId);
+      // 반 필터 (중복선택 지원)
+      if (selectedClasses.length > 0) {
+        query = query.in("class_id", selectedClasses);
       }
       
       // 학생 필터
@@ -163,21 +179,34 @@ export default function TuitionHistoryPage() {
 
       // 데이터 변환
       // @ts-ignore - Supabase 복잡한 관계 타입 처리
-      const transformedData: TuitionRow[] = (data || []).map((item: any) => ({
-        id: item.id,
-        classId: item.class_id,
-        className: (item.classes as any)?.name || '',
-        studentId: item.student_id,
-        studentName: (item.students as any)?.name || '',
-        year: item.year,
-        month: item.month,
-        isSibling: item.is_sibling || false,
-        classType: item.class_type,
-        amount: item.amount,
-        note: item.note || '',
-        paymentStatus: item.payment_status,
-        paymentDate: item.payment_date || undefined
-      }));
+      const transformedData: TuitionRow[] = (data || []).map((item: any) => {
+        const studentStatus = (item.students as any)?.status || '';
+        const studentName = (item.students as any)?.name || '(알 수 없음)';
+        // class_type이 '입학테스트비'인지 확인 (공백 제거하여 비교)
+        const isEntranceTest = item.class_type?.trim() === '입학테스트비';
+        const isRetired = !isEntranceTest && studentStatus && !studentStatus.includes('재원');
+        
+        // 반명 처리: 입학테스트비인 경우 "입학테스트비", 아니면 기존 반명 또는 "(반 정보 없음)"
+        const className = isEntranceTest ? '입학테스트비' : 
+                         ((item.classes as any)?.name || '(반 정보 없음)');
+        
+        return {
+          id: item.id,
+          classId: item.class_id,
+          className: className,
+          studentId: item.student_id,
+          studentName: isEntranceTest ? studentName : 
+                       (isRetired ? `${studentName} (퇴원)` : studentName),
+          year: item.year,
+          month: item.month,
+          isSibling: item.is_sibling || false,
+          classType: item.class_type,
+          amount: item.amount,
+          note: item.note || '',
+          paymentStatus: item.payment_status,
+          paymentDate: item.payment_date || undefined
+        };
+      });
 
       // 클라이언트 사이드에서 반 이름으로 추가 정렬
       transformedData.sort((a, b) => {
@@ -213,24 +242,17 @@ export default function TuitionHistoryPage() {
       if (!confirmChange) return;
     }
     
-    // 반 검색어를 ID로 변환
-    const classObj = classOptions.find(c => 
-      classSearch ? c.name.toLowerCase().includes(classSearch.toLowerCase()) : false
-    );
-    
     // 학생 검색어를 ID로 변환
     const studentObj = studentOptions.find(s => 
       studentSearch ? s.name.toLowerCase().includes(studentSearch.toLowerCase()) : false
     );
     
     // 필터 ID 설정
-    const newClassId = classObj?.id || "";
     const newStudentId = studentObj?.id || "";
     
-    setFilteredClassId(newClassId);
     setFilteredStudentId(newStudentId);
     
-    // 검색 실행
+    // 검색 실행 (selectedClasses는 이미 state에 있으므로 자동으로 적용됨)
     setTimeout(() => {
       fetchTuitionHistoryWithFilters();
     }, 100);
@@ -240,7 +262,7 @@ export default function TuitionHistoryPage() {
   function resetFilters() {
     setClassSearch("");
     setStudentSearch("");
-    setFilteredClassId("");
+    setSelectedClasses([]); // 반별 중복선택 초기화
     setFilteredStudentId("");
     setSelectedPaymentStatus("");
     setSelectedClassType("");
@@ -482,10 +504,12 @@ export default function TuitionHistoryPage() {
     }
   };
 
-  // 초기 데이터 로드
+  // 초기 데이터 로드 - selectedClasses 변경 시에도 자동으로 데이터를 다시 가져옴
   useEffect(() => {
-    fetchTuitionHistoryWithFilters();
-  }, [dateRange, filteredClassId, filteredStudentId, selectedPaymentStatus]);
+    if (dateRange.from && dateRange.to) {
+      fetchTuitionHistoryWithFilters();
+    }
+  }, [dateRange, selectedClasses, filteredStudentId, selectedPaymentStatus]);
 
   // 데이터 변경 감지
   useEffect(() => {
@@ -616,6 +640,9 @@ export default function TuitionHistoryPage() {
             dateRange={dateRange}
             onDateRangeChange={setDateRange}
             onResetFilters={resetFilters}
+            classOptions={classOptions}
+            selectedClasses={selectedClasses}
+            onClassSelectionChange={setSelectedClasses}
           />
           
         </div>

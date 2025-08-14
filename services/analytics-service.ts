@@ -280,15 +280,16 @@ export async function generateMonthlyReport(
     
     const { student, studyLogs, testLogs, monthlyStats, specialNotes } = analyticsResult.data
     
-    // 학생의 반 정보 조회
+    // 학생의 반 정보 조회 (복수 반 지원)
     const supabase = await createServerClient()
     const { data: classData } = await supabase
       .from("class_students")
       .select("class_id, classes(name)")
       .eq("student_id", studentId)
-      .single()
     
-    const className = classData?.classes?.name || "미배정"
+    // 복수 반 이름 처리
+    const classNames = classData?.map((item: any) => item.classes?.name).filter(Boolean) || []
+    const className = classNames.length > 0 ? classNames.join(", ") : "미배정"
     
     // 선생님별 데이터 그룹핑
     const teacherDataMap = new Map<string, {
@@ -372,24 +373,8 @@ export async function generateMonthlyReport(
     report += `이번 달 핵심 지표\n\n`
     
     // 첫 번째 줄 지표
-    report += `출석률 ${attendanceIcon} ${realAttendanceRate.toFixed(0)}% | 평균성적 ${scoreIcon} ${monthlyStats.avgTestScore}점 | 총 시험수 ${testLogs.length}회\n`
+    report += `출석률 ${attendanceIcon} ${realAttendanceRate.toFixed(0)}% | 평균성적 ${scoreIcon} ${monthlyStats.avgTestScore}점\n`
     report += `과제수행 ${monthlyStats.avgHomework.toFixed(1)}/5.0 | 집중도 ${monthlyStats.avgFocus.toFixed(1)}/5.0`
-    
-    // 선생님별 학습일수 추가
-    const teacherClassCount = new Map<string, number>()
-    teacherDataMap.forEach((data, teacherId) => {
-      teacherClassCount.set(data.teacherName, data.studyLogs.length)
-    })
-    
-    if (teacherClassCount.size > 0) {
-      report += ` | 학습일수: `
-      const teacherCountArray = Array.from(teacherClassCount.entries())
-      teacherCountArray.forEach(([name, count], index) => {
-        report += `${name}(${count})`
-        if (index < teacherCountArray.length - 1) report += ', '
-      })
-    }
-    report += ` (총 ${studyLogs.length}일)`
     
     report += `\n\n`
     
@@ -424,7 +409,7 @@ export async function generateMonthlyReport(
       
       // 시험 결과
       if (data.testLogs.length > 0) {
-        report += `시험 결과 (평균: ${avgScore.toFixed(1)}점)\n`
+        report += `시험 결과\n`
         data.testLogs
           .sort((a, b) => a.date.localeCompare(b.date))
           .slice(-5)  // 최근 5개만 표시
@@ -930,8 +915,9 @@ export async function getStudentReportsStatus(
         reportStatus = ReportStatus.GENERATED
       }
       
-      // 학생의 첫 번째 반 정보 가져오기
-      const classInfo = student.class_students?.[0]?.classes
+      // 학생의 모든 반 정보 가져오기 (복수 반 지원)
+      const classNames = student.class_students?.map((cs: any) => cs.classes?.name).filter(Boolean) || []
+      const className = classNames.length > 0 ? classNames.join(", ") : "미배정"
       
       return {
         studentId: student.id,
@@ -939,7 +925,7 @@ export async function getStudentReportsStatus(
         grade: student.grade,
         school: student.school,
         department: student.department,
-        className: classInfo?.name,
+        className,
         reportId: report?.id,
         reportStatus,
         generatedAt: report?.created_at,

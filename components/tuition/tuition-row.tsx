@@ -59,6 +59,8 @@ export function TuitionRow({
         return 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
       case '입학테스트비':
         return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
+      case '입학테스트비':
+        return 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
       default:
         return 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
     }
@@ -196,6 +198,7 @@ export function TuitionRow({
                     type === '정규' ? 'bg-blue-400' : 
                     type === '특강' ? 'bg-purple-400' :
                     type === '모의고사비' ? 'bg-green-400' :
+                    type === '입학테스트비' ? 'bg-orange-400' :
                     type === '입학테스트비' ? 'bg-orange-400' :
                     'bg-slate-400'
                   )} />

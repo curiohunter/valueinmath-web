@@ -16,7 +16,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { HelpCircle, Trash2, ChevronLeft, ChevronRight, Plus, Calendar, Users, ChevronDown, Filter, X } from "lucide-react";
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal";
 
-const today = new Date().toISOString().slice(0, 10);
+// 한국 시간대(KST) 기준으로 오늘 날짜 가져오기
+const getKoreanDate = () => {
+  const now = new Date();
+  // UTC+9 (한국 시간)
+  const koreanTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  return koreanTime.toISOString().slice(0, 10);
+};
+
+const today = getKoreanDate();
 
 // 점수 색상 스타일 함수 (노션 스타일)
 const scoreColor = (score: number) => {
@@ -97,6 +105,9 @@ export default function LearningPage() {
   const [originalRows, setOriginalRows] = useState<typeof rows>([]);
   const [deletedRowIds, setDeletedRowIds] = useState<string[]>([]); // 삭제된 행의 ID 추적
   
+  // 필드별 변경 추적을 위한 state (부분 업데이트용)
+  const [dirtyFields, setDirtyFields] = useState<Map<string, Set<string>>>(new Map());
+  
   // 교재/진도 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRowIdx, setModalRowIdx] = useState<number | null>(null);
@@ -158,35 +169,41 @@ export default function LearningPage() {
         .from("study_logs")
         .select(`
           *,
-          student:students!student_id(name),
-          created_employee:employees!created_by(name),
-          modified_employee:employees!last_modified_by(name)
+          student:students!left(name, status),
+          created_employee:employees!left(name),
+          modified_employee:employees!left(name)
         `)
         .eq("date", targetDate);
       
       if (error) throw error;
       
       if (logs && logs.length > 0) {
-        const mappedRows = logs.map((log: any) => ({
-          id: log.id,
-          classId: log.class_id || "",
-          studentId: log.student_id || "",
-          name: log.student?.name || "",
-          date: log.date,
-          attendance: log.attendance_status || 5,
-          homework: log.homework || 5,
-          focus: log.focus || 5,
-          note: log.note || "",
-          book1: log.book1 || "",
-          book1log: log.book1log || "",
-          book2: log.book2 || "",
-          book2log: log.book2log || "",
-          createdBy: log.created_by,
-          createdByName: log.created_employee?.name || "",
-          lastModifiedBy: log.last_modified_by,
-          lastModifiedByName: log.modified_employee?.name || "",
-          updatedAt: log.updated_at
-        }));
+        const mappedRows = logs.map((log: any) => {
+          const studentStatus = log.student?.status || '';
+          const isRetired = studentStatus && !studentStatus.includes('재원');
+          const studentName = log.student?.name || "(알 수 없음)";
+          
+          return {
+            id: log.id,
+            classId: log.class_id || "",
+            studentId: log.student_id || "",
+            name: isRetired ? `${studentName} (퇴원)` : studentName,
+            date: log.date,
+            attendance: log.attendance_status || 5,
+            homework: log.homework || 5,
+            focus: log.focus || 5,
+            note: log.note || "",
+            book1: log.book1 || "",
+            book1log: log.book1log || "",
+            book2: log.book2 || "",
+            book2log: log.book2log || "",
+            createdBy: log.created_by,
+            createdByName: log.created_employee?.name || "",
+            lastModifiedBy: log.last_modified_by,
+            lastModifiedByName: log.modified_employee?.name || "",
+            updatedAt: log.updated_at
+          };
+        });
         
         setRows(mappedRows);
         setOriginalRows(mappedRows);
@@ -198,48 +215,111 @@ export default function LearningPage() {
     }
   };
 
-  // 오늘 날짜의 학습 기록 불러오기
-  const fetchTodayLogs = async () => {
-    setDeletedRowIds([]); // 새로 불러올 때 삭제 목록 초기화
-    try {
-      const { data: todayLogs, error } = await supabase
-        .from("today_study_logs")
-        .select("*");
-      
-      if (error) throw error;
-      
-      if (todayLogs && todayLogs.length > 0) {
-        const mappedRows = todayLogs.map((log: any) => ({
-          id: log.id,
-          classId: log.class_id || "",
-          studentId: log.student_id || "",
-          name: log.student_name || "",
-          date: log.date,
-          attendance: log.attendance_status || 5,
-          homework: log.homework || 5,
-          focus: log.focus || 5,
-          note: log.note || "",
-          book1: log.book1 || "",
-          book1log: log.book1log || "",
-          book2: log.book2 || "",
-          book2log: log.book2log || "",
-          createdBy: log.created_by,
-          createdByName: log.created_by_name,
-          lastModifiedBy: log.last_modified_by,
-          lastModifiedByName: log.last_modified_by_name,
-          updatedAt: log.updated_at
-        }));
-        
-        setRows(mappedRows);
-        setOriginalRows(mappedRows);
-      }
-    } catch (error) {
-    }
-  };
 
   useEffect(() => {
     fetchData();
   }, []);
+  
+  // 실시간 동기화 구현
+  useEffect(() => {
+    if (!date) return;
+    
+    // Supabase Realtime 구독
+    const channel = supabase
+      .channel('study_logs_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'study_logs',
+          filter: `date=eq.${date}`
+        },
+        async (payload) => {
+          // 다른 사용자의 변경사항 처리
+          if (payload.eventType === 'UPDATE') {
+            const updatedRow = payload.new;
+            
+            // 현재 편집 중인 필드는 건드리지 않음
+            const rowKey = `${updatedRow.id}`;
+            const localDirtyFields = dirtyFields.get(rowKey);
+            
+            if (!localDirtyFields || localDirtyFields.size === 0) {
+              // 로컬 변경사항이 없으면 서버 데이터로 완전 업데이트
+              setRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  return {
+                    ...r,
+                    attendance: updatedRow.attendance_status || 5,
+                    homework: updatedRow.homework || 5,
+                    focus: updatedRow.focus || 5,
+                    note: updatedRow.note || "",
+                    book1: updatedRow.book1 || "",
+                    book1log: updatedRow.book1log || "",
+                    book2: updatedRow.book2 || "",
+                    book2log: updatedRow.book2log || "",
+                    lastModifiedBy: updatedRow.last_modified_by,
+                    updatedAt: updatedRow.updated_at
+                  };
+                }
+                return r;
+              }));
+            } else {
+              // 로컬 변경사항이 있으면 변경하지 않은 필드만 업데이트
+              setRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  const updatedFields: any = { ...r };
+                  
+                  // 변경하지 않은 필드만 서버 값으로 업데이트
+                  if (!localDirtyFields.has('attendance')) {
+                    updatedFields.attendance = updatedRow.attendance_status || 5;
+                  }
+                  if (!localDirtyFields.has('homework')) {
+                    updatedFields.homework = updatedRow.homework || 5;
+                  }
+                  if (!localDirtyFields.has('focus')) {
+                    updatedFields.focus = updatedRow.focus || 5;
+                  }
+                  if (!localDirtyFields.has('note')) {
+                    updatedFields.note = updatedRow.note || "";
+                  }
+                  if (!localDirtyFields.has('book1')) {
+                    updatedFields.book1 = updatedRow.book1 || "";
+                  }
+                  if (!localDirtyFields.has('book1log')) {
+                    updatedFields.book1log = updatedRow.book1log || "";
+                  }
+                  if (!localDirtyFields.has('book2')) {
+                    updatedFields.book2 = updatedRow.book2 || "";
+                  }
+                  if (!localDirtyFields.has('book2log')) {
+                    updatedFields.book2log = updatedRow.book2log || "";
+                  }
+                  
+                  // 메타 정보는 항상 업데이트
+                  updatedFields.lastModifiedBy = updatedRow.last_modified_by;
+                  updatedFields.updatedAt = updatedRow.updated_at;
+                  
+                  return updatedFields;
+                }
+                return r;
+              }));
+            }
+          } else if (payload.eventType === 'INSERT') {
+            // 새로운 행이 추가된 경우
+            await fetchLogsForDate(date);
+          } else if (payload.eventType === 'DELETE') {
+            // 행이 삭제된 경우
+            setRows(prev => prev.filter(r => r.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [date, dirtyFields]);
 
   const prevDateRef = useRef(date);
 
@@ -335,9 +415,44 @@ export default function LearningPage() {
     });
   };
 
-  // 표 입력 변경
+  // 표 입력 변경 (부분 업데이트를 위한 변경 추적 포함)
   const handleChange = (idx: number, key: keyof (typeof rows)[number], value: any) => {
+    const row = rows[idx];
+    const originalRow = originalRows.find(or => 
+      or.studentId === row.studentId && or.classId === row.classId && or.date === row.date
+    );
+    
+    // 행 데이터 업데이트
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+    
+    // 기존 데이터가 있는 경우만 변경 추적 (새로 추가된 행은 제외)
+    if (row.id && originalRow) {
+      const rowKey = `${row.id}`;
+      
+      // 원본과 비교하여 변경 여부 확인
+      if (originalRow[key] !== value) {
+        setDirtyFields(prev => {
+          const newMap = new Map(prev);
+          if (!newMap.has(rowKey)) {
+            newMap.set(rowKey, new Set());
+          }
+          newMap.get(rowKey)!.add(key);
+          return newMap;
+        });
+      } else {
+        // 원본과 같으면 dirty 제거
+        setDirtyFields(prev => {
+          const newMap = new Map(prev);
+          if (newMap.has(rowKey)) {
+            newMap.get(rowKey)!.delete(key);
+            if (newMap.get(rowKey)!.size === 0) {
+              newMap.delete(rowKey);
+            }
+          }
+          return newMap;
+        });
+      }
+    }
   };
 
   // 저장 버튼 클릭
@@ -357,6 +472,16 @@ export default function LearningPage() {
         
         if (deleteError) {
           throw deleteError;
+        }
+        
+        // 삭제만 하고 저장할 새 데이터가 없으면 여기서 성공 처리
+        if (rows.length === 0) {
+          alert("삭제되었습니다.");
+          await fetchLogsForDate(date);
+          setHasUnsavedChanges(false);
+          setDeletedRowIds([]);
+          setDirtyFields(new Map());
+          return;
         }
       }
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -380,37 +505,164 @@ export default function LearningPage() {
       
       const classTeacherMap = new Map(classData?.map(c => [c.id, c.teacher_id]) || []);
 
+      // ID가 있는 행과 없는 행 분리
       const existingRows = rows.filter(r => r.id);
       const newRows = rows.filter(r => !r.id);
       
-      let error = null;
+      // 중복 체크: 같은 학생, 같은 반, 같은 날짜가 이미 DB에 있는지 확인
+      const potentiallyDuplicateRows: typeof rows = [];
+      const trulyNewRows: typeof rows = [];
+      const duplicateRowsOriginalData = new Map<string, any>(); // 중복 행의 원본 DB 데이터 저장
       
-      if (existingRows.length > 0) {
-        const updateData = existingRows.map(r => ({
-          id: r.id,
-          class_id: r.classId || null,
-          student_id: r.studentId,
-          date: r.date,
-          attendance_status: typeof r.attendance === "number" ? r.attendance : attendanceMap[r.attendance],
-          homework: typeof r.homework === "number" ? r.homework : homeworkMap[r.homework],
-          focus: typeof r.focus === "number" ? r.focus : focusMap[r.focus],
-          book1: r.book1,
-          book1log: r.book1log,
-          book2: r.book2,
-          book2log: r.book2log,
-          note: r.note,
-          last_modified_by: currentEmployee?.id,
-        }));
-        
-        const { error: updateError } = await supabase
+      if (newRows.length > 0) {
+        // 해당 날짜의 모든 기존 데이터 조회 (전체 필드 포함)
+        const { data: existingData } = await supabase
           .from("study_logs")
-          .upsert(updateData, { onConflict: "id" });
+          .select("*")
+          .eq("date", date);
         
-        if (updateError) error = updateError;
+        for (const row of newRows) {
+          const exists = existingData?.find(
+            existing => 
+              existing.student_id === row.studentId && 
+              existing.class_id === row.classId &&
+              existing.date === row.date
+          );
+          
+          if (exists) {
+            // 이미 존재하는 행이면 업데이트 대상으로 변경
+            const rowWithId = { ...row, id: exists.id };
+            potentiallyDuplicateRows.push(rowWithId);
+            // 원본 DB 데이터 저장 (나중에 병합용)
+            duplicateRowsOriginalData.set(exists.id, exists);
+          } else {
+            // 진짜 새로운 행
+            trulyNewRows.push(row);
+          }
+        }
+        
+        // 중복된 행들을 기존 행 목록에 추가
+        existingRows.push(...potentiallyDuplicateRows);
       }
       
-      if (!error && newRows.length > 0) {
-        const insertData = newRows.map(r => {
+      let error = null;
+      
+      // 기존 행 업데이트 - 부분 업데이트 적용
+      if (existingRows.length > 0) {
+        // 부분 업데이트: 변경된 필드만 업데이트
+        for (const row of existingRows) {
+          const rowKey = `${row.id}`;
+          const changedFields = dirtyFields.get(rowKey);
+          
+          // potentiallyDuplicateRows에서 온 행인지 확인
+          const isDuplicateRow = potentiallyDuplicateRows.some(r => r.id === row.id);
+          
+          // 중복 행이거나 변경된 필드가 있는 경우 업데이트
+          if (isDuplicateRow || (changedFields && changedFields.size > 0)) {
+            const updateData: any = {
+              last_modified_by: currentEmployee?.id,
+              updated_at: new Date().toISOString()
+            };
+            
+            // 중복 행인 경우 모든 필드 업데이트, 아니면 변경된 필드만 업데이트
+            if (isDuplicateRow) {
+              // 중복 행은 기존 DB 값과 병합하여 업데이트
+              const originalData = duplicateRowsOriginalData.get(row.id!);
+              
+              // 로컬 값이 초기값(5)과 다르면 로컬 값 사용, 같으면 기존 DB 값 사용
+              // 숫자 필드: 로컬에서 변경했으면 그 값 사용, 안 했으면 DB 값 유지
+              updateData.attendance_status = row.attendance !== 5 ? 
+                (typeof row.attendance === "number" ? row.attendance : attendanceMap[row.attendance]) :
+                (originalData?.attendance_status || 5);
+              
+              updateData.homework = row.homework !== 5 ?
+                (typeof row.homework === "number" ? row.homework : homeworkMap[row.homework]) :
+                (originalData?.homework || 5);
+              
+              updateData.focus = row.focus !== 5 ?
+                (typeof row.focus === "number" ? row.focus : focusMap[row.focus]) :
+                (originalData?.focus || 5);
+              
+              // 텍스트 필드: 빈 문자열이 아니면 로컬 값 사용, 빈 문자열이면 DB 값 유지
+              updateData.book1 = row.book1 !== "" ? row.book1 : (originalData?.book1 || "");
+              updateData.book1log = row.book1log !== "" ? row.book1log : (originalData?.book1log || "");
+              updateData.book2 = row.book2 !== "" ? row.book2 : (originalData?.book2 || "");
+              updateData.book2log = row.book2log !== "" ? row.book2log : (originalData?.book2log || "");
+              updateData.note = row.note !== "" ? row.note : (originalData?.note || "");
+              updateData.date = row.date;
+            } else if (changedFields) {
+              // 일반 행은 변경된 필드만 업데이트
+              changedFields.forEach(field => {
+                switch(field) {
+                  case 'attendance':
+                    updateData.attendance_status = typeof row.attendance === "number" ? 
+                      row.attendance : attendanceMap[row.attendance];
+                    break;
+                  case 'homework':
+                    updateData.homework = typeof row.homework === "number" ? 
+                      row.homework : homeworkMap[row.homework];
+                    break;
+                  case 'focus':
+                    updateData.focus = typeof row.focus === "number" ? 
+                      row.focus : focusMap[row.focus];
+                    break;
+                  case 'book1':
+                    updateData.book1 = row.book1;
+                    break;
+                  case 'book1log':
+                    updateData.book1log = row.book1log;
+                    break;
+                  case 'book2':
+                    updateData.book2 = row.book2;
+                    break;
+                  case 'book2log':
+                    updateData.book2log = row.book2log;
+                    break;
+                  case 'note':
+                    updateData.note = row.note;
+                    break;
+                  case 'date':
+                    updateData.date = row.date;
+                    break;
+                }
+              });
+            }
+            
+            // 개별 행 업데이트 (부분 업데이트)
+            const { error: updateError } = await supabase
+              .from("study_logs")
+              .update(updateData)
+              .eq('id', row.id);
+            
+            if (updateError) {
+              console.error(`Failed to update row ${row.id}:`, updateError);
+              error = updateError;
+              break;
+            }
+          }
+        }
+      }
+      
+      // 진짜 새로운 행만 삽입
+      if (!error && trulyNewRows.length > 0) {
+        // 학생과 반 이름 조회 (스냅샷용)
+        const studentIds = [...new Set(trulyNewRows.map(r => r.studentId).filter(Boolean))]
+        const classIds = [...new Set(trulyNewRows.map(r => r.classId).filter(Boolean))]
+        
+        const { data: studentsData } = await supabase
+          .from("students")
+          .select("id, name")
+          .in("id", studentIds)
+        
+        const { data: classesData } = await supabase
+          .from("classes")
+          .select("id, name")
+          .in("id", classIds)
+        
+        const studentNameMap = new Map(studentsData?.map(s => [s.id, s.name]) || [])
+        const classNameMap = new Map(classesData?.map(c => [c.id, c.name]) || [])
+        
+        const insertData = trulyNewRows.map(r => {
           const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
           return {
             class_id: r.classId || null,
@@ -425,6 +677,8 @@ export default function LearningPage() {
             book2log: r.book2log,
             note: r.note,
             created_by: teacherId,
+            student_name_snapshot: studentNameMap.get(r.studentId) || null,
+            class_name_snapshot: r.classId ? classNameMap.get(r.classId) || null : null,
           };
         });
         
@@ -440,9 +694,11 @@ export default function LearningPage() {
       }
       
       alert("저장되었습니다.");
-      await fetchTodayLogs();
+      // 현재 선택된 날짜의 데이터를 다시 불러오기 (과거 날짜 편집 후에도 해당 날짜 유지)
+      await fetchLogsForDate(date);
       setHasUnsavedChanges(false);
       setDeletedRowIds([]); // 삭제 목록 초기화
+      setDirtyFields(new Map()); // 변경 추적 초기화
     } catch (e) {
       alert("저장 중 오류가 발생했습니다.");
     }
@@ -833,7 +1089,15 @@ export default function LearningPage() {
                       <Button 
                         variant="outline" 
                         size="sm"
-                        onClick={() => setRows([])}
+                        onClick={() => {
+                          // ID가 있는 행들(DB에 저장된 행들)을 deletedRowIds에 추가
+                          const existingIds = rows.filter(r => r.id).map(r => r.id!);
+                          if (existingIds.length > 0) {
+                            setDeletedRowIds(prev => [...prev, ...existingIds]);
+                          }
+                          // 화면에서 모든 행 제거
+                          setRows([]);
+                        }}
                         className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />

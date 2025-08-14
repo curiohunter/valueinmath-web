@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { calendarService } from '@/services/calendar'
+import EventModal from '@/components/calendar/EventModal'
+import { toast } from 'sonner'
 import type { CalendarEvent } from '@/types/calendar'
 
 interface DashboardCalendarProps {
@@ -83,6 +85,8 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentDateOffset, setCurrentDateOffset] = useState(0) // 0 = 오늘부터, -7 = 7일 전부터, 7 = 7일 후부터
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   
   // 현재 선택된 날짜 범위 계산
   const currentDateRange = useMemo(() => {
@@ -136,6 +140,48 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
 
   const goToCurrentWeek = () => {
     setCurrentDateOffset(0)
+  }
+  
+  // 이벤트 클릭 핸들러
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedEvent(event)
+    setIsModalOpen(true)
+  }
+  
+  // 모달 닫기
+  const handleModalClose = () => {
+    setSelectedEvent(null)
+    setIsModalOpen(false)
+  }
+  
+  // 이벤트 저장 (수정)
+  const handleEventSave = async (eventData: Omit<CalendarEvent, 'id' | 'created_by' | 'created_at' | 'updated_at'>) => {
+    if (!selectedEvent?.id) return
+    
+    try {
+      await calendarService.updateEvent(selectedEvent.id, eventData)
+      toast.success('일정이 수정되었습니다.')
+      handleModalClose()
+      loadEvents() // 목록 새로고침
+    } catch (error) {
+      console.error('Failed to update event:', error)
+      toast.error('일정 수정에 실패했습니다.')
+    }
+  }
+  
+  // 이벤트 삭제
+  const handleEventDelete = async (id: string) => {
+    if (!window.confirm('정말로 이 일정을 삭제하시겠습니까?')) return
+    
+    try {
+      await calendarService.deleteEvent(id)
+      toast.success('일정이 삭제되었습니다.')
+      handleModalClose()
+      loadEvents() // 목록 새로고침
+    } catch (error) {
+      console.error('Failed to delete event:', error)
+      toast.error('일정 삭제에 실패했습니다.')
+    }
   }
   
   // 시간 포맷팅 (HH:MM)
@@ -291,6 +337,7 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
                               className={`flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer ${
                                 isToday ? 'bg-blue-50/30' : ''
                               }`}
+                              onClick={() => handleEventClick(event)}
                             >
                               {/* 이벤트 색상 도트 */}
                               <div
@@ -334,6 +381,17 @@ export default function DashboardCalendar({ className }: DashboardCalendarProps)
           </div>
         )}
       </CardContent>
+      
+      {/* 이벤트 편집 모달 */}
+      {selectedEvent && (
+        <EventModal
+          isOpen={isModalOpen}
+          onClose={handleModalClose}
+          onSave={handleEventSave}
+          onDelete={handleEventDelete}
+          event={selectedEvent}
+        />
+      )}
     </Card>
   )
 }

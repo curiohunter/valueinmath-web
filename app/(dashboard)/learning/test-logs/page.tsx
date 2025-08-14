@@ -107,47 +107,51 @@ export default function TestLogsPage() {
       // 현재 선택된 날짜 사용 (오늘이 아닌 date state 사용)
       const { data: todayLogs, error } = await supabase
         .from("test_logs")
-        .select("*")
+        .select(`
+          *,
+          student:students!left(name, status),
+          created_employee:employees!left(name),
+          modified_employee:employees!left(name)
+        `)
         .eq("date", date);
       
       if (error) throw error;
       
       if (todayLogs && todayLogs.length > 0) {
-        const studentIds = [...new Set(todayLogs.map(log => log.student_id))];
         const employeeIds = [...new Set([
           ...todayLogs.map(log => log.created_by).filter(Boolean),
           ...todayLogs.map(log => log.last_modified_by).filter(Boolean)
         ])];
-        
-        const { data: studentsData } = await supabase
-          .from("students")
-          .select("id, name")
-          .in("id", studentIds.filter(id => id !== null));
           
         const { data: employeesData } = await supabase
           .from("employees")
           .select("id, name")
           .in("id", employeeIds.filter(id => id !== null));
           
-        const studentMap = new Map(studentsData?.map(s => [s.id, s.name]) || []);
         const employeeMap = new Map(employeesData?.map(e => [e.id, e.name]) || []);
         
-        const mappedLogs = todayLogs.map((log: any) => ({
-          id: log.id,
-          classId: log.class_id || "",
-          studentId: log.student_id || "",
-          name: studentMap.get(log.student_id) || "",
-          date: log.date,
-          testType: log.test_type || "",
-          test: log.test || "",
-          testScore: log.test_score,
-          note: log.note || "",
-          createdBy: log.created_by,
-          createdByName: employeeMap.get(log.created_by) || "",
-          lastModifiedBy: log.last_modified_by,
-          lastModifiedByName: employeeMap.get(log.last_modified_by) || "",
-          updatedAt: log.updated_at
-        }));
+        const mappedLogs = todayLogs.map((log: any) => {
+          const studentStatus = log.student?.status || '';
+          const isRetired = studentStatus && !studentStatus.includes('재원');
+          const studentName = log.student?.name || "(알 수 없음)";
+          
+          return {
+            id: log.id,
+            classId: log.class_id || "",
+            studentId: log.student_id || "",
+            name: isRetired ? `${studentName} (퇴원)` : studentName,
+            date: log.date,
+            testType: log.test_type || "",
+            test: log.test || "",
+            testScore: log.test_score,
+            note: log.note || "",
+            createdBy: log.created_by,
+            createdByName: log.created_employee?.name || "",
+            lastModifiedBy: log.last_modified_by,
+            lastModifiedByName: log.modified_employee?.name || "",
+            updatedAt: log.updated_at
+          };
+        });
         setRows(mappedLogs);
         setOriginalRows(mappedLogs);
       }
@@ -388,6 +392,23 @@ export default function TestLogsPage() {
       
       // 새 레코드 삽입
       if (!error && newRows.length > 0) {
+        // 학생과 반 이름 조회 (스냅샷용)
+        const studentIds = [...new Set(newRows.map(r => r.studentId).filter(Boolean))]
+        const classIds = [...new Set(newRows.map(r => r.classId).filter(Boolean))]
+        
+        const { data: studentsData } = await supabase
+          .from("students")
+          .select("id, name")
+          .in("id", studentIds)
+        
+        const { data: classesData } = await supabase
+          .from("classes")
+          .select("id, name")
+          .in("id", classIds)
+        
+        const studentNameMap = new Map(studentsData?.map(s => [s.id, s.name]) || [])
+        const classNameMap = new Map(classesData?.map(c => [c.id, c.name]) || [])
+        
         const insertData = newRows.map((r, index) => {
           const teacherId = r.classId ? classTeacherMap.get(r.classId) : null;
           return {
@@ -398,7 +419,9 @@ export default function TestLogsPage() {
             test_type: r.testType || null,  // null로 처리
             test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
             note: r.note || null,
-            created_by: teacherId || null
+            created_by: teacherId || null,
+            student_name_snapshot: studentNameMap.get(r.studentId) || null,
+            class_name_snapshot: r.classId ? classNameMap.get(r.classId) || null : null,
           };
         });
         

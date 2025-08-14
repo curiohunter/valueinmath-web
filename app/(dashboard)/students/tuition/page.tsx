@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast"
 import { toast as directToast } from "@/components/ui/use-toast"
 import { toast as sonnerToast } from "sonner"
 import { useClassesWithStudents, useTuitionMutate } from "@/hooks/use-tuition"
+import { useEmployees } from "@/hooks/use-employees"
+import { useNewConsultStudents } from "@/hooks/use-students"
 import StudentClassTabs from "@/components/StudentClassTabs"
 import { Download, ChevronLeft, ChevronRight } from "lucide-react"
 import type { TuitionRow, TuitionFeeInput } from "@/types/tuition"
@@ -38,6 +40,12 @@ export default function TuitionPage() {
   // 클래스 데이터는 공통으로 사용
   const { data: classesWithStudents = [] } = useClassesWithStudents()
   
+  // 직원(선생님) 데이터 가져오기
+  const { employees: teachers = [] } = useEmployees(1, 100, { isActive: true })
+  
+  // 신규상담 학생 데이터 가져오기
+  const { data: newConsultStudents = [] } = useNewConsultStudents()
+  
   // Mutation hooks (단일월 생성용)
   const {
     saveBulk,
@@ -46,24 +54,6 @@ export default function TuitionPage() {
   } = useTuitionMutate()
 
   const { toast, dismiss } = useToast()
-  
-  // 테스트용 토스트 함수
-  const testToast = () => {
-    console.log("Test toast called")
-    toast({
-      title: "테스트 토스트",
-      description: "토스트가 정상 작동합니다.",
-    })
-  }
-
-  // 성공 토스트 전용 테스트 함수
-  const testSuccessToast = () => {
-    console.log("Success toast test called")
-    toast({
-      title: "저장 완료",
-      description: "4개의 학원비가 저장되었습니다.",
-    })
-  }
 
   // 단일월 생성 모드: 로컬 데이터만 사용
   const displayRows = localRows
@@ -265,6 +255,59 @@ export default function TuitionPage() {
       })
     }
   }, [classesWithStudents, yearMonth, localRows, toast])
+
+  // 신규상담 학생 추가 핸들러 (입학테스트비, 특강비용 등)
+  const handleAddNewConsultStudent = useCallback(async (studentId: string) => {
+    const student = newConsultStudents.find(s => s.id === studentId)
+    if (!student) {
+      toast({
+        title: "오류",
+        description: "선택한 학생을 찾을 수 없습니다.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const year = parseInt(yearMonth.split('-')[0])
+    const month = parseInt(yearMonth.split('-')[1])
+
+    // 이미 존재하는지 확인 (신규상담 학생은 class_id가 null)
+    const exists = localRows.some(row => 
+      row.studentId === studentId && 
+      row.year === year && 
+      row.month === month &&
+      !row.classId // class_id가 null인 경우
+    )
+
+    if (!exists) {
+      const newRow: TuitionRow = {
+        id: `temp-${Date.now()}-${student.id}`, // 임시 ID
+        classId: null as any, // NULL로 저장될 예정
+        className: '입학테스트비', // 반 이름 대신 구분용 텍스트
+        studentId: student.id,
+        studentName: student.name,
+        year,
+        month,
+        isSibling: student.has_sibling || false,
+        classType: '입학테스트비', // 입학테스트비로 분류
+        amount: 10000, // 기본 입학테스트비 (수정 가능)
+        note: '', // 현금/카드 결제 방법 입력용
+        paymentStatus: '미납'
+      }
+
+      setLocalRows(prev => [...prev, newRow])
+      toast({
+        title: "추가 완료",
+        description: `${student.name} 학생의 입학테스트비가 추가되었습니다.`,
+      })
+    } else {
+      toast({
+        title: "이미 존재",
+        description: "해당 학생의 입학테스트비가 이미 추가되어 있습니다.",
+        variant: "destructive"
+      })
+    }
+  }, [newConsultStudents, yearMonth, localRows, toast])
 
   // 월별 자동 생성 핸들러 (로컬에만 추가)
   const handleGenerateMonthly = useCallback(async () => {
@@ -486,8 +529,11 @@ export default function TuitionPage() {
             yearMonth={yearMonth}
             onYearMonthChange={handleYearMonthChange}
             classesWithStudents={classesWithStudents}
+            teachers={teachers.map(t => ({ id: t.id, name: t.name }))}
+            newConsultStudents={newConsultStudents}
             onAddAll={handleAddAll}
             onAddStudent={handleAddStudent}
+            onAddNewConsultStudent={handleAddNewConsultStudent}
             onGenerateMonthly={handleGenerateMonthly}
             isGenerating={isGenerating}
             selectedClassId={selectedClassId}
@@ -514,16 +560,6 @@ export default function TuitionPage() {
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           />
         </div>
-      </div>
-
-      {/* 테스트 버튼 */}
-      <div className="flex gap-2">
-        <Button onClick={testToast} variant="outline">
-          토스트 테스트
-        </Button>
-        <Button onClick={testSuccessToast} variant="outline">
-          성공 토스트 테스트
-        </Button>
       </div>
 
       {/* 하단 요약 정보 */}

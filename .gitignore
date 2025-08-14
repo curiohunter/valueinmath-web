@@ -36,3 +36,18 @@ LEARNED_FROM_ERRORS.md
 PROJECT_INSTRUCTIONS_CLAUDE.md
 PROJECT_STATUS.md
 shrimp-rules.md
+
+# 데이터베이스 관련 민감한 파일
+database/migrations/*.sql
+database/seed/*.sql
+supabase/seed.sql
+
+# 백업 파일
+*.backup
+*.bak
+*.tmp
+
+# 개인 메모 및 문서
+TODO.md
+NOTES.md
+private/

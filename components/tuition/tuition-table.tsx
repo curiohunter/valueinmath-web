@@ -1,10 +1,12 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ArrowDown, FileText, Trash2, Search, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TuitionRow as TuitionTableRow } from "./tuition-row"
 import type { TuitionRow } from "@/types/tuition"
@@ -42,6 +44,10 @@ interface TuitionTableProps {
   // 사이드바 토글 관련
   isSidebarOpen?: boolean
   onToggleSidebar?: () => void
+  // 반별 중복선택 관련
+  classOptions?: Array<{ id: string; name: string }>
+  selectedClasses?: string[]
+  onClassSelectionChange?: (classes: string[]) => void
 }
 
 export function TuitionTable({
@@ -73,7 +79,10 @@ export function TuitionTable({
   onDateRangeChange,
   onResetFilters,
   isSidebarOpen = true,
-  onToggleSidebar
+  onToggleSidebar,
+  classOptions = [],
+  selectedClasses = [],
+  onClassSelectionChange
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -98,7 +107,7 @@ export function TuitionTable({
             <h2 className="text-lg font-semibold text-gray-800">학원비 관리</h2>
           </div>
           {isHistoryMode ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
@@ -110,21 +119,99 @@ export function TuitionTable({
               </div>
               <div>
                 <Input
-                  type="date"
-                  value={dateRange?.from || ""}
-                  onChange={(e) => onDateRangeChange?.({ ...dateRange!, from: e.target.value })}
-                  placeholder="시작일"
+                  type="month"
+                  value={dateRange?.from ? dateRange.from.substring(0, 7) : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      onDateRangeChange?.({ ...dateRange!, from: value + "-01" });
+                    } else {
+                      onDateRangeChange?.({ ...dateRange!, from: "" });
+                    }
+                  }}
+                  placeholder="시작 연월"
                   className="text-sm"
                 />
               </div>
               <div>
                 <Input
-                  type="date"
-                  value={dateRange?.to || ""}
-                  onChange={(e) => onDateRangeChange?.({ ...dateRange!, to: e.target.value })}
-                  placeholder="종료일"
+                  type="month"
+                  value={dateRange?.to ? dateRange.to.substring(0, 7) : ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      const [year, month] = value.split('-').map(Number);
+                      const lastDay = new Date(year, month, 0).getDate();
+                      onDateRangeChange?.({ ...dateRange!, to: `${value}-${lastDay.toString().padStart(2, '0')}` });
+                    } else {
+                      onDateRangeChange?.({ ...dateRange!, to: "" });
+                    }
+                  }}
+                  placeholder="종료 연월"
                   className="text-sm"
                 />
+              </div>
+              <div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between text-sm font-normal"
+                    >
+                      {selectedClasses.length === 0
+                        ? "반 선택"
+                        : selectedClasses.length === 1
+                        ? classOptions.find(c => c.id === selectedClasses[0])?.name || "반 선택"
+                        : `${selectedClasses.length}개 반 선택`
+                      }
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-0">
+                    <div className="max-h-64 overflow-y-auto">
+                      <div className="p-2 border-b">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-xs"
+                          onClick={() => {
+                            if (selectedClasses.length === classOptions.length) {
+                              onClassSelectionChange?.([]);
+                            } else {
+                              onClassSelectionChange?.(classOptions.map(c => c.id));
+                            }
+                          }}
+                        >
+                          {selectedClasses.length === classOptions.length ? "전체 해제" : "전체 선택"}
+                        </Button>
+                      </div>
+                      <div className="p-2 space-y-1">
+                        {classOptions.map((classOption) => (
+                          <div
+                            key={classOption.id}
+                            className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100 cursor-pointer"
+                            onClick={() => {
+                              const isSelected = selectedClasses.includes(classOption.id);
+                              if (isSelected) {
+                                onClassSelectionChange?.(selectedClasses.filter(id => id !== classOption.id));
+                              } else {
+                                onClassSelectionChange?.([...selectedClasses, classOption.id]);
+                              }
+                            }}
+                          >
+                            <Checkbox
+                              checked={selectedClasses.includes(classOption.id)}
+                              className="pointer-events-none"
+                            />
+                            <label className="text-sm cursor-pointer flex-1">
+                              {classOption.name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <select
@@ -163,29 +250,7 @@ export function TuitionTable({
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="학생명, 반명, 비고로 검색..."
-                  value={searchTerm}
-                  onChange={(e) => onSearchChange?.(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <select
-                value={paymentStatusFilter}
-                onChange={(e) => onPaymentStatusFilterChange?.(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">전체 납부상태</option>
-                <option value="미납">미납</option>
-                <option value="완납">완납</option>
-                <option value="부분납">부분납</option>
-              </select>
-            </div>
-          )}
+          ) : null}
           {(searchTerm || paymentStatusFilter !== "all" || (classTypeFilter && classTypeFilter !== "all")) && (
             <div className="mt-3">
               <Badge variant="secondary" className="text-xs">

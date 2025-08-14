@@ -125,7 +125,7 @@ export default function LearningHistoryPage() {
     try {
       let query = supabase
         .from("study_logs")
-        .select("class_id,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
+        .select("class_id,class_name_snapshot,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
       
       // 날짜 필터
       if (dateRange.from) {
@@ -216,7 +216,7 @@ export default function LearningHistoryPage() {
     try {
       let query = supabase
         .from("study_logs")
-        .select("class_id,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
+        .select("class_id,class_name_snapshot,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
       
       if (dateRange.from) query = query.gte("date", dateRange.from);
       if (dateRange.to) query = query.lte("date", dateRange.to);
@@ -254,7 +254,10 @@ export default function LearningHistoryPage() {
 
   // 반별로 데이터 그룹화 및 페이지네이션
   const groupedData = data.reduce((groups: { [className: string]: any[] }, item) => {
-    const className = classMap[item.class_id] || item.class_id || '클래스 없음';
+    // class_id가 있으면 매핑 사용, 없으면 스냅샷 사용
+    const className = item.class_id 
+      ? (classMap[item.class_id] || item.class_id) 
+      : (item.class_name_snapshot || '클래스 없음');
     if (!groups[className]) {
       groups[className] = [];
     }
@@ -292,7 +295,10 @@ export default function LearningHistoryPage() {
   
   // 페이지네이션된 데이터를 반별로 그룹화
   const paginatedGroupedData = paginatedData.reduce((groups: { [className: string]: any[] }, item) => {
-    const className = classMap[item.class_id] || item.class_id || '클래스 없음';
+    // class_id가 있으면 매핑 사용, 없으면 스냅샷 사용
+    const className = item.class_id 
+      ? (classMap[item.class_id] || item.class_id) 
+      : (item.class_name_snapshot || '클래스 없음');
     if (!groups[className]) {
       groups[className] = [];
     }
@@ -764,7 +770,7 @@ export default function LearningHistoryPage() {
             </DialogTitle>
             {editingRow && (
               <div className="text-sm text-gray-500 mt-1">
-                {classMap[editingRow.class_id]} • {studentMap[editingRow.student_id]}
+                {editingRow.class_id ? classMap[editingRow.class_id] : editingRow.class_name_snapshot} • {studentMap[editingRow.student_id]}
               </div>
             )}
           </DialogHeader>

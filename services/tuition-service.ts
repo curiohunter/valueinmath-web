@@ -232,6 +232,19 @@ export async function saveTuitionFee(
   try {
     const supabase = await createServerClient()
     
+    // 학생과 반 이름 조회 (스냅샷용)
+    const { data: studentData } = await supabase
+      .from("students")
+      .select("name")
+      .eq("id", data.student_id)
+      .single()
+    
+    const { data: classData } = await supabase
+      .from("classes")
+      .select("name")
+      .eq("id", data.class_id)
+      .single()
+    
     const { error } = await supabase
       .from("tuition_fees")
       .upsert({
@@ -245,6 +258,8 @@ export async function saveTuitionFee(
         note: data.note || null,
         payment_status: data.payment_status || '미납',
         payment_date: data.payment_date || null,
+        student_name_snapshot: studentData?.name || null,
+        class_name_snapshot: classData?.name || null,
       }, {
         onConflict: "class_id,student_id,year,month,class_type"
       })
@@ -271,8 +286,32 @@ export async function saveTuitionFees(
   try {
     const supabase = await createServerClient()
     
+    // 모든 학생과 반 ID 수집 (NULL class_id 제외)
+    const studentIds = [...new Set(tuitionFees.map(t => t.student_id))]
+    const classIds = [...new Set(tuitionFees.map(t => t.class_id).filter(id => id))]
+    
+    // 학생과 반 이름 일괄 조회
+    const { data: students } = await supabase
+      .from("students")
+      .select("id, name")
+      .in("id", studentIds)
+    
+    // 반 이름 조회 (class_id가 있는 경우만)
+    let classNameMap = new Map()
+    if (classIds.length > 0) {
+      const { data: classes } = await supabase
+        .from("classes")
+        .select("id, name")
+        .in("id", classIds)
+      
+      classNameMap = new Map(classes?.map(c => [c.id, c.name]) || [])
+    }
+    
+    // ID-이름 매핑 생성
+    const studentNameMap = new Map(students?.map(s => [s.id, s.name]) || [])
+    
     const insertData = tuitionFees.map(data => ({
-      class_id: data.class_id,
+      class_id: data.class_id || null, // NULL 허용
       student_id: data.student_id,
       year: data.year,
       month: data.month,
@@ -282,13 +321,19 @@ export async function saveTuitionFees(
       note: data.note || null,
       payment_status: data.payment_status || '미납',
       payment_date: data.payment_date || null,
+      student_name_snapshot: studentNameMap.get(data.student_id) || null,
+      class_name_snapshot: data.class_id ? classNameMap.get(data.class_id) || null : null,
     }))
+    
+    // 기존 데이터 있는 항목만 필터링 (중복 체크용)
+    const existingCheck = tuitionFees.filter(t => !t.id?.startsWith('temp-'))
     
     // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
     const { error } = await supabase
       .from("tuition_fees")
       .upsert(insertData as any, {
-        onConflict: "class_id,student_id,year,month,class_type"
+        // class_id가 NULL인 경우를 고려한 conflict resolution
+        onConflict: existingCheck.length > 0 ? "id" : undefined
       })
     
     if (error) {
@@ -311,7 +356,7 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
   try {
     const supabase = await createServerClient()
     
-    // 활성 반 조회
+    // 활성 반 조회 (teacher_id 포함)
     const { data: classesData, error: classesError } = await supabase
       .from("classes")
       .select("*")
@@ -347,6 +392,8 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
         name: classRow.name,
         // @ts-ignore - classRow 타입 복잡성 해결
         subject: classRow.subject,
+        // @ts-ignore - classRow 타입 복잡성 해결
+        teacher_id: classRow.teacher_id,
         // @ts-ignore - classRow 타입 복잡성 해결
         monthly_fee: classRow.monthly_fee,
         students,
