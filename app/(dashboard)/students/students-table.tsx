@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Edit, Trash2, FileText } from "lucide-react"
+import { Edit, Trash2, FileText, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -36,6 +36,8 @@ export function StudentsTable() {
   const search = searchParams.get("search") || ""
   const department = searchParams.get("department") || "all"
   const status = searchParams.get("status") || "재원" // 기본값을 "재원"으로 설정
+  const sortBy = searchParams.get("sortBy") || "name" // 정렬 기준
+  const sortOrder = searchParams.get("sortOrder") || "asc" // 정렬 순서
 
   // 필터 객체 메모이제이션
   const filters = useMemo<StudentFilters>(
@@ -47,7 +49,7 @@ export function StudentsTable() {
     [search, department, status],
   )
 
-  const { students, totalCount, isLoading, mutate, deleteStudent } = useStudents(page, pageSize, filters)
+  const { students, totalCount, isLoading, mutate, deleteStudent } = useStudents(page, pageSize, filters, sortBy, sortOrder as "asc" | "desc")
 
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -148,6 +150,35 @@ export function StudentsTable() {
     }
   }
 
+  // 정렬 변경 처리
+  const handleSort = (field: "name" | "start_date") => {
+    const params = new URLSearchParams(searchParams)
+    
+    if (sortBy === field) {
+      // 같은 필드 클릭시 정렬 순서 토글
+      params.set("sortOrder", sortOrder === "asc" ? "desc" : "asc")
+    } else {
+      // 다른 필드 클릭시 해당 필드로 변경하고 오름차순으로
+      params.set("sortBy", field)
+      params.set("sortOrder", "asc")
+    }
+    
+    // 페이지를 1로 리셋
+    params.set("page", "1")
+    
+    router.push(`/students?${params.toString()}`)
+  }
+
+  // 정렬 아이콘 표시
+  const getSortIcon = (field: "name" | "start_date") => {
+    if (sortBy !== field) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
+    }
+    return sortOrder === "asc" 
+      ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" />
+      : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+  }
+
   // 상태 배지 색상 매핑
   const statusColorMap: Record<string, string> = {
     재원: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
@@ -177,14 +208,30 @@ export function StudentsTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[10%]">이름</TableHead>
+              <TableHead className="w-[10%]">
+                <button
+                  className="flex items-center font-medium hover:text-gray-900 dark:hover:text-gray-100"
+                  onClick={() => handleSort("name")}
+                >
+                  이름
+                  {getSortIcon("name")}
+                </button>
+              </TableHead>
               <TableHead className="w-[10%]">학교</TableHead>
               <TableHead className="w-[7%]">학년</TableHead>
               <TableHead className="w-[8%]">담당관</TableHead>
               <TableHead className="w-[7%]">상태</TableHead>
               <TableHead className="w-[12%]">학생 연락처</TableHead>
               <TableHead className="w-[12%]">학부모 연락처</TableHead>
-              <TableHead className="w-[10%]">시작일</TableHead>
+              <TableHead className="w-[10%]">
+                <button
+                  className="flex items-center font-medium hover:text-gray-900 dark:hover:text-gray-100"
+                  onClick={() => handleSort("start_date")}
+                >
+                  시작일
+                  {getSortIcon("start_date")}
+                </button>
+              </TableHead>
               <TableHead className="w-[10%]">종료일</TableHead>
               <TableHead className="w-[10%] text-center">메모</TableHead>
               <TableHead className="w-[6%] text-center">관리</TableHead>

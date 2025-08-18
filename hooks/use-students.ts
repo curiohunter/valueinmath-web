@@ -86,6 +86,8 @@ export function useStudents(
   page = 1,
   pageSize = 10,
   filters: StudentFilters = { search: "", department: "all", status: "all" },
+  sortBy: string = "name",
+  sortOrder: "asc" | "desc" = "asc"
 ) {
   const router = useRouter()
   const [data, setData] = useState<{ data: Student[]; count: number }>({ data: [], count: 0 })
@@ -96,7 +98,7 @@ export function useStudents(
   const fetchData = useCallback(async () => {
     setIsLoading(true)
     try {
-      const result = await getStudents(page, pageSize, filters)
+      const result = await getStudents(page, pageSize, filters, sortBy, sortOrder)
       setData(result)
       setError(null)
     } catch (err) {
@@ -105,7 +107,7 @@ export function useStudents(
     } finally {
       setIsLoading(false)
     }
-  }, [page, pageSize, filters])
+  }, [page, pageSize, filters, sortBy, sortOrder])
 
   // 학생 삭제 함수
   const handleDeleteStudent = useCallback(

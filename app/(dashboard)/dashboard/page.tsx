@@ -33,14 +33,20 @@ interface EntranceTestData extends EntranceTest {
 
 interface DashboardStats {
   activeStudents: number
+  activeStudentsByDept: { [key: string]: number }
   activeStudentsChange: string
   consultationsThisMonth: number
   consultationsByDept: { [key: string]: number }
+  consultationsYoY: string
   testsThisMonth: number
+  testsByDept: { [key: string]: number }
   testConversionRate: string
   newEnrollmentsThisMonth: number
+  newEnrollmentsByDept: { [key: string]: number }
   enrollmentConversionRate: string
   withdrawalsThisMonth: number
+  withdrawalsByDept: { [key: string]: number }
+  withdrawalsYoY: string
 }
 
 export default function DashboardPage() {
@@ -50,14 +56,20 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats>({
     activeStudents: 0,
+    activeStudentsByDept: {},
     activeStudentsChange: "+0%",
     consultationsThisMonth: 0,
     consultationsByDept: {},
+    consultationsYoY: "+0%",
     testsThisMonth: 0,
+    testsByDept: {},
     testConversionRate: "0%",
     newEnrollmentsThisMonth: 0,
+    newEnrollmentsByDept: {},
     enrollmentConversionRate: "0%",
-    withdrawalsThisMonth: 0
+    withdrawalsThisMonth: 0,
+    withdrawalsByDept: {},
+    withdrawalsYoY: "+0%"
   })
   const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
@@ -88,6 +100,14 @@ export default function DashboardPage() {
           
       // 한국시간 기준 월간 범위 계산
       const { start: monthStart, end: monthEnd } = getKoreanMonthRange()
+      
+      // 작년 동월 범위 계산
+      const lastYearDate = new Date()
+      lastYearDate.setFullYear(lastYearDate.getFullYear() - 1)
+      const lastYearMonth = lastYearDate.getMonth()
+      const lastYearYear = lastYearDate.getFullYear()
+      const lastYearMonthStart = new Date(lastYearYear, lastYearMonth, 1, 0, 0, 0).toISOString()
+      const lastYearMonthEnd = new Date(lastYearYear, lastYearMonth + 1, 0, 23, 59, 59).toISOString()
 
 
       // 재원생 수
@@ -107,12 +127,24 @@ export default function DashboardPage() {
         .select('*')
         .gte('first_contact_date', monthStart)
         .lt('first_contact_date', monthEnd)
+      
+      // 작년 동월 신규상담 (YoY 계산용)
+      const { data: lastYearConsultationsData } = await supabase
+        .from('students')
+        .select('*')
+        .gte('first_contact_date', lastYearMonthStart)
+        .lt('first_contact_date', lastYearMonthEnd)
 
 
-      // 이번달 입학테스트 (test_date 기준) - 수정됨
+      // 이번달 입학테스트 (test_date 기준) - 학생 정보와 함께 조회
       const { data: testsData } = await supabase
         .from('entrance_tests')
-        .select('*')
+        .select(`
+          *,
+          students!consultation_id (
+            department
+          )
+        `)
         .gte('test_date', monthStart)
         .lt('test_date', monthEnd)
 
@@ -132,6 +164,14 @@ export default function DashboardPage() {
         .gte('end_date', monthStart)
         .lt('end_date', monthEnd)
         .eq('status', '퇴원')
+      
+      // 작년 동월 퇴원 (YoY 계산용)
+      const { data: lastYearWithdrawalsData } = await supabase
+        .from('students')
+        .select('*')
+        .gte('end_date', lastYearMonthStart)
+        .lt('end_date', lastYearMonthEnd)
+        .eq('status', '퇴원')
 
       if (withdrawalError) {
         console.error('퇴원 쿼리 에러:', withdrawalError)
@@ -142,12 +182,68 @@ export default function DashboardPage() {
         // 퇴원 학생 데이터 처리 (로그 제거됨)
       }
 
+      // 부서 정렬 함수
+      const sortDepartments = (deptData: { [key: string]: number }) => {
+        const order = ['영재관', '중등관', '고등관']
+        const sorted: { [key: string]: number } = {}
+        
+        // 정해진 순서대로 먼저 추가
+        order.forEach(dept => {
+          if (deptData[dept]) {
+            sorted[dept] = deptData[dept]
+          }
+        })
+        
+        // 나머지 부서들 추가 (미분류 등)
+        Object.keys(deptData).forEach(dept => {
+          if (!order.includes(dept)) {
+            sorted[dept] = deptData[dept]
+          }
+        })
+        
+        return sorted
+      }
+
+      // 부서별 재원생 분류
+      const activeStudentsByDeptRaw: { [key: string]: number } = {}
+      activeStudents?.forEach(student => {
+        const dept = student.department || '미분류'
+        activeStudentsByDeptRaw[dept] = (activeStudentsByDeptRaw[dept] || 0) + 1
+      })
+      const activeStudentsByDept = sortDepartments(activeStudentsByDeptRaw)
+
       // 부서별 상담 분류
-      const consultationsByDept: { [key: string]: number } = {}
+      const consultationsByDeptRaw: { [key: string]: number } = {}
       consultationsData?.forEach(consultation => {
         const dept = consultation.department || '미분류'
-        consultationsByDept[dept] = (consultationsByDept[dept] || 0) + 1
+        consultationsByDeptRaw[dept] = (consultationsByDeptRaw[dept] || 0) + 1
       })
+      const consultationsByDept = sortDepartments(consultationsByDeptRaw)
+
+      // 부서별 입학테스트 분류
+      const testsByDeptRaw: { [key: string]: number } = {}
+      testsData?.forEach(test => {
+        const student = test.students as any
+        const dept = student?.department || '미분류'
+        testsByDeptRaw[dept] = (testsByDeptRaw[dept] || 0) + 1
+      })
+      const testsByDept = sortDepartments(testsByDeptRaw)
+
+      // 부서별 신규등원 분류
+      const newEnrollmentsByDeptRaw: { [key: string]: number } = {}
+      newEnrollments?.forEach(enrollment => {
+        const dept = enrollment.department || '미분류'
+        newEnrollmentsByDeptRaw[dept] = (newEnrollmentsByDeptRaw[dept] || 0) + 1
+      })
+      const newEnrollmentsByDept = sortDepartments(newEnrollmentsByDeptRaw)
+
+      // 부서별 퇴원 분류
+      const withdrawalsByDeptRaw: { [key: string]: number } = {}
+      withdrawals?.forEach(withdrawal => {
+        const dept = withdrawal.department || '미분류'
+        withdrawalsByDeptRaw[dept] = (withdrawalsByDeptRaw[dept] || 0) + 1
+      })
+      const withdrawalsByDept = sortDepartments(withdrawalsByDeptRaw)
 
       // 전환율 계산
       const testConversionRate = consultationsData && consultationsData.length > 0
@@ -157,17 +253,41 @@ export default function DashboardPage() {
       const enrollmentConversionRate = consultationsData && consultationsData.length > 0
         ? ((newEnrollments?.length || 0) / consultationsData.length * 100).toFixed(1)
         : "0"
+      
+      // YoY 계산 (신규상담)
+      let consultationsYoY = "0%"
+      if (lastYearConsultationsData && lastYearConsultationsData.length > 0) {
+        const yoyChange = ((consultationsData?.length || 0) - lastYearConsultationsData.length) / lastYearConsultationsData.length * 100
+        consultationsYoY = yoyChange >= 0 ? `+${yoyChange.toFixed(0)}%` : `${yoyChange.toFixed(0)}%`
+      } else if (consultationsData && consultationsData.length > 0) {
+        consultationsYoY = "+100%" // 작년에 데이터가 없고 올해는 있는 경우
+      }
+      
+      // YoY 계산 (퇴원) - 퇴원은 감소가 좋은 것
+      let withdrawalsYoY = "0%"
+      if (lastYearWithdrawalsData && lastYearWithdrawalsData.length > 0) {
+        const yoyChange = ((withdrawals?.length || 0) - lastYearWithdrawalsData.length) / lastYearWithdrawalsData.length * 100
+        withdrawalsYoY = yoyChange >= 0 ? `+${yoyChange.toFixed(0)}%` : `${yoyChange.toFixed(0)}%`
+      } else if (withdrawals && withdrawals.length > 0) {
+        withdrawalsYoY = "+100%" // 작년에 데이터가 없고 올해는 있는 경우
+      }
 
       setStats({
         activeStudents: activeStudents?.length || 0,
+        activeStudentsByDept,
         activeStudentsChange: "+2%", // 이건 별도 계산 필요
         consultationsThisMonth: consultationsData?.length || 0,
         consultationsByDept,
+        consultationsYoY,
         testsThisMonth: testsData?.length || 0,
+        testsByDept,
         testConversionRate: `${testConversionRate}%`,
         newEnrollmentsThisMonth: newEnrollments?.length || 0,
+        newEnrollmentsByDept,
         enrollmentConversionRate: `${enrollmentConversionRate}%`,
-        withdrawalsThisMonth: withdrawals?.length || 0
+        withdrawalsThisMonth: withdrawals?.length || 0,
+        withdrawalsByDept,
+        withdrawalsYoY
       })
 
     } catch (error) {
@@ -641,6 +761,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeStudents}명</div>
+            <div className="text-xs text-muted-foreground space-y-1 mt-1">
+              {Object.entries(stats.activeStudentsByDept).map(([dept, count]) => (
+                <div key={dept}>{dept}: {count}명</div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -652,7 +777,14 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.consultationsThisMonth}건</div>
-            <div className="text-xs text-muted-foreground space-y-1">
+            <p className={`text-xs font-medium ${
+              stats.consultationsYoY.startsWith('+') ? 'text-green-600' : 
+              stats.consultationsYoY.startsWith('-') ? 'text-red-600' : 
+              'text-muted-foreground'
+            }`}>
+              YoY {stats.consultationsYoY}
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1 mt-1">
               {Object.entries(stats.consultationsByDept).map(([dept, count]) => (
                 <div key={dept}>{dept}: {count}건</div>
               ))}
@@ -668,7 +800,19 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.testsThisMonth}건</div>
-            <p className="text-xs text-muted-foreground">전환율: {stats.testConversionRate}</p>
+            <p className={`text-xs font-medium ${
+              parseFloat(stats.testConversionRate) >= 70 ? 'text-green-600' : 
+              parseFloat(stats.testConversionRate) >= 40 ? 'text-amber-600' : 
+              parseFloat(stats.testConversionRate) > 0 ? 'text-red-600' :
+              'text-muted-foreground'
+            }`}>
+              전환율: {stats.testConversionRate}
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1 mt-1">
+              {Object.entries(stats.testsByDept).map(([dept, count]) => (
+                <div key={dept}>{dept}: {count}건</div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -680,7 +824,19 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.newEnrollmentsThisMonth}명</div>
-            <p className="text-xs text-muted-foreground">전환율: {stats.enrollmentConversionRate}</p>
+            <p className={`text-xs font-medium ${
+              parseFloat(stats.enrollmentConversionRate) >= 50 ? 'text-green-600' : 
+              parseFloat(stats.enrollmentConversionRate) >= 25 ? 'text-amber-600' : 
+              parseFloat(stats.enrollmentConversionRate) > 0 ? 'text-red-600' :
+              'text-muted-foreground'
+            }`}>
+              전환율: {stats.enrollmentConversionRate}
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1 mt-1">
+              {Object.entries(stats.newEnrollmentsByDept).map(([dept, count]) => (
+                <div key={dept}>{dept}: {count}명</div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -692,6 +848,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.withdrawalsThisMonth}명</div>
+            <p className={`text-xs font-medium ${
+              stats.withdrawalsYoY.startsWith('-') ? 'text-green-600' :  // 퇴원은 감소가 좋음
+              stats.withdrawalsYoY.startsWith('+') ? 'text-red-600' : 
+              'text-muted-foreground'
+            }`}>
+              YoY {stats.withdrawalsYoY}
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1 mt-1">
+              {Object.entries(stats.withdrawalsByDept).map(([dept, count]) => (
+                <div key={dept}>{dept}: {count}명</div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>

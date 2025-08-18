@@ -34,6 +34,8 @@ export async function getStudents(
   page = 1,
   pageSize = 10,
   filters: StudentFilters = { search: "", department: "all", status: "all" },
+  sortBy: string = "name",
+  sortOrder: "asc" | "desc" = "asc"
 ): Promise<{ data: Student[]; count: number }> {
   try {
     const supabase = getSupabaseBrowserClient()
@@ -59,15 +61,20 @@ export async function getStudents(
       query = query.eq("status", filters.status)
     }
 
-    // 정렬 적용
-    if (filters.status === "퇴원") {
-      query = query.order("end_date", { ascending: false, nullsFirst: false })
-    } else if (filters.status === "재원" || filters.status === "all") {
-      query = query.order("name", { ascending: true })
-    } else if (filters.status === "미등록") {
-      query = query.order("first_contact_date", { ascending: false, nullsFirst: false })
+    // 정렬 적용 - URL 파라미터 기반으로 정렬
+    if (sortBy === "start_date") {
+      query = query.order("start_date", { ascending: sortOrder === "asc", nullsFirst: false })
+    } else if (sortBy === "name") {
+      query = query.order("name", { ascending: sortOrder === "asc" })
     } else {
-      query = query.order("updated_at", { ascending: false })
+      // 기본 정렬 (상태별)
+      if (filters.status === "퇴원") {
+        query = query.order("end_date", { ascending: false, nullsFirst: false })
+      } else if (filters.status === "미등록") {
+        query = query.order("first_contact_date", { ascending: false, nullsFirst: false })
+      } else {
+        query = query.order("name", { ascending: true })
+      }
     }
 
     // 페이지네이션 적용
