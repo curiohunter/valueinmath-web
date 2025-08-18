@@ -153,8 +153,12 @@ export default function LearningPage() {
       
       if (classData && classData.length > 0) setSelectedClassId(classData[0].id);
       
-      await fetchLogsForDate(date);
+      // 현재 날짜 확인
+      const currentDate = date || getKoreanDate();
+      console.log("Using date for fetch:", currentDate);
+      await fetchLogsForDate(currentDate);
     } catch (e) {
+      console.error("Error in fetchData:", e);
       setError("데이터를 불러오는 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
@@ -163,25 +167,51 @@ export default function LearningPage() {
 
   // 특정 날짜의 학습 기록 불러오기
   const fetchLogsForDate = async (targetDate: string) => {
+    console.log("Fetching logs for date:", targetDate);
     setDeletedRowIds([]); // 날짜 변경 시 삭제 목록 초기화
     try {
       const { data: logs, error } = await supabase
         .from("study_logs")
         .select(`
           *,
-          student:students!left(name, status),
-          created_employee:employees!left(name),
-          modified_employee:employees!left(name)
+          students (name, status)
         `)
         .eq("date", targetDate);
       
-      if (error) throw error;
+      console.log("Fetched logs:", logs?.length || 0, "records");
+      if (error) {
+        console.error("Supabase error details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          full: JSON.stringify(error, null, 2)
+        });
+        throw error;
+      }
       
       if (logs && logs.length > 0) {
+        // Fetch employees data separately to get names
+        const employeeIds = new Set<string>();
+        logs.forEach((log: any) => {
+          if (log.created_by) employeeIds.add(log.created_by);
+          if (log.last_modified_by) employeeIds.add(log.last_modified_by);
+        });
+        
+        let employeeMap = new Map<string, string>();
+        if (employeeIds.size > 0) {
+          const { data: employees } = await supabase
+            .from("employees")
+            .select("id, name")
+            .in("id", Array.from(employeeIds));
+          
+          employeeMap = new Map(employees?.map(e => [e.id, e.name]) || []);
+        }
+        
         const mappedRows = logs.map((log: any) => {
-          const studentStatus = log.student?.status || '';
+          const studentStatus = log.students?.status || '';
           const isRetired = studentStatus && !studentStatus.includes('재원');
-          const studentName = log.student?.name || "(알 수 없음)";
+          const studentName = log.students?.name || "(알 수 없음)";
           
           return {
             id: log.id,
@@ -198,9 +228,9 @@ export default function LearningPage() {
             book2: log.book2 || "",
             book2log: log.book2log || "",
             createdBy: log.created_by,
-            createdByName: log.created_employee?.name || "",
+            createdByName: employeeMap.get(log.created_by) || "",
             lastModifiedBy: log.last_modified_by,
-            lastModifiedByName: log.modified_employee?.name || "",
+            lastModifiedByName: employeeMap.get(log.last_modified_by) || "",
             updatedAt: log.updated_at
           };
         });
@@ -212,6 +242,8 @@ export default function LearningPage() {
         setOriginalRows([]);
       }
     } catch (error) {
+      console.error("Error fetching logs for date:", targetDate, error);
+      setError("학습 기록을 불러오는 중 오류가 발생했습니다.");
     }
   };
 
@@ -560,8 +592,8 @@ export default function LearningPage() {
           // 중복 행이거나 변경된 필드가 있는 경우 업데이트
           if (isDuplicateRow || (changedFields && changedFields.size > 0)) {
             const updateData: any = {
-              last_modified_by: currentEmployee?.id,
-              updated_at: new Date().toISOString()
+              last_modified_by: currentEmployee?.id
+              // updated_at은 DB 트리거가 자동으로 처리
             };
             
             // 중복 행인 경우 모든 필드 업데이트, 아니면 변경된 필드만 업데이트

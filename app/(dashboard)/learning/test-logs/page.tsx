@@ -14,6 +14,13 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+// 한국 시간대(KST) 기준으로 오늘 날짜 가져오기
+const getKoreanDate = () => {
+  const now = new Date();
+  const koreanTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  return koreanTime.toISOString().slice(0, 10);
+};
+
 // 점수 색상 스타일 함수 (노션 스타일)
 const scoreColor = (score: number) => {
   switch (score) {
@@ -28,7 +35,7 @@ const scoreColor = (score: number) => {
 export default function TestLogsPage() {
   const supabase = getSupabaseBrowserClient();
   const { user, loading: authLoading } = useAuth();
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => getKoreanDate());
   const [rows, setRows] = useState<Array<{
     id?: string;
     classId: string;
@@ -204,7 +211,7 @@ export default function TestLogsPage() {
   // 자정 감지 및 자동 저장
   useEffect(() => {
     const checkDateChange = () => {
-      const currentDate = new Date().toISOString().slice(0, 10);
+      const currentDate = getKoreanDate();
       
       if (currentDate !== date && rows.length > 0) {
         
