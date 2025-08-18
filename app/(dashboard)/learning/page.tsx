@@ -155,7 +155,6 @@ export default function LearningPage() {
       
       // 현재 날짜 확인
       const currentDate = date || getKoreanDate();
-      console.log("Using date for fetch:", currentDate);
       await fetchLogsForDate(currentDate);
     } catch (e) {
       console.error("Error in fetchData:", e);
@@ -167,18 +166,13 @@ export default function LearningPage() {
 
   // 특정 날짜의 학습 기록 불러오기
   const fetchLogsForDate = async (targetDate: string) => {
-    console.log("Fetching logs for date:", targetDate);
     setDeletedRowIds([]); // 날짜 변경 시 삭제 목록 초기화
     try {
       const { data: logs, error } = await supabase
         .from("study_logs")
-        .select(`
-          *,
-          students (name, status)
-        `)
+        .select("*, students (name, status)")
         .eq("date", targetDate);
       
-      console.log("Fetched logs:", logs?.length || 0, "records");
       if (error) {
         console.error("Supabase error details:", {
           message: error.message,
@@ -217,7 +211,7 @@ export default function LearningPage() {
             id: log.id,
             classId: log.class_id || "",
             studentId: log.student_id || "",
-            name: isRetired ? `${studentName} (퇴원)` : studentName,
+            name: isRetired ? studentName + " (퇴원)" : studentName,
             date: log.date,
             attendance: log.attendance_status || 5,
             homework: log.homework || 5,
@@ -265,7 +259,7 @@ export default function LearningPage() {
           event: '*',
           schema: 'public',
           table: 'study_logs',
-          filter: `date=eq.${date}`
+          filter: "date=eq." + date
         },
         async (payload) => {
           // 다른 사용자의 변경사항 처리
@@ -273,26 +267,35 @@ export default function LearningPage() {
             const updatedRow = payload.new;
             
             // 현재 편집 중인 필드는 건드리지 않음
-            const rowKey = `${updatedRow.id}`;
+            const rowKey = String(updatedRow.id);
             const localDirtyFields = dirtyFields.get(rowKey);
             
             if (!localDirtyFields || localDirtyFields.size === 0) {
               // 로컬 변경사항이 없으면 서버 데이터로 완전 업데이트
+              const updatedData = {
+                attendance: updatedRow.attendance_status || 5,
+                homework: updatedRow.homework || 5,
+                focus: updatedRow.focus || 5,
+                note: updatedRow.note || "",
+                book1: updatedRow.book1 || "",
+                book1log: updatedRow.book1log || "",
+                book2: updatedRow.book2 || "",
+                book2log: updatedRow.book2log || "",
+                lastModifiedBy: updatedRow.last_modified_by,
+                updatedAt: updatedRow.updated_at
+              };
+              
               setRows(prev => prev.map(r => {
                 if (r.id === updatedRow.id) {
-                  return {
-                    ...r,
-                    attendance: updatedRow.attendance_status || 5,
-                    homework: updatedRow.homework || 5,
-                    focus: updatedRow.focus || 5,
-                    note: updatedRow.note || "",
-                    book1: updatedRow.book1 || "",
-                    book1log: updatedRow.book1log || "",
-                    book2: updatedRow.book2 || "",
-                    book2log: updatedRow.book2log || "",
-                    lastModifiedBy: updatedRow.last_modified_by,
-                    updatedAt: updatedRow.updated_at
-                  };
+                  return { ...r, ...updatedData };
+                }
+                return r;
+              }));
+              
+              // originalRows도 업데이트하여 새로운 기준점으로 설정
+              setOriginalRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  return { ...r, ...updatedData };
                 }
                 return r;
               }));
@@ -333,6 +336,42 @@ export default function LearningPage() {
                   updatedFields.updatedAt = updatedRow.updated_at;
                   
                   return updatedFields;
+                }
+                return r;
+              }));
+              
+              // originalRows도 업데이트 (변경하지 않은 필드만)
+              setOriginalRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  const updatedOriginal: any = { ...r };
+                  
+                  // 로컬에서 변경하지 않은 필드만 업데이트
+                  if (!localDirtyFields.has('attendance')) {
+                    updatedOriginal.attendance = updatedRow.attendance_status || 5;
+                  }
+                  if (!localDirtyFields.has('homework')) {
+                    updatedOriginal.homework = updatedRow.homework || 5;
+                  }
+                  if (!localDirtyFields.has('focus')) {
+                    updatedOriginal.focus = updatedRow.focus || 5;
+                  }
+                  if (!localDirtyFields.has('note')) {
+                    updatedOriginal.note = updatedRow.note || "";
+                  }
+                  if (!localDirtyFields.has('book1')) {
+                    updatedOriginal.book1 = updatedRow.book1 || "";
+                  }
+                  if (!localDirtyFields.has('book1log')) {
+                    updatedOriginal.book1log = updatedRow.book1log || "";
+                  }
+                  if (!localDirtyFields.has('book2')) {
+                    updatedOriginal.book2 = updatedRow.book2 || "";
+                  }
+                  if (!localDirtyFields.has('book2log')) {
+                    updatedOriginal.book2log = updatedRow.book2log || "";
+                  }
+                  
+                  return updatedOriginal;
                 }
                 return r;
               }));
@@ -450,16 +489,16 @@ export default function LearningPage() {
   // 표 입력 변경 (부분 업데이트를 위한 변경 추적 포함)
   const handleChange = (idx: number, key: keyof (typeof rows)[number], value: any) => {
     const row = rows[idx];
-    const originalRow = originalRows.find(or => 
-      or.studentId === row.studentId && or.classId === row.classId && or.date === row.date
-    );
+    
+    // originalRows에서 id로 매칭 (id가 있는 경우)
+    const originalRow = row.id ? originalRows.find(or => or.id === row.id) : null;
     
     // 행 데이터 업데이트
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
     
     // 기존 데이터가 있는 경우만 변경 추적 (새로 추가된 행은 제외)
     if (row.id && originalRow) {
-      const rowKey = `${row.id}`;
+      const rowKey = String(row.id);
       
       // 원본과 비교하여 변경 여부 확인
       if (originalRow[key] !== value) {
@@ -489,6 +528,7 @@ export default function LearningPage() {
 
   // 저장 버튼 클릭
   const handleSave = async () => {
+    
     if (rows.length === 0 && deletedRowIds.length === 0) {
       alert("저장할 데이터가 없습니다.");
       return;
@@ -541,6 +581,7 @@ export default function LearningPage() {
       const existingRows = rows.filter(r => r.id);
       const newRows = rows.filter(r => !r.id);
       
+      
       // 중복 체크: 같은 학생, 같은 반, 같은 날짜가 이미 DB에 있는지 확인
       const potentiallyDuplicateRows: typeof rows = [];
       const trulyNewRows: typeof rows = [];
@@ -581,15 +622,26 @@ export default function LearningPage() {
       
       // 기존 행 업데이트 - 부분 업데이트 적용
       if (existingRows.length > 0) {
+        
+        // 저장 전에 최신 DB 데이터를 가져와서 다른 사용자의 변경사항과 병합
+        const { data: latestDbData } = await supabase
+          .from("study_logs")
+          .select("*")
+          .in("id", existingRows.map(r => r.id));
+        
+        const latestDbMap = new Map(latestDbData?.map(d => [d.id, d]) || []);
+        
         // 부분 업데이트: 변경된 필드만 업데이트
         for (const row of existingRows) {
-          const rowKey = `${row.id}`;
+          const rowKey = String(row.id);
           const changedFields = dirtyFields.get(rowKey);
+          const latestData = latestDbMap.get(row.id);
           
           // potentiallyDuplicateRows에서 온 행인지 확인
           const isDuplicateRow = potentiallyDuplicateRows.some(r => r.id === row.id);
           
           // 중복 행이거나 변경된 필드가 있는 경우 업데이트
+          
           if (isDuplicateRow || (changedFields && changedFields.size > 0)) {
             const updateData: any = {
               last_modified_by: currentEmployee?.id
@@ -622,8 +674,24 @@ export default function LearningPage() {
               updateData.book2log = row.book2log !== "" ? row.book2log : (originalData?.book2log || "");
               updateData.note = row.note !== "" ? row.note : (originalData?.note || "");
               updateData.date = row.date;
-            } else if (changedFields) {
+            } else if (changedFields && changedFields.size > 0) {
               // 일반 행은 변경된 필드만 업데이트
+              
+              // 중요: DB의 최신 데이터로 시작하여 다른 사용자의 변경사항 보존
+              if (latestData) {
+                // 모든 필드를 DB 값으로 초기화
+                updateData.attendance_status = latestData.attendance_status || 5;
+                updateData.homework = latestData.homework || 5;
+                updateData.focus = latestData.focus || 5;
+                updateData.book1 = latestData.book1 || "";
+                updateData.book1log = latestData.book1log || "";
+                updateData.book2 = latestData.book2 || "";
+                updateData.book2log = latestData.book2log || "";
+                updateData.note = latestData.note || "";
+                updateData.date = latestData.date || row.date;
+              }
+              
+              // 그 다음 현재 사용자가 변경한 필드만 덮어쓰기
               changedFields.forEach(field => {
                 switch(field) {
                   case 'attendance':
@@ -660,16 +728,25 @@ export default function LearningPage() {
               });
             }
             
-            // 개별 행 업데이트 (부분 업데이트)
-            const { error: updateError } = await supabase
+            
+            // 개별 행 업데이트
+            const { data: updateResult, error: updateError } = await supabase
               .from("study_logs")
               .update(updateData)
-              .eq('id', row.id);
+              .eq('id', row.id)
+              .select();
             
             if (updateError) {
-              console.error(`Failed to update row ${row.id}:`, updateError);
+              console.error("Failed to update row", row.id, ":", {
+                error: updateError,
+                message: updateError.message,
+                details: updateError.details,
+                hint: updateError.hint,
+                code: updateError.code
+              });
               error = updateError;
               break;
+            } else {
             }
           }
         }
@@ -765,13 +842,11 @@ export default function LearningPage() {
       return;
     }
     
-    setRows(prev => {
-      return prev.map(r => {
-        if (selectedClassIds.length === 0 || selectedClassIds.includes(r.classId)) {
-          return { ...r, [key]: firstValue };
-        }
-        return r;
-      });
+    // handleChange를 사용하여 각 행별로 변경 추적
+    rows.forEach((r, idx) => {
+      if (selectedClassIds.length === 0 || selectedClassIds.includes(r.classId)) {
+        handleChange(idx, key, firstValue);
+      }
     });
   };
 
@@ -784,9 +859,8 @@ export default function LearningPage() {
 
   const handleModalSave = () => {
     if (modalRowIdx !== null && modalField) {
-      setRows(prev => prev.map((r, i) =>
-        i === modalRowIdx ? { ...r, [modalField]: modalValue } : r
-      ));
+      // handleChange를 사용하여 dirtyFields 추적
+      handleChange(modalRowIdx, modalField, modalValue);
     }
     setModalOpen(false);
   };
@@ -814,9 +888,7 @@ export default function LearningPage() {
         <div className="flex gap-6 relative">
           
           {/* 왼쪽 사이드바 */}
-          <div className={`transition-all duration-300 ${
-            isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
-          }`}>
+          <div className={"transition-all duration-300 " + (isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden')}>
             <div className="w-72 max-h-[800px] flex-shrink-0 space-y-4 overflow-y-auto">
               {/* 날짜 선택 카드 */}
               <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50">
@@ -1053,7 +1125,7 @@ export default function LearningPage() {
                               <Filter className="w-4 h-4 mr-2" />
                               {selectedClassIds.length === 0
                                 ? "전체 반"
-                                : `${selectedClassIds.length}개 반 선택`}
+                                : selectedClassIds.length + "개 반 선택"}
                               <ChevronDown className="w-4 h-4 ml-2" />
                             </Button>
                           </PopoverTrigger>
@@ -1138,11 +1210,9 @@ export default function LearningPage() {
                       <Button 
                         size="sm"
                         onClick={handleSave}
-                        className={`${
-                          hasUnsavedChanges 
+                        className={(hasUnsavedChanges 
                             ? "bg-red-600 hover:bg-red-700 animate-pulse shadow-lg" 
-                            : "bg-blue-600 hover:bg-blue-700"
-                        } text-white font-medium`}
+                            : "bg-blue-600 hover:bg-blue-700") + " text-white font-medium"}
                       >
                         {hasUnsavedChanges ? "저장 필요!" : "저장"}
                       </Button>
@@ -1290,7 +1360,7 @@ export default function LearningPage() {
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span 
-                                  className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${scoreColor(row.attendance)}`}
+                                  className={"inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer " + scoreColor(row.attendance)}
                                   onClick={() => {
                                     const nextValue = row.attendance === 5 ? 1 : row.attendance + 1;
                                     handleChange(originalIdx, "attendance", nextValue);
@@ -1301,7 +1371,7 @@ export default function LearningPage() {
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span 
-                                  className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${scoreColor(row.homework)}`}
+                                  className={"inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer " + scoreColor(row.homework)}
                                   onClick={() => {
                                     const nextValue = row.homework === 5 ? 1 : row.homework + 1;
                                     handleChange(originalIdx, "homework", nextValue);
@@ -1312,7 +1382,7 @@ export default function LearningPage() {
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span 
-                                  className={`inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer ${scoreColor(row.focus)}`}
+                                  className={"inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer " + scoreColor(row.focus)}
                                   onClick={() => {
                                     const nextValue = row.focus === 5 ? 1 : row.focus + 1;
                                     handleChange(originalIdx, "focus", nextValue);
