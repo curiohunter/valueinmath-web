@@ -111,20 +111,27 @@ export default function TestLogsPage() {
   const fetchTestLogsByDate = async () => {
     setDeletedRowIds([]); // 새로 불러올 때 삭제 목록 초기화
     try {
-      // 현재 선택된 날짜 사용 (오늘이 아닌 date state 사용)
+      // 현재 선택된 날짜 사용 (오늘이 아닌 date state 사용) - 간단한 쿼리로 변경
       const { data: todayLogs, error } = await supabase
         .from("test_logs")
-        .select(`
-          *,
-          student:students!left(name, status),
-          created_employee:employees!left(name),
-          modified_employee:employees!left(name)
-        `)
+        .select("*")
         .eq("date", date);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase query error:", error);
+        throw error;
+      }
       
       if (todayLogs && todayLogs.length > 0) {
+        // 학생 정보 별도로 가져오기
+        const studentIds = [...new Set(todayLogs.map(log => log.student_id).filter(Boolean))];
+        const { data: studentsData } = await supabase
+          .from("students")
+          .select("id, name, status")
+          .in("id", studentIds);
+        const studentMap = new Map(studentsData?.map(s => [s.id, s]) || []);
+        
+        // 직원 정보 가져오기
         const employeeIds = [...new Set([
           ...todayLogs.map(log => log.created_by).filter(Boolean),
           ...todayLogs.map(log => log.last_modified_by).filter(Boolean)
@@ -138,9 +145,10 @@ export default function TestLogsPage() {
         const employeeMap = new Map(employeesData?.map(e => [e.id, e.name]) || []);
         
         const mappedLogs = todayLogs.map((log: any) => {
-          const studentStatus = log.student?.status || '';
+          const student = studentMap.get(log.student_id);
+          const studentStatus = student?.status || '';
           const isRetired = studentStatus && !studentStatus.includes('재원');
-          const studentName = log.student?.name || "(알 수 없음)";
+          const studentName = student?.name || log.student_name_snapshot || "(알 수 없음)";
           
           return {
             id: log.id,
@@ -153,16 +161,24 @@ export default function TestLogsPage() {
             testScore: log.test_score,
             note: log.note || "",
             createdBy: log.created_by,
-            createdByName: log.created_employee?.name || "",
+            createdByName: employeeMap.get(log.created_by) || "",
             lastModifiedBy: log.last_modified_by,
-            lastModifiedByName: log.modified_employee?.name || "",
+            lastModifiedByName: employeeMap.get(log.last_modified_by) || "",
             updatedAt: log.updated_at
           };
         });
         setRows(mappedLogs);
         setOriginalRows(mappedLogs);
+      } else {
+        // 데이터가 없을 때도 rows를 빈 배열로 설정
+        setRows([]);
+        setOriginalRows([]);
       }
     } catch (error) {
+      console.error("Error fetching test logs:", error);
+      // 에러가 발생해도 빈 배열로 설정하여 테이블은 표시
+      setRows([]);
+      setOriginalRows([]);
     }
   };
 
