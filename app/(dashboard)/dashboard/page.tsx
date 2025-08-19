@@ -303,7 +303,7 @@ export default function DashboardPage() {
         .select('*')
         .eq('status', '신규상담')
         .order('first_contact_date', { ascending: false })
-        .limit(10)
+        .limit(20)  // 더 많이 가져오기
 
       if (error) throw error
       setConsultations(data || [])
@@ -315,6 +315,20 @@ export default function DashboardPage() {
   // 입학테스트 데이터 로딩 - 신규상담 상태인 학생만
   const loadEntranceTests = async () => {
     try {
+      // 먼저 신규상담 학생들의 ID를 가져옴
+      const { data: consultationStudents } = await supabase
+        .from('students')
+        .select('id')
+        .eq('status', '신규상담')
+      
+      const studentIds = consultationStudents?.map(s => s.id) || []
+      
+      if (studentIds.length === 0) {
+        setEntranceTests([])
+        return
+      }
+      
+      // 해당 학생들의 입학테스트만 가져옴
       const { data, error } = await supabase
         .from('entrance_tests')
         .select(`
@@ -324,19 +338,17 @@ export default function DashboardPage() {
             status
           )
         `)
-        .order('test_date', { ascending: true })
-        .limit(20) // 좌더 많이 가져와서 필터링
+        .in('consultation_id', studentIds)
+        .order('test_date', { ascending: true, nullsFirst: true })
+        .limit(20)
 
       if (error) throw error
       
-      // 신규상담 상태인 학생의 테스트만 필터링
-      const testsWithNames = data?.filter(test => {
-        const student = test.students as any
-        return student && student.status === '신규상담'
-      }).map(test => ({
+      // 학생 이름 추가
+      const testsWithNames = data?.map(test => ({
         ...test,
         student_name: (test.students as any)?.name || '이름 없음'
-      })).slice(0, 10) || [] // 최대 10개만 표시
+      })) || []
 
       setEntranceTests(testsWithNames)
     } catch (error) {
@@ -355,7 +367,12 @@ export default function DashboardPage() {
         })
         .select()
 
-      if (error) throw error
+      if (error) {
+        toast.error(`입학테스트 생성 실패: ${error.message}`)
+        throw error
+      }
+      
+      toast.success('입학테스트가 생성되었습니다.')
       
       // 입학테스트 생성 후 필요한 데이터만 새로고침
       await loadStats() // 통계 업데이트
