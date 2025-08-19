@@ -221,6 +221,97 @@ export type Database = {
         }
         Relationships: []
       }
+      entrance_tests: {
+        Row: {
+          consultation_id: string | null
+          created_at: string | null
+          google_calendar_id: string | null
+          id: number
+          notes: string | null
+          recommended_class: string | null
+          status: Database["public"]["Enums"]["test_status_enum"] | null
+          test_date: string | null
+          test_result: Database["public"]["Enums"]["test_result_enum"] | null
+          test1_level: Database["public"]["Enums"]["test_level_enum"] | null
+          test1_score: number | null
+          test2_level: Database["public"]["Enums"]["test_level_enum"] | null
+          test2_score: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          consultation_id?: string | null
+          created_at?: string | null
+          google_calendar_id?: string | null
+          id?: number
+          notes?: string | null
+          recommended_class?: string | null
+          status?: Database["public"]["Enums"]["test_status_enum"] | null
+          test_date?: string | null
+          test_result?: Database["public"]["Enums"]["test_result_enum"] | null
+          test1_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test1_score?: number | null
+          test2_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test2_score?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          consultation_id?: string | null
+          created_at?: string | null
+          google_calendar_id?: string | null
+          id?: number
+          notes?: string | null
+          recommended_class?: string | null
+          status?: Database["public"]["Enums"]["test_status_enum"] | null
+          test_date?: string | null
+          test_result?: Database["public"]["Enums"]["test_result_enum"] | null
+          test1_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test1_score?: number | null
+          test2_level?: Database["public"]["Enums"]["test_level_enum"] | null
+          test2_score?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entrance_tests_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_participants: {
+        Row: {
+          created_at: string | null
+          event_id: string | null
+          id: string
+          participant_id: string
+          participant_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+          participant_id: string
+          participant_type: string
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+          participant_id?: string
+          participant_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_participants_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       global_messages: {
         Row: {
           content: string
@@ -247,6 +338,82 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      makeup_classes: {
+        Row: {
+          absence_date: string | null
+          absence_reason: Database["public"]["Enums"]["absence_reason_enum"] | null
+          class_id: string
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          end_time: string
+          id: string
+          makeup_date: string
+          makeup_type: Database["public"]["Enums"]["makeup_type_enum"]
+          notes: string | null
+          start_time: string
+          status: Database["public"]["Enums"]["makeup_status_enum"]
+          student_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          absence_date?: string | null
+          absence_reason?: Database["public"]["Enums"]["absence_reason_enum"] | null
+          class_id: string
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_time: string
+          id?: string
+          makeup_date: string
+          makeup_type?: Database["public"]["Enums"]["makeup_type_enum"]
+          notes?: string | null
+          start_time: string
+          status?: Database["public"]["Enums"]["makeup_status_enum"]
+          student_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          absence_date?: string | null
+          absence_reason?: Database["public"]["Enums"]["absence_reason_enum"] | null
+          class_id?: string
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          makeup_date?: string
+          makeup_type?: Database["public"]["Enums"]["makeup_type_enum"]
+          notes?: string | null
+          start_time?: string
+          status?: Database["public"]["Enums"]["makeup_status_enum"]
+          student_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "makeup_classes_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "makeup_classes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "makeup_classes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_read_status: {
         Row: {
@@ -690,6 +857,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      absence_reason_enum: "sick" | "travel" | "event" | "unauthorized" | "other"
       claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"
       claude_report_type: "monthly" | "quarterly" | "yearly" | "custom"
       event_type_enum:
@@ -705,6 +873,8 @@ export type Database = {
         | "last_minute_makeup"
         | "holiday"
         | "project"
+      makeup_status_enum: "scheduled" | "completed" | "cancelled"
+      makeup_type_enum: "absence" | "additional"
       test_level_enum:
         | "초3-1"
         | "초3-2"
@@ -744,83 +914,3 @@ export type Database = {
     }
   }
 }
-
-export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (Database["public"]["Tables"] & Database["public"]["Views"])
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never = never
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : PublicTableNameOrOptions extends keyof (Database["public"]["Tables"] &
-      Database["public"]["Views"])
-  ? (Database["public"]["Tables"] &
-      Database["public"]["Views"])[PublicTableNameOrOptions] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : never
-
-export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof Database["public"]["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
-  ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : never
-
-export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof Database["public"]["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
-  ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : never
-
-export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof Database["public"]["Enums"]
-    | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
-    : never = never
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
-  ? Database["public"]["Enums"][PublicEnumNameOrOptions]
-  : never

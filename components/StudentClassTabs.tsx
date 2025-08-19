@@ -11,7 +11,7 @@ export default function StudentClassTabs() {
         href="/students"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname.startsWith("/students")
+          pathname === "/students"
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}
@@ -50,6 +50,17 @@ export default function StudentClassTabs() {
         )}
       >
         학원비 이력
+      </Link>
+      <Link
+        href="/students/entrance-tests"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname === "/students/entrance-tests"
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        입학테스트
       </Link>
     </div>
   );
