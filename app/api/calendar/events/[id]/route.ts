@@ -68,6 +68,78 @@ export async function PUT(
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // 연결된 보강 데이터 동기화
+    if (data && (data.event_type === 'absence' || data.event_type === 'makeup')) {
+      try {
+        // 이벤트 ID로 연결된 보강 찾기
+        const { data: makeupClasses } = await supabase
+          .from('makeup_classes')
+          .select('*')
+          .or(`absence_calendar_event_id.eq.${params.id},makeup_calendar_event_id.eq.${params.id}`);
+
+        if (makeupClasses && makeupClasses.length > 0) {
+          for (const makeup of makeupClasses) {
+            const updateData: any = {};
+            
+            // 결석 이벤트인 경우
+            if (data.event_type === 'absence' && makeup.absence_calendar_event_id === params.id) {
+              // 날짜를 YYYY-MM-DD 형식으로 추출
+              const absenceDate = data.start_time.split('T')[0];
+              updateData.absence_date = absenceDate;
+              
+              // 결석 사유 업데이트 (description에서 추출)
+              if (data.description && data.description.includes('결석 사유:')) {
+                const reason = data.description.split('결석 사유:')[1]?.trim();
+                if (reason) {
+                  // 한글을 영어 enum 값으로 변환
+                  const reasonMap: { [key: string]: string } = {
+                    '아픔': 'sick',
+                    '여행': 'travel',
+                    '행사': 'event',
+                    '무단': 'unauthorized',
+                    '기타': 'other'
+                  };
+                  updateData.absence_reason = reasonMap[reason] || 'other';
+                }
+              }
+            }
+            
+            // 보강 이벤트인 경우
+            if (data.event_type === 'makeup' && makeup.makeup_calendar_event_id === params.id) {
+              // 날짜와 시간 추출
+              const makeupDate = data.start_time.split('T')[0];
+              const startTime = data.start_time.split('T')[1];
+              const endTime = data.end_time.split('T')[1];
+              
+              updateData.makeup_date = makeupDate;
+              updateData.start_time = startTime;
+              updateData.end_time = endTime;
+              
+              // 내용 업데이트
+              if (data.description) {
+                updateData.content = data.description;
+              }
+            }
+            
+            // 보강 데이터 업데이트
+            if (Object.keys(updateData).length > 0) {
+              updateData.updated_at = new Date().toISOString();
+              
+              await supabase
+                .from('makeup_classes')
+                .update(updateData)
+                .eq('id', makeup.id);
+              
+              console.log(`보강 데이터 동기화 완료: ${makeup.id}`);
+            }
+          }
+        }
+      } catch (syncError) {
+        console.error('보강 데이터 동기화 실패:', syncError);
+        // 동기화 실패해도 캘린더 이벤트 수정은 성공으로 처리
+      }
+    }
+
     // 즉시 응답 반환
     const response = NextResponse.json({ data })
     
@@ -106,13 +178,44 @@ export async function DELETE(
     const params = await props.params
     const supabase = await createServerClient()
     
-    // 삭제하기 전에 Google Calendar ID 가져오기
+    // 삭제하기 전에 이벤트 정보 가져오기
     const { data: eventToDelete } = await supabase
       .from('calendar_events')
-      .select('google_calendar_id')
+      .select('*')
       // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq('id', params.id)
       .single()
+    
+    // 연결된 보강 데이터에서 캘린더 이벤트 ID 제거
+    if (eventToDelete && (eventToDelete.event_type === 'absence' || eventToDelete.event_type === 'makeup')) {
+      try {
+        // 결석 이벤트 삭제인 경우
+        if (eventToDelete.event_type === 'absence') {
+          await supabase
+            .from('makeup_classes')
+            .update({ 
+              absence_calendar_event_id: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('absence_calendar_event_id', params.id);
+        }
+        
+        // 보강 이벤트 삭제인 경우
+        if (eventToDelete.event_type === 'makeup') {
+          await supabase
+            .from('makeup_classes')
+            .update({ 
+              makeup_calendar_event_id: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('makeup_calendar_event_id', params.id);
+        }
+        
+        console.log(`보강 데이터에서 캘린더 이벤트 연결 해제: ${params.id}`);
+      } catch (syncError) {
+        console.error('보강 데이터 동기화 실패:', syncError);
+      }
+    }
     
     // 메인 DB 작업 - 이벤트 삭제
     const { error } = await supabase

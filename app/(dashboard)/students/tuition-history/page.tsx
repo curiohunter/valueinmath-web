@@ -47,7 +47,7 @@ export default function TuitionHistoryPage() {
   const [datePreset, setDatePreset] = useState("custom");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]); // 반별 중복선택
-  const [selectedStudent, setSelectedStudent] = useState("");
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]); // 학생 중복선택으로 변경
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState("");
   const [selectedClassType, setSelectedClassType] = useState("");
   const [page, setPage] = useState(1);
@@ -58,13 +58,11 @@ export default function TuitionHistoryPage() {
   // 반/학생 id→이름 매핑
   const [classMap, setClassMap] = useState<{ [id: string]: string }>({});
   const [studentMap, setStudentMap] = useState<{ [id: string]: string }>({});
-  const [classOptions, setClassOptions] = useState<{id: string, name: string}[]>([]);
+  const [classOptions, setClassOptions] = useState<{id: string, name: string, teacher_id?: string | null}[]>([]);
   const [studentOptions, setStudentOptions] = useState<{id: string, name: string}[]>([]);
   const [classSearch, setClassSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
-  
-  // 실제 필터에 적용할 id (학생 ID만 필요, 반은 selectedClasses 사용)
-  const [filteredStudentId, setFilteredStudentId] = useState("");
+  const [teachers, setTeachers] = useState<{id: string, name: string}[]>([]);
   
   // 테이블 상태
   const [searchTerm, setSearchTerm] = useState("");
@@ -77,18 +75,87 @@ export default function TuitionHistoryPage() {
   const [originalData, setOriginalData] = useState<TuitionRow[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // 반/학생 이름 매핑 fetch
+  // 반 이름 매핑 및 선생님 정보 fetch (초기 로드)
   useEffect(() => {
-    async function fetchMeta() {
-      const { data: classes } = await supabase.from("classes").select("id,name");
-      const { data: students } = await supabase.from("students").select("id,name");
+    async function fetchClassesAndTeachers() {
+      // 반 정보 가져오기 (teacher_id 포함)
+      const { data: classes } = await supabase.from("classes").select("id,name,teacher_id");
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
-      setStudentMap(Object.fromEntries((students || []).map((s: any) => [s.id, s.name])));
       setClassOptions(classes || []);
-      setStudentOptions(students || []);
+      
+      // 선생님 정보 가져오기 (재직 중인 직원)
+      const { data: employeesData, error: employeesError } = await supabase
+        .from("employees")
+        .select("id, name")
+        .eq("status", "재직");
+      
+      if (employeesError) {
+        console.error("Error fetching employees:", employeesError);
+      }
+      
+      setTeachers(employeesData || []);
     }
-    fetchMeta();
+    fetchClassesAndTeachers();
   }, []);
+
+  // 날짜 범위에 따른 학생 목록 동적 fetch
+  useEffect(() => {
+    async function fetchStudentsInDateRange() {
+      if (!dateRange.from || !dateRange.to) return;
+
+      const [fromYear, fromMonth] = dateRange.from.split('-').map(Number);
+      const [toYear, toMonth] = dateRange.to.split('-').map(Number);
+
+      // 날짜 범위에 해당하는 tuition_fees에서 unique한 student_id들을 가져오기
+      let query = supabase
+        .from("tuition_fees")
+        .select("student_id, students!inner(id, name)")
+        .order("students(name)", { ascending: true });
+
+      // 날짜 범위 필터링
+      if (fromYear && fromMonth && toYear && toMonth) {
+        if (fromYear === toYear) {
+          query = query
+            .eq("year", fromYear)
+            .gte("month", fromMonth)
+            .lte("month", toMonth);
+        } else {
+          query = query.or(
+            `and(year.eq.${fromYear},month.gte.${fromMonth}),` +
+            `and(year.eq.${toYear},month.lte.${toMonth})` +
+            (toYear - fromYear > 1 ? `,and(year.gt.${fromYear},year.lt.${toYear})` : '')
+          );
+        }
+      }
+
+      const { data, error } = await query;
+      
+      if (!error && data) {
+        // 중복 제거하여 unique한 학생 목록 생성
+        const uniqueStudents = new Map();
+        data.forEach((item: any) => {
+          if (item.students && !uniqueStudents.has(item.student_id)) {
+            uniqueStudents.set(item.student_id, {
+              id: item.student_id,
+              name: item.students.name
+            });
+          }
+        });
+
+        const studentList = Array.from(uniqueStudents.values()).sort((a, b) => 
+          a.name.localeCompare(b.name, 'ko')
+        );
+        
+        setStudentOptions(studentList);
+        setStudentMap(Object.fromEntries(studentList.map((s: any) => [s.id, s.name])));
+        
+        // 날짜 범위가 변경되면 선택된 학생 초기화 (새로운 날짜 범위에 없는 학생이 선택되어 있을 수 있으므로)
+        setSelectedStudents([]);
+      }
+    }
+
+    fetchStudentsInDateRange();
+  }, [dateRange]);
 
   // 이번 달 기본 설정
   useEffect(() => {
@@ -163,9 +230,9 @@ export default function TuitionHistoryPage() {
         query = query.in("class_id", selectedClasses);
       }
       
-      // 학생 필터
-      if (filteredStudentId) {
-        query = query.eq("student_id", filteredStudentId);
+      // 학생 필터 (중복선택 지원)
+      if (selectedStudents.length > 0) {
+        query = query.in("student_id", selectedStudents);
       }
 
       // 납부 상태 필터
@@ -242,20 +309,8 @@ export default function TuitionHistoryPage() {
       if (!confirmChange) return;
     }
     
-    // 학생 검색어를 ID로 변환
-    const studentObj = studentOptions.find(s => 
-      studentSearch ? s.name.toLowerCase().includes(studentSearch.toLowerCase()) : false
-    );
-    
-    // 필터 ID 설정
-    const newStudentId = studentObj?.id || "";
-    
-    setFilteredStudentId(newStudentId);
-    
-    // 검색 실행 (selectedClasses는 이미 state에 있으므로 자동으로 적용됨)
-    setTimeout(() => {
-      fetchTuitionHistoryWithFilters();
-    }, 100);
+    // 검색 실행 (selectedClasses와 selectedStudents는 이미 state에 있으므로 자동으로 적용됨)
+    fetchTuitionHistoryWithFilters();
   }
 
   // 초기화 버튼
@@ -263,7 +318,7 @@ export default function TuitionHistoryPage() {
     setClassSearch("");
     setStudentSearch("");
     setSelectedClasses([]); // 반별 중복선택 초기화
-    setFilteredStudentId("");
+    setSelectedStudents([]); // 학생 중복선택 초기화
     setSelectedPaymentStatus("");
     setSelectedClassType("");
     setSearchTerm("");
@@ -310,9 +365,9 @@ export default function TuitionHistoryPage() {
 
   // 개별 행 수정 핸들러
   const handleRowChange = (index: number, field: keyof TuitionRow, value: any) => {
-    const actualIndex = (page - 1) * pageSize + index;
-    if (actualIndex < filteredData.length) {
-      const rowToUpdate = filteredData[actualIndex];
+    // paginatedData의 index를 사용하여 직접 접근
+    if (index < paginatedData.length) {
+      const rowToUpdate = paginatedData[index];
       const originalDataIndex = data.findIndex(item => item.id === rowToUpdate.id);
       
       if (originalDataIndex !== -1) {
@@ -325,10 +380,9 @@ export default function TuitionHistoryPage() {
 
   // 개별 행 저장 핸들러
   const handleRowSave = async (index: number) => {
-    const actualIndex = (page - 1) * pageSize + index;
-    if (actualIndex >= filteredData.length) return;
+    if (index >= paginatedData.length) return;
     
-    const row = filteredData[actualIndex];
+    const row = paginatedData[index];
     
     setIsSaving(true);
     try {
@@ -363,10 +417,9 @@ export default function TuitionHistoryPage() {
 
   // 개별 행 삭제 핸들러
   const handleRowDelete = async (index: number) => {
-    const actualIndex = (page - 1) * pageSize + index;
-    if (actualIndex >= filteredData.length) return;
+    if (index >= paginatedData.length) return;
     
-    const row = filteredData[actualIndex];
+    const row = paginatedData[index];
     const confirmDelete = window.confirm(`정말로 ${row.studentName}의 ${row.year}년 ${row.month}월 학원비를 삭제하시겠습니까?`);
     
     if (!confirmDelete) return;
@@ -391,11 +444,16 @@ export default function TuitionHistoryPage() {
 
   // 행 선택 핸들러
   const handleRowSelect = (index: number, selected: boolean) => {
-    const actualIndex = (page - 1) * pageSize + index;
+    // paginatedData의 실제 row ID를 사용하여 선택 관리
+    if (index >= paginatedData.length) return;
+    
+    const row = paginatedData[index];
+    const globalIndex = data.findIndex(item => item.id === row.id);
+    
     if (selected) {
-      setSelectedRows([...selectedRows, actualIndex]);
+      setSelectedRows([...selectedRows, globalIndex]);
     } else {
-      setSelectedRows(selectedRows.filter(i => i !== actualIndex));
+      setSelectedRows(selectedRows.filter(i => i !== globalIndex));
     }
   };
 
@@ -504,12 +562,12 @@ export default function TuitionHistoryPage() {
     }
   };
 
-  // 초기 데이터 로드 - selectedClasses 변경 시에도 자동으로 데이터를 다시 가져옴
+  // 초기 데이터 로드 - selectedClasses, selectedStudents 변경 시에도 자동으로 데이터를 다시 가져옴
   useEffect(() => {
     if (dateRange.from && dateRange.to) {
       fetchTuitionHistoryWithFilters();
     }
-  }, [dateRange, selectedClasses, filteredStudentId, selectedPaymentStatus]);
+  }, [dateRange, selectedClasses, selectedStudents, selectedPaymentStatus]);
 
   // 데이터 변경 감지
   useEffect(() => {
@@ -532,10 +590,9 @@ export default function TuitionHistoryPage() {
   );
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       <StudentClassTabs />
       
-
       {/* 통계 카드 */}
       {filteredData.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
@@ -624,7 +681,10 @@ export default function TuitionHistoryPage() {
             onRowSave={handleRowSave}
             onSave={handleSave}
             isSaving={isSaving}
-            selectedRows={selectedRows.filter(i => i >= (page - 1) * pageSize && i < page * pageSize).map(i => i - (page - 1) * pageSize)}
+            selectedRows={paginatedData.map((row, idx) => {
+              const globalIndex = data.findIndex(item => item.id === row.id);
+              return selectedRows.includes(globalIndex) ? idx : -1;
+            }).filter(i => i !== -1)}
             onRowSelect={handleRowSelect}
             onSelectAll={handleSelectAll}
             onBulkDelete={handleBulkDelete}
@@ -643,6 +703,10 @@ export default function TuitionHistoryPage() {
             classOptions={classOptions}
             selectedClasses={selectedClasses}
             onClassSelectionChange={setSelectedClasses}
+            studentOptions={studentOptions}
+            selectedStudents={selectedStudents}
+            onStudentSelectionChange={setSelectedStudents}
+            teachers={teachers}
           />
           
         </div>

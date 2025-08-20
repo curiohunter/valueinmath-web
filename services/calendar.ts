@@ -39,7 +39,8 @@ export const calendarService = {
         throw new Error(result.error || 'Failed to create event')
       }
       
-      return result
+      // API는 { data, googleCalendarId } 형태로 반환하므로 data를 반환
+      return result.data
     } catch (error) {
       console.error('Failed to create event:', error)
       throw error

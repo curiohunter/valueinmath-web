@@ -45,9 +45,15 @@ interface TuitionTableProps {
   isSidebarOpen?: boolean
   onToggleSidebar?: () => void
   // 반별 중복선택 관련
-  classOptions?: Array<{ id: string; name: string }>
+  classOptions?: Array<{ id: string; name: string; teacher_id?: string | null }>
   selectedClasses?: string[]
   onClassSelectionChange?: (classes: string[]) => void
+  // 학생 중복선택 관련
+  studentOptions?: Array<{ id: string; name: string }>
+  selectedStudents?: string[]
+  onStudentSelectionChange?: (students: string[]) => void
+  // 선생님 정보
+  teachers?: Array<{ id: string; name: string }>
 }
 
 export function TuitionTable({
@@ -82,14 +88,19 @@ export function TuitionTable({
   onToggleSidebar,
   classOptions = [],
   selectedClasses = [],
-  onClassSelectionChange
+  onClassSelectionChange,
+  studentOptions = [],
+  selectedStudents = [],
+  onStudentSelectionChange,
+  teachers = []
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
+  const [studentSearchTerm, setStudentSearchTerm] = useState("")
 
   return (
     <div className="flex-1">
-      <div className="w-full max-w-[1400px] mx-auto">
+      <div className="w-full">
         {/* 검색 및 필터링 바 */}
         <div className="bg-white rounded-t-xl shadow-sm border border-b-0 p-4">
           <div className="flex items-center gap-4 mb-3">
@@ -107,7 +118,7 @@ export function TuitionTable({
             <h2 className="text-lg font-semibold text-gray-800">학원비 관리</h2>
           </div>
           {isHistoryMode ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
@@ -185,29 +196,143 @@ export function TuitionTable({
                           {selectedClasses.length === classOptions.length ? "전체 해제" : "전체 선택"}
                         </Button>
                       </div>
+                      <div className="p-2 space-y-3">
+                        {/* 담당 선생님별로 그룹화 */}
+                        {(() => {
+                          // 담당 선생님별로 반 그룹화
+                          const groupedClasses = classOptions.reduce((acc: { [key: string]: any[] }, cls) => {
+                            const teacherId = cls.teacher_id || 'unassigned';
+                            if (!acc[teacherId]) acc[teacherId] = [];
+                            acc[teacherId].push(cls);
+                            return acc;
+                          }, {});
+                          
+                          // 각 그룹 내에서 반 이름으로 정렬
+                          Object.values(groupedClasses).forEach(group => {
+                            group.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+                          });
+                          
+                          // 선생님 ID 정렬 (미배정은 맨 아래)
+                          const sortedTeacherIds = Object.keys(groupedClasses).sort((a, b) => {
+                            if (a === 'unassigned') return 1;
+                            if (b === 'unassigned') return -1;
+                            const teacherA = teachers.find(t => t.id === a)?.name || a;
+                            const teacherB = teachers.find(t => t.id === b)?.name || b;
+                            return teacherA.localeCompare(teacherB, 'ko');
+                          });
+                          
+                          return sortedTeacherIds.map(teacherId => {
+                            const teacher = teachers.find(t => t.id === teacherId);
+                            const teacherName = teacher?.name || (teacherId === 'unassigned' ? '미배정' : teacherId);
+                            const teacherClasses = groupedClasses[teacherId];
+                            
+                            return (
+                              <div key={teacherId}>
+                                {/* 담당 선생님 헤더 */}
+                                <div className="px-2 py-1 bg-gray-100 rounded text-xs font-semibold text-gray-600">
+                                  {teacherName} 담당
+                                </div>
+                                {/* 해당 선생님의 반 목록 */}
+                                <div className="ml-2 space-y-1 mt-1">
+                                  {teacherClasses.map((classOption: any) => (
+                                    <div
+                                      key={classOption.id}
+                                      className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100 cursor-pointer"
+                                      onClick={() => {
+                                        const isSelected = selectedClasses.includes(classOption.id);
+                                        if (isSelected) {
+                                          onClassSelectionChange?.(selectedClasses.filter(id => id !== classOption.id));
+                                        } else {
+                                          onClassSelectionChange?.([...selectedClasses, classOption.id]);
+                                        }
+                                      }}
+                                    >
+                                      <Checkbox
+                                        checked={selectedClasses.includes(classOption.id)}
+                                        className="pointer-events-none"
+                                      />
+                                      <label className="text-sm cursor-pointer flex-1">
+                                        {classOption.name}
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between text-sm font-normal"
+                    >
+                      {selectedStudents.length === 0
+                        ? "학생 선택"
+                        : selectedStudents.length === 1
+                        ? studentOptions.find(s => s.id === selectedStudents[0])?.name || "학생 선택"
+                        : `${selectedStudents.length}명 선택`
+                      }
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-0">
+                    <div className="max-h-64 overflow-y-auto">
+                      <div className="p-2 border-b">
+                        <Input
+                          placeholder="학생 검색..."
+                          value={studentSearchTerm}
+                          onChange={(e) => setStudentSearchTerm(e.target.value)}
+                          className="mb-2"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-xs"
+                          onClick={() => {
+                            if (selectedStudents.length === studentOptions.length) {
+                              onStudentSelectionChange?.([]);
+                            } else {
+                              onStudentSelectionChange?.(studentOptions.map(s => s.id));
+                            }
+                          }}
+                        >
+                          {selectedStudents.length === studentOptions.length ? "전체 해제" : "전체 선택"}
+                        </Button>
+                      </div>
                       <div className="p-2 space-y-1">
-                        {classOptions.map((classOption) => (
-                          <div
-                            key={classOption.id}
-                            className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100 cursor-pointer"
-                            onClick={() => {
-                              const isSelected = selectedClasses.includes(classOption.id);
-                              if (isSelected) {
-                                onClassSelectionChange?.(selectedClasses.filter(id => id !== classOption.id));
-                              } else {
-                                onClassSelectionChange?.([...selectedClasses, classOption.id]);
-                              }
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedClasses.includes(classOption.id)}
-                              className="pointer-events-none"
-                            />
-                            <label className="text-sm cursor-pointer flex-1">
-                              {classOption.name}
-                            </label>
-                          </div>
-                        ))}
+                        {studentOptions
+                          .filter(student => 
+                            !studentSearchTerm || student.name.toLowerCase().includes(studentSearchTerm.toLowerCase())
+                          )
+                          .map((student) => (
+                            <div
+                              key={student.id}
+                              className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100 cursor-pointer"
+                              onClick={() => {
+                                const isSelected = selectedStudents.includes(student.id);
+                                if (isSelected) {
+                                  onStudentSelectionChange?.(selectedStudents.filter(id => id !== student.id));
+                                } else {
+                                  onStudentSelectionChange?.([...selectedStudents, student.id]);
+                                }
+                              }}
+                            >
+                              <Checkbox
+                                checked={selectedStudents.includes(student.id)}
+                                className="pointer-events-none"
+                              />
+                              <label className="text-sm cursor-pointer flex-1">
+                                {student.name}
+                              </label>
+                            </div>
+                          ))}
                       </div>
                     </div>
                   </PopoverContent>
@@ -262,7 +387,7 @@ export function TuitionTable({
 
         <div className="bg-white rounded-b-xl shadow-lg border overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-[1200px] w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 border-b border-slate-200">
                   {!isReadOnly && onRowSelect && (
@@ -278,13 +403,13 @@ export function TuitionTable({
                       />
                     </th>
                   )}
-                  <th className="min-w-[100px] w-[12%] px-3 py-4 text-left font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     반명
                   </th>
-                  <th className="min-w-[100px] w-[12%] px-3 py-4 text-left font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     학생명
                   </th>
-                  <th className="min-w-[120px] w-[15%] px-3 py-4 text-left font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     <div className="flex items-center gap-2">
                       연월
                       {!isReadOnly && (
@@ -299,10 +424,10 @@ export function TuitionTable({
                       )}
                     </div>
                   </th>
-                  <th className="min-w-[80px] w-[10%] px-3 py-4 text-center font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-center font-semibold text-slate-700">
                     형제할인
                   </th>
-                  <th className="min-w-[100px] w-[12%] px-3 py-4 text-left font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     <div className="flex items-center gap-2">
                       수업유형
                       {!isReadOnly && (
@@ -317,7 +442,7 @@ export function TuitionTable({
                       )}
                     </div>
                   </th>
-                  <th className="min-w-[120px] w-[15%] px-3 py-4 text-right font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-right font-semibold text-slate-700">
                     <div className="flex items-center justify-end gap-2">
                       원비
                       {!isReadOnly && (
@@ -332,7 +457,7 @@ export function TuitionTable({
                       )}
                     </div>
                   </th>
-                  <th className="min-w-[100px] w-[12%] px-3 py-4 text-left font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     <div className="flex items-center gap-2">
                       납부상태
                       {!isReadOnly && (
@@ -347,11 +472,11 @@ export function TuitionTable({
                       )}
                     </div>
                   </th>
-                  <th className="min-w-[150px] w-[20%] px-3 py-4 text-left font-semibold text-slate-700">
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     비고
                   </th>
                   {!isReadOnly && (
-                    <th className="min-w-[80px] w-[10%] px-3 py-4 text-center font-semibold text-slate-700">
+                    <th className="px-3 py-4 text-center font-semibold text-slate-700">
                       {isHistoryMode ? "관리" : "삭제"}
                     </th>
                   )}
@@ -392,10 +517,29 @@ export function TuitionTable({
           {/* 하단 액션 바 */}
           <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-6 py-4 border-t border-slate-200">
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-6">
                 <div className="text-sm text-slate-600">
                   총 <span className="font-semibold text-blue-600">{rows.length}</span>개의 학원비 기록
                 </div>
+                {rows.length > 0 && (
+                  <>
+                    <div className="text-sm text-slate-600 border-l pl-6 border-slate-300">
+                      총 금액: <span className="font-bold text-lg text-blue-600">{rows.reduce((sum, row) => sum + row.amount, 0).toLocaleString()}원</span>
+                    </div>
+                    <div className="text-sm text-slate-600 border-l pl-6 border-slate-300">
+                      <span className="text-green-600">
+                        완납: {rows.filter(r => r.paymentStatus === '완납').reduce((sum, r) => sum + r.amount, 0).toLocaleString()}원
+                        ({rows.filter(r => r.paymentStatus === '완납').length}명)
+                      </span>
+                      {rows.filter(r => r.paymentStatus === '미납').length > 0 && (
+                        <span className="ml-3 text-red-600">
+                          미납: {rows.filter(r => r.paymentStatus === '미납').reduce((sum, r) => sum + r.amount, 0).toLocaleString()}원
+                          ({rows.filter(r => r.paymentStatus === '미납').length}명)
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
                 {selectedRows.length > 0 && (
                   <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                     {selectedRows.length}개 선택됨

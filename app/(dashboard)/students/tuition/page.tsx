@@ -146,15 +146,8 @@ export default function TuitionPage() {
 
     // 해당 반의 모든 학생에 대해 학원비 생성
     for (const student of targetClass.students) {
-      // 이미 존재하는지 확인
-      const exists = localRows.some(row => 
-        row.classId === classId && 
-        row.studentId === student.id && 
-        row.year === year && 
-        row.month === month
-      )
-
-      if (!exists) {
+      // 중복 체크 제거 - 정규 수업도 중복 추가 가능
+      if (true) {
         const amount = targetClass.monthly_fee || 50000 // 기본값 설정
         const discountedAmount = student.has_sibling ? Math.floor(amount * 0.95) : amount
 
@@ -181,17 +174,11 @@ export default function TuitionPage() {
         title: "추가 완료",
         description: `${targetClass.name}반 ${newRows.length}명의 학원비가 추가되었습니다.`,
       })
-    } else {
-      toast({
-        title: "이미 존재",
-        description: "해당 반의 모든 학생이 이미 추가되어 있습니다.",
-        variant: "destructive"
-      })
     }
   }, [classesWithStudents, yearMonth, localRows, toast])
 
-  // 개별 학생 추가 핸들러
-  const handleAddStudent = useCallback(async (classId: string, studentId: string) => {
+  // 개별 학생 추가 핸들러 (classType 파라미터 추가)
+  const handleAddStudent = useCallback(async (classId: string, studentId: string, classType: '정규' | '특강' = '정규') => {
     const targetClass = classesWithStudents.find(c => c.id === classId)
     if (!targetClass) {
       toast({
@@ -215,17 +202,12 @@ export default function TuitionPage() {
     const year = parseInt(yearMonth.split('-')[0])
     const month = parseInt(yearMonth.split('-')[1])
 
-    // 이미 존재하는지 확인
-    const exists = localRows.some(row => 
-      row.classId === classId && 
-      row.studentId === studentId && 
-      row.year === year && 
-      row.month === month
-    )
-
-    if (!exists) {
-      const amount = targetClass.monthly_fee || 50000 // 기본값 설정
-      const discountedAmount = student.has_sibling ? Math.floor(amount * 0.95) : amount
+    // 중복 체크 제거 - 같은 학생을 여러 번 추가 가능
+    // 반이 다르면 같은 학생이라도 추가 가능 (다른 반 수업)
+    // 같은 반에서도 중복 추가 가능 (정규/특강 구분은 테이블에서)
+    if (true) {
+      const amount = classType === '특강' ? 100000 : (targetClass.monthly_fee || 50000) // 특강은 기본 10만원
+      const discountedAmount = student.has_sibling && classType === '정규' ? Math.floor(amount * 0.95) : amount
 
       const newRow: TuitionRow = {
         id: `temp-${Date.now()}-${student.id}`, // 임시 ID
@@ -236,22 +218,16 @@ export default function TuitionPage() {
         year,
         month,
         isSibling: student.has_sibling || false,
-        classType: '정규',
+        classType,
         amount: discountedAmount,
-        note: '',
+        note: classType === '특강' ? '특강' : '',
         paymentStatus: '미납'
       }
 
       setLocalRows(prev => [...prev, newRow])
       toast({
         title: "추가 완료",
-        description: `${student.name} 학생의 학원비가 추가되었습니다.`,
-      })
-    } else {
-      toast({
-        title: "이미 존재",
-        description: "해당 학생의 학원비가 이미 추가되어 있습니다.",
-        variant: "destructive"
+        description: `${student.name} 학생이 추가되었습니다. 테이블에서 수업유형을 변경할 수 있습니다.`,
       })
     }
   }, [classesWithStudents, yearMonth, localRows, toast])
@@ -344,12 +320,13 @@ export default function TuitionPage() {
         for (const student of classData.students) {
           totalCount++
           
-          // 이미 존재하는지 확인
+          // 정규 수업만 중복 체크 (월별 자동 생성은 정규 수업만 생성)
           const exists = localRows.some(row => 
             row.classId === classData.id && 
             row.studentId === student.id && 
             row.year === year && 
-            row.month === month
+            row.month === month &&
+            row.classType === '정규'
           )
           
           if (!exists) {
@@ -456,8 +433,6 @@ export default function TuitionPage() {
 
   // 저장 핸들러
   const handleSave = useCallback(async () => {
-    console.log("Save button clicked, localRows:", localRows.length)
-
     if (localRows.length === 0) {
       toast({
         title: "저장할 데이터 없음",
@@ -481,13 +456,9 @@ export default function TuitionPage() {
         payment_status: row.paymentStatus
       }))
 
-      console.log("Data to save:", dataToSave)
       const result = await saveBulk(dataToSave)
-      console.log("Save result:", result)
       
       if (result.success) {
-        console.log("About to show success toast")
-        
         // 기존 토스트들 모두 dismiss
         dismiss()
         
@@ -497,9 +468,7 @@ export default function TuitionPage() {
         
         // Sonner 토스트 사용 (더 안정적)
         sonnerToast.success(`저장 완료! ${dataToSave.length}개의 학원비가 저장되었습니다.`)
-        console.log("Sonner toast called")
       } else {
-        console.log("Save failed:", result.error)
         toast({
           title: "저장 실패",
           description: result.error || "학원비 저장 중 오류가 발생했습니다.",
@@ -507,7 +476,6 @@ export default function TuitionPage() {
         })
       }
     } catch (error) {
-      console.error("Save error:", error)
       toast({
         title: "저장 실패",
         description: "학원비 저장 중 오류가 발생했습니다.",

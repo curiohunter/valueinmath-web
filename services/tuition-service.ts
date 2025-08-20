@@ -325,18 +325,19 @@ export async function saveTuitionFees(
       class_name_snapshot: data.class_id ? classNameMap.get(data.class_id) || null : null,
     }))
     
-    // 기존 데이터 있는 항목만 필터링 (중복 체크용)
-    const existingCheck = tuitionFees.filter(t => !t.id?.startsWith('temp-'))
-    
+    // UNIQUE 제약조건이 제거되었으므로 insert 사용
     // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
     const { error } = await supabase
       .from("tuition_fees")
-      .upsert(insertData as any, {
-        // class_id가 NULL인 경우를 고려한 conflict resolution
-        onConflict: existingCheck.length > 0 ? "id" : undefined
-      })
+      .insert(insertData as any)
     
     if (error) {
+      console.error("Supabase insert error details:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      })
       throw error
     }
     
