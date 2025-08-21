@@ -9,12 +9,11 @@ import { MakeupModal } from "./makeup-modal";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 type MakeupClass = Database["public"]["Tables"]["makeup_classes"]["Row"];
 type Student = Database["public"]["Tables"]["students"]["Row"];
 type Class = Database["public"]["Tables"]["classes"]["Row"];
+type Employee = Database["public"]["Tables"]["employees"]["Row"];
 
 // 한국 시간대(KST) 기준으로 오늘 날짜 가져오기
 const getKoreanDate = () => {
@@ -30,8 +29,8 @@ export default function MakeupClassesPage() {
   const [makeupClasses, setMakeupClasses] = useState<MakeupClass[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedTab, setSelectedTab] = useState<"pending" | "scheduled" | "completed" | "cancelled">("pending");
   
   // 모달 상태
@@ -66,6 +65,15 @@ export default function MakeupClassesPage() {
       
       if (classError) throw classError;
       setClasses(classData || []);
+
+      // 선생님 데이터
+      const { data: employeeData, error: employeeError } = await supabase
+        .from("employees")
+        .select("*")
+        .order("name");
+      
+      if (employeeError) throw employeeError;
+      setEmployees(employeeData || []);
 
       // 보강 데이터
       const { data: makeupData, error: makeupError } = await supabase
@@ -161,6 +169,51 @@ export default function MakeupClassesPage() {
     );
   };
 
+  // 선생님별 보강 통계 계산 (최근 30일)
+  const calculateTeacherStats = () => {
+    const todayKST = getKoreanDate();
+    const today = new Date(todayKST + 'T00:00:00');
+    const monthAgo = new Date(today);
+    monthAgo.setDate(today.getDate() - 30);
+    
+    // 반별 선생님 매핑
+    const classTeacherMap = new Map<string, string>();
+    classes.forEach(cls => {
+      if (cls.teacher_id) {
+        classTeacherMap.set(cls.id, cls.teacher_id);
+      }
+    });
+    
+    // 선생님별 보강 카운트
+    const teacherMakeupCount = new Map<string, number>();
+    
+    makeupClasses.forEach(makeup => {
+      if (makeup.makeup_date) {
+        const makeupDate = new Date(makeup.makeup_date + 'T00:00:00');
+        if (makeupDate >= monthAgo && makeupDate <= today && makeup.status === "completed") {
+          const teacherId = classTeacherMap.get(makeup.class_id);
+          if (teacherId) {
+            teacherMakeupCount.set(teacherId, (teacherMakeupCount.get(teacherId) || 0) + 1);
+          }
+        }
+      }
+    });
+    
+    // 선생님 이름과 건수 매핑
+    const teacherStats: { name: string; count: number }[] = [];
+    teacherMakeupCount.forEach((count, teacherId) => {
+      const teacher = employees.find(e => e.id === teacherId);
+      if (teacher) {
+        teacherStats.push({ name: teacher.name, count });
+      }
+    });
+    
+    // 건수 많은 순으로 정렬
+    teacherStats.sort((a, b) => b.count - a.count);
+    
+    return teacherStats;
+  };
+
   // 통계 계산 (한국 시간 기준)
   const stats = {
     weeklyAbsences: makeupClasses.filter(m => {
@@ -208,7 +261,8 @@ export default function MakeupClassesPage() {
       
       const makeupDate = new Date(m.makeup_date + 'T00:00:00');
       return m.status === "completed" && makeupDate >= monthAgo && makeupDate <= today;
-    }).length
+    }).length,
+    teacherStats: calculateTeacherStats()
   };
 
   if (loading) {
@@ -229,19 +283,10 @@ export default function MakeupClassesPage() {
       {/* 상단 통계 카드 */}
       <MakeupStats stats={stats} />
       
-      <div className="flex gap-6 relative">
-        {/* 사이드바 토글 버튼 */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute left-0 top-0 z-10 h-8 w-8 p-0 bg-white border shadow-sm hover:bg-gray-50"
-        >
-          {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </Button>
-        
-        {/* 왼쪽 사이드바 */}
-        <div className={`transition-all duration-300 ${isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'}`}>
+      {/* 사이드바와 테이블 - 5개 그리드와 동일한 구조 */}
+      <div className="grid grid-cols-5 gap-4">
+        {/* 왼쪽 사이드바 - 첫 번째 열 */}
+        <div className="col-span-1">
           <MakeupSidebar
             students={students}
             classes={classes}
@@ -250,8 +295,8 @@ export default function MakeupClassesPage() {
           />
         </div>
         
-        {/* 메인 테이블 */}
-        <div className="flex-1">
+        {/* 메인 테이블 - 나머지 4개 열 */}
+        <div className="col-span-4">
           <MakeupTable
             makeupClasses={makeupClasses}
             students={students}

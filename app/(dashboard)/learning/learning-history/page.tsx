@@ -114,13 +114,6 @@ export default function LearningHistoryPage() {
     setLoading(true);
     setError(null);
     
-    console.log("검색 조건:", {
-      dateRange,
-      filteredClassId,
-      filteredStudentId,
-      classSearch,
-      studentSearch
-    });
 
     try {
       let query = supabase
@@ -130,23 +123,19 @@ export default function LearningHistoryPage() {
       // 날짜 필터
       if (dateRange.from) {
         query = query.gte("date", dateRange.from);
-        console.log("날짜 시작 필터 적용:", dateRange.from);
       }
       if (dateRange.to) {
         query = query.lte("date", dateRange.to);
-        console.log("날짜 종료 필터 적용:", dateRange.to);
       }
       
       // 반 필터
       if (filteredClassId) {
         query = query.eq("class_id", filteredClassId);
-        console.log("반 필터 적용:", filteredClassId, classMap[filteredClassId]);
       }
       
       // 학생 필터
       if (filteredStudentId) {
         query = query.eq("student_id", filteredStudentId);
-        console.log("학생 필터 적용:", filteredStudentId, studentMap[filteredStudentId]);
       }
 
       // 날짜순 정렬 추가 (오래된 것이 위로)
@@ -154,7 +143,6 @@ export default function LearningHistoryPage() {
       
       const { data, error } = await query;
       
-      console.log("쿼리 결과:", { data, error, count: data?.length });
       
       if (error) throw error;
       setData(data || []);
@@ -169,8 +157,6 @@ export default function LearningHistoryPage() {
 
   // 검색 버튼 클릭 시 - 검색어를 ID로 변환 후 검색
   function handleSearch() {
-    console.log("검색 버튼 클릭");
-    console.log("검색어:", { classSearch, studentSearch });
     
     // 반 검색어를 ID로 변환
     const classObj = classOptions.find(c => 
@@ -182,7 +168,6 @@ export default function LearningHistoryPage() {
       studentSearch ? s.name.toLowerCase().includes(studentSearch.toLowerCase()) : false
     );
     
-    console.log("찾은 결과:", { classObj, studentObj });
     
     // 필터 ID 설정
     const newClassId = classObj?.id || "";
@@ -191,7 +176,6 @@ export default function LearningHistoryPage() {
     setFilteredClassId(newClassId);
     setFilteredStudentId(newStudentId);
     
-    console.log("설정된 필터 ID:", { newClassId, newStudentId });
     
     // 약간의 지연 후 검색 (상태 업데이트 완료 대기)
     setTimeout(() => {
@@ -207,11 +191,6 @@ export default function LearningHistoryPage() {
     const useClassId = classId !== undefined ? classId : filteredClassId;
     const useStudentId = studentId !== undefined ? studentId : filteredStudentId;
     
-    console.log("필터로 검색:", {
-      dateRange,
-      useClassId,
-      useStudentId
-    });
 
     try {
       let query = supabase
@@ -229,7 +208,6 @@ export default function LearningHistoryPage() {
       setData(data || []);
       setPage(1);
       
-      console.log("검색 완료, 결과 개수:", data?.length);
     } catch (e) {
       console.error("검색 에러:", e);
       setError("데이터를 불러오는 중 오류가 발생했습니다.");

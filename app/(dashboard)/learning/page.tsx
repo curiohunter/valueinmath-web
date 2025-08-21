@@ -38,27 +38,30 @@ const scoreColor = (score: number) => {
   }
 };
 
-// 출결/숙제/집중도 string→숫자 매핑
-const attendanceMap: Record<string, number> = {
-  "결석": 1,
-  "조퇴": 2,
-  "30분내 등원": 3,
-  "15분내 등원": 4,
-  "수업시작전 등원": 5,
+// 출결 점수 → 텍스트 매핑 (새로운 시스템)
+const attendanceLabels: Record<number, string> = {
+  5: "출석",
+  4: "지각",
+  3: "조퇴",
+  2: "보강",
+  1: "결석"
 };
-const homeworkMap: Record<string, number> = {
-  "결석": 1,
-  "보강필요": 2,
-  "추가 추적 필요": 3,
-  "90% 이상": 4,
-  "100% 마무리": 5,
+
+// 숙제/집중도 점수 → 텍스트 매핑
+const homeworkLabels: Record<number, string> = {
+  5: "100% 마무리",
+  4: "90% 이상",
+  3: "추가 추적 필요",
+  2: "보강필요",
+  1: "결석"
 };
-const focusMap: Record<string, number> = {
-  "결석": 1,
-  "조치필요": 2,
-  "산만하나 진행가능": 3,
-  "대체로 잘참여": 4,
-  "매우 열의있음": 5,
+
+const focusLabels: Record<number, string> = {
+  5: "매우 열의있음",
+  4: "대체로 잘참여",
+  3: "산만하나 진행가능",
+  2: "조치필요",
+  1: "결석"
 };
 
 export default function LearningPage() {
@@ -1360,35 +1363,38 @@ export default function LearningPage() {
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span 
-                                  className={"inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer " + scoreColor(row.attendance)}
+                                  className={"inline-flex items-center justify-center px-2 py-1 text-xs font-bold rounded-full border-2 cursor-pointer whitespace-nowrap " + scoreColor(row.attendance)}
                                   onClick={() => {
                                     const nextValue = row.attendance === 5 ? 1 : row.attendance + 1;
                                     handleChange(originalIdx, "attendance", nextValue);
                                   }}
+                                  title={`클릭하여 변경 (현재: ${attendanceLabels[row.attendance]})`}
                                 >
-                                  {row.attendance}
+                                  {attendanceLabels[row.attendance] || row.attendance}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span 
-                                  className={"inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer " + scoreColor(row.homework)}
+                                  className={"inline-flex items-center justify-center px-2 py-1 text-xs font-bold rounded-full border-2 cursor-pointer whitespace-nowrap " + scoreColor(row.homework)}
                                   onClick={() => {
                                     const nextValue = row.homework === 5 ? 1 : row.homework + 1;
                                     handleChange(originalIdx, "homework", nextValue);
                                   }}
+                                  title={`클릭하여 변경 (현재: ${homeworkLabels[row.homework]})`}
                                 >
-                                  {row.homework}
+                                  {homeworkLabels[row.homework] || row.homework}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span 
-                                  className={"inline-flex items-center justify-center w-8 h-8 text-xs font-bold rounded-full border-2 cursor-pointer " + scoreColor(row.focus)}
+                                  className={"inline-flex items-center justify-center px-2 py-1 text-xs font-bold rounded-full border-2 cursor-pointer whitespace-nowrap " + scoreColor(row.focus)}
                                   onClick={() => {
                                     const nextValue = row.focus === 5 ? 1 : row.focus + 1;
                                     handleChange(originalIdx, "focus", nextValue);
                                   }}
+                                  title={`클릭하여 변경 (현재: ${focusLabels[row.focus]})`}
                                 >
-                                  {row.focus}
+                                  {focusLabels[row.focus] || row.focus}
                                 </span>
                               </td>
                               <td className="px-4 py-3">

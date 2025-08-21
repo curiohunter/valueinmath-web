@@ -13,6 +13,8 @@ import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2 }
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import ConsultationCard from "@/components/dashboard/ConsultationCard"
 import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
+import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
+import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { calendarService } from "@/services/calendar"
@@ -53,6 +55,7 @@ export default function DashboardPage() {
   const supabase = createClient()
   const [consultations, setConsultations] = useState<ConsultationData[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
+  const [atRiskStudents, setAtRiskStudents] = useState<TeacherGroup[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats>({
     activeStudents: 0,
@@ -78,6 +81,8 @@ export default function DashboardPage() {
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [expandedConsultations, setExpandedConsultations] = useState<Set<string>>(new Set())
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set())
+  const [selectedStudent, setSelectedStudent] = useState<AtRiskStudent | null>(null)
+  const [isStudentDetailModalOpen, setIsStudentDetailModalOpen] = useState(false)
 
   // UTC로 저장된 datetime을 한국시간으로 정확히 변환하여 표시하는 헬퍼 함수
   const formatKoreanDateTime = (utcDateString: string): string => {
@@ -718,12 +723,298 @@ export default function DashboardPage() {
     // 미들웨어에서 이미 인증을 확인했으므로 여기서는 데이터만 로드
   }, [])
 
+  // 위험 학생 데이터 로딩
+  const loadAtRiskStudents = async () => {
+    try {
+      // 한 달 전 날짜 계산
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      const monthAgoStr = monthAgo.toISOString().split('T')[0];
+      const todayStr = new Date().toISOString().split('T')[0];
+
+
+      // 1. 최근 1개월 study_logs 데이터 조회
+      const { data: studyLogs, error: studyError } = await supabase
+        .from('study_logs')
+        .select(`
+          student_id,
+          attendance_status,
+          homework,
+          focus,
+          class_id,
+          date,
+          students!inner(id, name, status),
+          classes!inner(id, name, teacher_id)
+        `)
+        .gte('date', monthAgoStr)
+        .lte('date', todayStr)
+        .eq('students.status', '재원');
+
+      if (studyError) {
+        console.error('학습 로그 조회 오류:', studyError);
+        return;
+      }
+
+
+      // 2. 최근 시험 데이터 조회
+      const { data: testLogs, error: testError } = await supabase
+        .from('test_logs')
+        .select(`
+          student_id,
+          test_score,
+          date,
+          class_id
+        `)
+        .gte('date', monthAgoStr)
+        .lte('date', todayStr);
+
+      if (testError) {
+        console.error('시험 로그 조회 오류:', testError);
+      }
+
+      // 3. 선생님 정보 조회
+      const { data: teachers, error: teacherError } = await supabase
+        .from('employees')
+        .select('id, name')
+        .eq('status', '재직');
+
+      if (teacherError) {
+        console.error('선생님 조회 오류:', teacherError);
+      }
+
+
+      // 4. 학생별 통계 계산 - 학생별로 통합 (반 구분 없이)
+      const studentStatsMap = new Map<string, {
+        studentId: string;
+        studentName: string;
+        classNames: Set<string>;
+        teacherIds: Set<string>;
+        attendanceSum: number;
+        attendanceCount: number;
+        homeworkSum: number;
+        homeworkCount: number;
+        focusSum: number;
+        focusCount: number;
+        testScores: number[];
+        expectedTests: number;
+      }>();
+
+      // study_logs 데이터 집계 - 학생별로 통합
+      studyLogs?.forEach(log => {
+        const studentId = log.student_id;
+        if (!studentStatsMap.has(studentId)) {
+          studentStatsMap.set(studentId, {
+            studentId: log.student_id,
+            studentName: (log.students as any).name,
+            classNames: new Set(),
+            teacherIds: new Set(),
+            attendanceSum: 0,
+            attendanceCount: 0,
+            homeworkSum: 0,
+            homeworkCount: 0,
+            focusSum: 0,
+            focusCount: 0,
+            testScores: [],
+            expectedTests: 0
+          });
+        }
+        
+        const stats = studentStatsMap.get(studentId)!;
+        stats.classNames.add((log.classes as any).name);
+        stats.teacherIds.add((log.classes as any).teacher_id);
+        
+        if (log.attendance_status) {
+          stats.attendanceSum += log.attendance_status;
+          stats.attendanceCount++;
+        }
+        if (log.homework) {
+          stats.homeworkSum += log.homework;
+          stats.homeworkCount++;
+        }
+        if (log.focus) {
+          stats.focusSum += log.focus;
+          stats.focusCount++;
+        }
+      });
+
+      // 학생-선생님 조합으로 변환 (한 학생이 여러 선생님에게 속할 수 있음)
+      const studentStats = new Map<string, {
+        studentId: string;
+        studentName: string;
+        className: string;
+        teacherId: string;
+        attendanceSum: number;
+        attendanceCount: number;
+        homeworkSum: number;
+        homeworkCount: number;
+        focusSum: number;
+        focusCount: number;
+        testScores: number[];
+        expectedTests: number;
+      }>();
+
+      studentStatsMap.forEach((stats, studentId) => {
+        // 각 선생님별로 엔트리 생성
+        stats.teacherIds.forEach(teacherId => {
+          const key = `${studentId}_${teacherId}`;
+          studentStats.set(key, {
+            studentId: stats.studentId,
+            studentName: stats.studentName,
+            className: Array.from(stats.classNames).join(', '),
+            teacherId,
+            attendanceSum: stats.attendanceSum,
+            attendanceCount: stats.attendanceCount,
+            homeworkSum: stats.homeworkSum,
+            homeworkCount: stats.homeworkCount,
+            focusSum: stats.focusSum,
+            focusCount: stats.focusCount,
+            testScores: stats.testScores,
+            expectedTests: stats.expectedTests
+          });
+        });
+      });
+
+      
+      // 선생님별 학생 수 확인
+      const teacherStudentCount = new Map<string, { name: string, count: number }>();
+      studentStats.forEach(stat => {
+        const teacherName = teachers?.find(t => t.id === stat.teacherId)?.name || '알 수 없음';
+        if (!teacherStudentCount.has(stat.teacherId)) {
+          teacherStudentCount.set(stat.teacherId, { name: teacherName, count: 0 });
+        }
+        teacherStudentCount.get(stat.teacherId)!.count++;
+      });
+      
+
+      // test_logs 데이터 추가 - 학생별로 통합
+      testLogs?.forEach(test => {
+        // 먼저 학생의 모든 stats 엔트리 찾기
+        studentStats.forEach((stats, key) => {
+          if (stats.studentId === test.student_id && test.test_score !== null) {
+            stats.testScores.push(test.test_score);
+          }
+        });
+      });
+
+      // 5. 위험도 계산 및 학생 변환 - 모든 학생의 점수를 계산
+      const allStudentScores: AtRiskStudent[] = [];
+      
+      
+      studentStats.forEach((stats, key) => {
+        const attendanceAvg = stats.attendanceCount > 0 ? stats.attendanceSum / stats.attendanceCount : 5;
+        const homeworkAvg = stats.homeworkCount > 0 ? stats.homeworkSum / stats.homeworkCount : 5;
+        const focusAvg = stats.focusCount > 0 ? stats.focusSum / stats.focusCount : 5;
+        const testScore = stats.testScores.length > 0 ? 
+          stats.testScores.reduce((a, b) => a + b, 0) / stats.testScores.length : null;
+        const missingTests = Math.max(0, 1 - stats.testScores.length); // 최소 1개 시험은 봐야 함
+        
+        // 종합 위험 점수 계산 (낮을수록 위험) - 미응시 감점 제거
+        let totalScore = (attendanceAvg + homeworkAvg + focusAvg) / 3;
+        if (testScore !== null) {
+          totalScore = (totalScore * 3 + (testScore / 20)) / 4; // 시험 점수를 5점 만점으로 환산
+        }
+        // 미응시 시험 감점을 제거하거나 줄임
+        // if (missingTests > 0) {
+        //   totalScore -= missingTests; // 미응시 시험당 1점 감점
+        // }
+        
+        
+        // 위험 레벨 결정 (기준 완화)
+        let riskLevel: 'high' | 'medium' | 'low';
+        if (totalScore < 3.0 || attendanceAvg < 2 || homeworkAvg < 2.5 || missingTests > 1) {
+          riskLevel = 'high';
+        } else if (totalScore < 4.0 || attendanceAvg < 3.5 || homeworkAvg < 3.5 || (testScore !== null && testScore < 70)) {
+          riskLevel = 'medium';
+        } else {
+          riskLevel = 'low';
+        }
+        
+        // 모든 학생을 추가 (나중에 선생님별로 하위 3명만 선별)
+        const teacherName = teachers?.find(t => t.id === stats.teacherId)?.name || '선생님';
+        
+        allStudentScores.push({
+          studentId: stats.studentId,
+          studentName: stats.studentName,
+          className: stats.className,
+          teacherId: stats.teacherId,
+          teacherName,
+          riskLevel,
+          factors: {
+            attendanceAvg,
+            homeworkAvg,
+            focusAvg,
+            testScore,
+            missingTests
+          },
+          totalScore
+        });
+      });
+
+
+      // 6. 먼저 모든 선생님의 그룹을 만들고 (선생님이 최소 1명의 학생이라도 있으면)
+      const teacherGroupMap = new Map<string, TeacherGroup>();
+      
+      // 모든 학생을 선생님별로 그룹화
+      allStudentScores.forEach(student => {
+        if (!teacherGroupMap.has(student.teacherId)) {
+          teacherGroupMap.set(student.teacherId, {
+            teacherId: student.teacherId,
+            teacherName: student.teacherName,
+            students: []
+          });
+        }
+        teacherGroupMap.get(student.teacherId)!.students.push(student);
+      });
+      
+      // 데이터가 없는 선생님도 추가 (반이 있지만 최근 데이터가 없는 경우)
+      // 모든 반 정보 가져오기
+      const { data: allClasses } = await supabase
+        .from('classes')
+        .select('teacher_id')
+        .not('teacher_id', 'is', null);
+        
+      const uniqueTeacherIds = new Set(allClasses?.map(c => c.teacher_id) || []);
+      
+      uniqueTeacherIds.forEach(teacherId => {
+        if (!teacherGroupMap.has(teacherId)) {
+          const teacherName = teachers?.find(t => t.id === teacherId)?.name;
+          if (teacherName) {
+            teacherGroupMap.set(teacherId, {
+              teacherId,
+              teacherName,
+              students: []
+            });
+          }
+        }
+      });
+      
+      // 각 선생님별로 위험도 순으로 정렬 후 하위 3명만 선별 (점수가 낮은 순)
+      const finalGroups: TeacherGroup[] = [];
+      teacherGroupMap.forEach(group => {
+        // 점수가 낮은 순으로 정렬 (위험도가 높은 순)
+        group.students.sort((a, b) => a.totalScore - b.totalScore);
+        // 하위 3명 선택 (점수 제한 없이 무조건 하위 3명)
+        group.students = group.students.slice(0, 3);
+        finalGroups.push(group); // 학생이 없어도 선생님은 표시
+      });
+      
+      // 선생님 이름으로 정렬
+      finalGroups.sort((a, b) => a.teacherName.localeCompare(b.teacherName, 'ko'));
+      
+      
+      setAtRiskStudents(finalGroups);
+    } catch (error) {
+      console.error('위험 학생 데이터 로딩 오류:', error);
+    }
+  };
+
   // 모든 데이터 새로고침 함수
   const refreshAllData = async () => {
     await Promise.all([
       loadStats(),
       loadConsultations(),
-      loadEntranceTests()
+      loadEntranceTests(),
+      loadAtRiskStudents()
     ])
   }
 
@@ -986,8 +1277,21 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 하단: 학원 일정 캘린더 */}
-      <DashboardCalendar />
+      {/* 하단: 학원 일정 캘린더 및 위험 학생 관리 */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        {/* 왼쪽: 캘린더 */}
+        <DashboardCalendar />
+        
+        {/* 오른쪽: 위험 학생 관리 */}
+        <AtRiskStudentsCard 
+          teacherGroups={atRiskStudents}
+          loading={loading}
+          onStudentClick={(student) => {
+            setSelectedStudent(student);
+            setIsStudentDetailModalOpen(true);
+          }}
+        />
+      </div>
 
       {/* 신규상담 편집 모달 */}
       <ConsultationModal
@@ -1007,6 +1311,16 @@ export default function DashboardPage() {
           loadConsultations()
           loadStats()
         }}
+      />
+
+      {/* 학생 상세 정보 모달 */}
+      <StudentDetailModal
+        isOpen={isStudentDetailModalOpen}
+        onClose={() => {
+          setIsStudentDetailModalOpen(false);
+          setSelectedStudent(null);
+        }}
+        student={selectedStudent}
       />
     </div>
   )

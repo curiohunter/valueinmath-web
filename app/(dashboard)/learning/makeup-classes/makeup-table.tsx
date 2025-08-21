@@ -194,44 +194,24 @@ export function MakeupTable({
               className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
             >
               보강 미정
-              {counts.pending > 0 && (
-                <Badge variant="destructive" className="ml-2">
-                  {counts.pending}
-                </Badge>
-              )}
             </TabsTrigger>
             <TabsTrigger 
               value="scheduled"
               className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
             >
               보강 예정
-              {counts.scheduled > 0 && (
-                <Badge variant="outline" className="ml-2">
-                  {counts.scheduled}
-                </Badge>
-              )}
             </TabsTrigger>
             <TabsTrigger 
               value="completed"
               className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
             >
               보강 완료
-              {counts.completed > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {counts.completed}
-                </Badge>
-              )}
             </TabsTrigger>
             <TabsTrigger 
               value="cancelled"
               className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
             >
               취소됨
-              {counts.cancelled > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {counts.cancelled}
-                </Badge>
-              )}
             </TabsTrigger>
           </TabsList>
         </div>

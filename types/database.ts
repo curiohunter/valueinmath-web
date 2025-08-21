@@ -356,6 +356,10 @@ export type Database = {
           status: Database["public"]["Enums"]["makeup_status_enum"]
           student_id: string
           updated_at: string | null
+          absence_calendar_event_id: string | null
+          makeup_calendar_event_id: string | null
+          student_name_snapshot: string | null
+          class_name_snapshot: string | null
         }
         Insert: {
           absence_date?: string | null
@@ -373,6 +377,10 @@ export type Database = {
           status?: Database["public"]["Enums"]["makeup_status_enum"]
           student_id: string
           updated_at?: string | null
+          absence_calendar_event_id?: string | null
+          makeup_calendar_event_id?: string | null
+          student_name_snapshot?: string | null
+          class_name_snapshot?: string | null
         }
         Update: {
           absence_date?: string | null
@@ -390,6 +398,10 @@ export type Database = {
           status?: Database["public"]["Enums"]["makeup_status_enum"]
           student_id?: string
           updated_at?: string | null
+          absence_calendar_event_id?: string | null
+          makeup_calendar_event_id?: string | null
+          student_name_snapshot?: string | null
+          class_name_snapshot?: string | null
         }
         Relationships: [
           {

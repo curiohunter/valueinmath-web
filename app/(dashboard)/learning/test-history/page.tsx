@@ -183,7 +183,6 @@ export default function TestHistoryPage() {
       
       const { data, error } = await query;
       
-      console.log("Test History Query Result:", { data, error });
       
       if (error) throw error;
       setData(data || []);

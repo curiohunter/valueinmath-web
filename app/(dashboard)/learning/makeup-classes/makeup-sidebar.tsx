@@ -127,13 +127,13 @@ export function MakeupSidebar({
   }, [classes, teachers]);
 
   return (
-    <div className="w-full h-full bg-white border rounded-lg shadow-sm overflow-hidden">
+    <div className="w-full bg-white border rounded-lg shadow-sm overflow-hidden">
       <div className="p-4 border-b bg-gray-50">
         <h3 className="font-semibold text-gray-900">반별 학생 목록</h3>
         <p className="text-sm text-gray-500 mt-1">학생을 선택하여 보강 추가</p>
       </div>
       
-      <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 20rem)" }}>
+      <div className="overflow-y-auto" style={{ height: "calc(100vh - 24rem)" }}>
         {Array.from(classesByTeacher.entries()).map(([teacherId, teacherClasses]) => {
           const teacher = teachers.find(t => t.id === teacherId);
           const teacherName = teacher?.name || "담당 미지정";
