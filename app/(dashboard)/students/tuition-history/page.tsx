@@ -149,8 +149,8 @@ export default function TuitionHistoryPage() {
         setStudentOptions(studentList);
         setStudentMap(Object.fromEntries(studentList.map((s: any) => [s.id, s.name])));
         
-        // 날짜 범위가 변경되면 선택된 학생 초기화 (새로운 날짜 범위에 없는 학생이 선택되어 있을 수 있으므로)
-        setSelectedStudents([]);
+        // 날짜 범위가 변경되면 선택된 학생 중 새로운 날짜 범위에 없는 학생만 제거
+        setSelectedStudents(prev => prev.filter(id => uniqueStudents.has(id)));
       }
     }
 
@@ -315,6 +315,12 @@ export default function TuitionHistoryPage() {
 
   // 초기화 버튼
   function resetFilters() {
+    // 변경사항이 있으면 경고
+    if (hasUnsavedChanges) {
+      const confirmChange = window.confirm("저장하지 않은 변경사항이 있습니다. 계속하시겠습니까?");
+      if (!confirmChange) return;
+    }
+    
     setClassSearch("");
     setStudentSearch("");
     setSelectedClasses([]); // 반별 중복선택 초기화
@@ -333,6 +339,9 @@ export default function TuitionHistoryPage() {
     const lastDay = new Date(year, month, 0).getDate();
     const lastDayStr = `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
     setDateRange({ from: firstDay, to: lastDayStr });
+    
+    // 필터 초기화 후 데이터 다시 불러오기
+    fetchTuitionHistoryWithFilters();
   }
 
   // 페이지당 아이템 수
@@ -562,12 +571,12 @@ export default function TuitionHistoryPage() {
     }
   };
 
-  // 초기 데이터 로드 - selectedClasses, selectedStudents 변경 시에도 자동으로 데이터를 다시 가져옴
+  // 초기 데이터 로드 - 날짜 범위가 설정되면 한 번만 로드
   useEffect(() => {
     if (dateRange.from && dateRange.to) {
       fetchTuitionHistoryWithFilters();
     }
-  }, [dateRange, selectedClasses, selectedStudents, selectedPaymentStatus]);
+  }, [dateRange.from, dateRange.to]);
 
   // 데이터 변경 감지
   useEffect(() => {
@@ -707,6 +716,7 @@ export default function TuitionHistoryPage() {
             selectedStudents={selectedStudents}
             onStudentSelectionChange={setSelectedStudents}
             teachers={teachers}
+            onSearch={handleSearch}
           />
           
         </div>

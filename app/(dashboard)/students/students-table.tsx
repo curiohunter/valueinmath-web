@@ -36,6 +36,8 @@ export function StudentsTable() {
   const search = searchParams.get("search") || ""
   const department = searchParams.get("department") || "all"
   const status = searchParams.get("status") || "재원" // 기본값을 "재원"으로 설정
+  const school_type = searchParams.get("school_type") || "all"
+  const grade = searchParams.get("grade") || "all"
   const sortBy = searchParams.get("sortBy") || "name" // 정렬 기준
   const sortOrder = searchParams.get("sortOrder") || "asc" // 정렬 순서
 
@@ -45,8 +47,10 @@ export function StudentsTable() {
       search,
       department: department as any,
       status: status as any,
+      school_type: school_type as any,
+      grade: grade === "all" ? "all" : Number(grade),
     }),
-    [search, department, status],
+    [search, department, status, school_type, grade],
   )
 
   const { students, totalCount, isLoading, mutate, deleteStudent } = useStudents(page, pageSize, filters, sortBy, sortOrder as "asc" | "desc")
@@ -151,7 +155,7 @@ export function StudentsTable() {
   }
 
   // 정렬 변경 처리
-  const handleSort = (field: "name" | "start_date") => {
+  const handleSort = (field: "name" | "start_date" | "end_date") => {
     const params = new URLSearchParams(searchParams)
     
     if (sortBy === field) {
@@ -170,7 +174,7 @@ export function StudentsTable() {
   }
 
   // 정렬 아이콘 표시
-  const getSortIcon = (field: "name" | "start_date") => {
+  const getSortIcon = (field: "name" | "start_date" | "end_date") => {
     if (sortBy !== field) {
       return <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
     }
@@ -178,6 +182,7 @@ export function StudentsTable() {
       ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" />
       : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
   }
+
 
   // 상태 배지 색상 매핑
   const statusColorMap: Record<string, string> = {
@@ -232,7 +237,15 @@ export function StudentsTable() {
                   {getSortIcon("start_date")}
                 </button>
               </TableHead>
-              <TableHead className="w-[10%]">종료일</TableHead>
+              <TableHead className="w-[10%]">
+                <button
+                  className="flex items-center font-medium hover:text-gray-900 dark:hover:text-gray-100"
+                  onClick={() => handleSort("end_date")}
+                >
+                  종료일
+                  {getSortIcon("end_date")}
+                </button>
+              </TableHead>
               <TableHead className="w-[10%] text-center">메모</TableHead>
               <TableHead className="w-[6%] text-center">관리</TableHead>
             </TableRow>

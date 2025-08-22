@@ -85,7 +85,7 @@ export function useNewConsultStudents() {
 export function useStudents(
   page = 1,
   pageSize = 10,
-  filters: StudentFilters = { search: "", department: "all", status: "all" },
+  filters: StudentFilters = { search: "", department: "all", status: "all", school_type: "all", grade: "all" },
   sortBy: string = "name",
   sortOrder: "asc" | "desc" = "asc"
 ) {

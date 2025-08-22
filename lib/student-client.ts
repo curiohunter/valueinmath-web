@@ -33,7 +33,7 @@ function mapStudentRowToStudent(row: StudentRow): Student {
 export async function getStudents(
   page = 1,
   pageSize = 10,
-  filters: StudentFilters = { search: "", department: "all", status: "all" },
+  filters: StudentFilters = { search: "", department: "all", status: "all", school_type: "all", grade: "all" },
   sortBy: string = "name",
   sortOrder: "asc" | "desc" = "asc"
 ): Promise<{ data: Student[]; count: number }> {
@@ -61,9 +61,21 @@ export async function getStudents(
       query = query.eq("status", filters.status)
     }
 
+    // 학교 타입 필터 적용
+    if (filters.school_type !== "all") {
+      query = query.eq("school_type", filters.school_type)
+    }
+
+    // 학년 필터 적용
+    if (filters.grade !== "all") {
+      query = query.eq("grade", filters.grade)
+    }
+
     // 정렬 적용 - URL 파라미터 기반으로 정렬
     if (sortBy === "start_date") {
       query = query.order("start_date", { ascending: sortOrder === "asc", nullsFirst: false })
+    } else if (sortBy === "end_date") {
+      query = query.order("end_date", { ascending: sortOrder === "asc", nullsFirst: false })
     } else if (sortBy === "name") {
       query = query.order("name", { ascending: sortOrder === "asc" })
     } else {

@@ -39,4 +39,6 @@ export interface StudentFilters {
   search: string
   department: Department | "all"
   status: StudentStatus | "all"
+  school_type: SchoolType | "all"
+  grade: number | "all"
 }

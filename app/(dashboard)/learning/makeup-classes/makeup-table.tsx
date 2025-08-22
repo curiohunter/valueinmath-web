@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit2, Trash2, Calendar, Clock, User } from "lucide-react";
+import { Edit2, Trash2, Calendar, Clock, User, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
@@ -53,6 +53,14 @@ export function MakeupTable({
 }: MakeupTableProps) {
   const supabase = createClient();
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // 탭 변경 시 페이지 초기화
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedTab]);
+
   // 탭별 데이터 필터링
   const filteredMakeups = makeupClasses.filter(makeup => {
     switch (selectedTab) {
@@ -68,6 +76,15 @@ export function MakeupTable({
         return false;
     }
   });
+
+  // 페이지네이션 계산 (completed와 cancelled 탭에만 적용)
+  const needsPagination = selectedTab === "completed" || selectedTab === "cancelled";
+  const totalPages = needsPagination ? Math.ceil(filteredMakeups.length / itemsPerPage) : 1;
+  
+  // 현재 페이지에 표시할 데이터
+  const paginatedMakeups = needsPagination
+    ? filteredMakeups.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : filteredMakeups;
 
   // 학생/반 이름 찾기 헬퍼 함수
   const getStudentName = (studentId: string) => {
@@ -223,7 +240,8 @@ export function MakeupTable({
               <p>해당하는 보강 내역이 없습니다.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -240,7 +258,7 @@ export function MakeupTable({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMakeups.map((makeup) => (
+                  {paginatedMakeups.map((makeup) => (
                     <TableRow key={makeup.id} className="hover:bg-gray-50/50">
                       <TableCell className="font-medium py-3 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-1">
@@ -336,6 +354,69 @@ export function MakeupTable({
                 </TableBody>
               </Table>
             </div>
+            
+            {/* 페이지네이션 UI - completed와 cancelled 탭에만 표시 */}
+            {needsPagination && totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t">
+                <div className="text-sm text-gray-500">
+                  전체 {filteredMakeups.length}개 중 {((currentPage - 1) * itemsPerPage) + 1}-
+                  {Math.min(currentPage * itemsPerPage, filteredMakeups.length)}개 표시
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    이전
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    {/* 페이지 번호 표시 */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                      // 현재 페이지 주변 2개씩만 표시
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => setCurrentPage(page)}
+                          >
+                            {page}
+                          </Button>
+                        );
+                      }
+                      
+                      // 생략 부호 표시
+                      if (page === currentPage - 2 || page === currentPage + 2) {
+                        return <span key={page} className="px-1 text-gray-400">...</span>;
+                      }
+                      
+                      return null;
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    다음
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </TabsContent>
       </Tabs>

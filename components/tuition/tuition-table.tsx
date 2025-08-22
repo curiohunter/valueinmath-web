@@ -54,6 +54,8 @@ interface TuitionTableProps {
   onStudentSelectionChange?: (students: string[]) => void
   // 선생님 정보
   teachers?: Array<{ id: string; name: string }>
+  // 검색 실행 핸들러
+  onSearch?: () => void
 }
 
 export function TuitionTable({
@@ -92,7 +94,8 @@ export function TuitionTable({
   studentOptions = [],
   selectedStudents = [],
   onStudentSelectionChange,
-  teachers = []
+  teachers = [],
+  onSearch
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -237,21 +240,23 @@ export function TuitionTable({
                                   {teacherClasses.map((classOption: any) => (
                                     <div
                                       key={classOption.id}
-                                      className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100 cursor-pointer"
-                                      onClick={() => {
-                                        const isSelected = selectedClasses.includes(classOption.id);
-                                        if (isSelected) {
-                                          onClassSelectionChange?.(selectedClasses.filter(id => id !== classOption.id));
-                                        } else {
-                                          onClassSelectionChange?.([...selectedClasses, classOption.id]);
-                                        }
-                                      }}
+                                      className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100"
                                     >
                                       <Checkbox
+                                        id={`class-${classOption.id}`}
                                         checked={selectedClasses.includes(classOption.id)}
-                                        className="pointer-events-none"
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            onClassSelectionChange?.([...selectedClasses, classOption.id]);
+                                          } else {
+                                            onClassSelectionChange?.(selectedClasses.filter(id => id !== classOption.id));
+                                          }
+                                        }}
                                       />
-                                      <label className="text-sm cursor-pointer flex-1">
+                                      <label 
+                                        htmlFor={`class-${classOption.id}`}
+                                        className="text-sm cursor-pointer flex-1"
+                                      >
                                         {classOption.name}
                                       </label>
                                     </div>
@@ -314,21 +319,23 @@ export function TuitionTable({
                           .map((student) => (
                             <div
                               key={student.id}
-                              className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100 cursor-pointer"
-                              onClick={() => {
-                                const isSelected = selectedStudents.includes(student.id);
-                                if (isSelected) {
-                                  onStudentSelectionChange?.(selectedStudents.filter(id => id !== student.id));
-                                } else {
-                                  onStudentSelectionChange?.([...selectedStudents, student.id]);
-                                }
-                              }}
+                              className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100"
                             >
                               <Checkbox
+                                id={`student-${student.id}`}
                                 checked={selectedStudents.includes(student.id)}
-                                className="pointer-events-none"
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    onStudentSelectionChange?.([...selectedStudents, student.id]);
+                                  } else {
+                                    onStudentSelectionChange?.(selectedStudents.filter(id => id !== student.id));
+                                  }
+                                }}
                               />
-                              <label className="text-sm cursor-pointer flex-1">
+                              <label 
+                                htmlFor={`student-${student.id}`}
+                                className="text-sm cursor-pointer flex-1"
+                              >
                                 {student.name}
                               </label>
                             </div>
@@ -363,7 +370,18 @@ export function TuitionTable({
                   <option value="입학테스트비">입학테스트</option>
                 </select>
               </div>
-              <div>
+              <div className="flex gap-2">
+                {onSearch && (
+                  <Button
+                    onClick={onSearch}
+                    variant="default"
+                    className="h-10 px-4"
+                    title="검색"
+                  >
+                    <Search className="h-4 w-4 mr-2" />
+                    검색
+                  </Button>
+                )}
                 <Button
                   onClick={onResetFilters}
                   variant="outline"
