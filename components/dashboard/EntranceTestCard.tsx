@@ -14,12 +14,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, MoreHorizontal, Edit, Trash2, Calendar, UserCheck } from "lucide-react"
+import { ChevronDown, MoreHorizontal, Edit, Trash2, UserCheck } from "lucide-react"
 import type { Database } from "@/types/database"
 
 type Student = Database['public']['Tables']['students']['Row']
@@ -27,6 +24,7 @@ type EntranceTest = Database['public']['Tables']['entrance_tests']['Row']
 
 interface EntranceTestData extends EntranceTest {
   student_name?: string
+  calendar_event_id?: string | null
 }
 
 interface EntranceTestCardProps {
@@ -37,7 +35,7 @@ interface EntranceTestCardProps {
   onEdit?: () => void
   onDelete?: () => void
   onCreateCalendarEvent?: (test: EntranceTestData) => void
-  onEnrollmentDecision?: (testId: number, status: '재원' | '미등록') => void
+  onEnrollmentDecision?: (testId: number) => void
   className?: string
 }
 
@@ -135,27 +133,11 @@ const EntranceTestCard = memo<EntranceTestCardProps>(({
                         삭제
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      {onCreateCalendarEvent && (
-                        <DropdownMenuItem onClick={() => onCreateCalendarEvent(entranceTest)}>
-                          <Calendar className="mr-2 h-4 w-4" />
-                          일정등록
-                        </DropdownMenuItem>
-                      )}
                       {onEnrollmentDecision && (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <UserCheck className="mr-2 h-4 w-4" />
-                            등록결정
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent>
-                            <DropdownMenuItem onClick={() => onEnrollmentDecision(entranceTest.id, '재원')}>
-                              재원으로 변경
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onEnrollmentDecision(entranceTest.id, '미등록')}>
-                              미등록으로 변경
-                            </DropdownMenuItem>
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
+                        <DropdownMenuItem onClick={() => onEnrollmentDecision(entranceTest.id)}>
+                          <UserCheck className="mr-2 h-4 w-4" />
+                          등록결정
+                        </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>

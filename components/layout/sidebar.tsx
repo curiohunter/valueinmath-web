@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -110,9 +110,9 @@ export function Sidebar() {
       icon: Home,
     },
     {
-      title: "AI insight",
-      href: "/agent",
-      icon: Bot,
+      title: "상담 관리",
+      href: "/consultations",
+      icon: MessageSquare,
     },
     {
       title: "학생 관리",
@@ -120,14 +120,14 @@ export function Sidebar() {
       icon: Users,
     },
     {
-      title: "수업 일정",
-      href: "/schedule",
-      icon: Calendar,
-    },
-    {
       title: "학습 관리",
       href: "/learning",
       icon: BookOpen,
+    },
+    {
+      title: "수업 일정",
+      href: "/schedule",
+      icon: Calendar,
     },
     {
       title: "통계 분석",
@@ -138,6 +138,11 @@ export function Sidebar() {
       title: "직원 관리",
       href: "/employees",
       icon: UserCog,
+    },
+    {
+      title: "AI insight",
+      href: "/agent",
+      icon: Bot,
     },
     {
       title: "설정",

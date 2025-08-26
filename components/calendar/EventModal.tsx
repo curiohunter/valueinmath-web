@@ -20,18 +20,31 @@ interface EventModalProps {
 }
 
 const eventCategories = [
-  { value: 'notice', label: '공지사항', color: '#ef4444' }, // red-500
-  { value: 'work', label: '근무관련', color: '#3b82f6' }, // blue-500
-  { value: 'project', label: '프로젝트', color: '#8b5cf6' }, // violet-500
-  { value: 'makeup', label: '보강', color: '#10b981' }, // emerald-500
-  { value: 'absence', label: '결석', color: '#f59e0b' }, // amber-500
-  { value: 'entrance_test', label: '입학테스트', color: '#7c3aed' }, // violet-600
+  // 상담 관련
   { value: 'new_consultation', label: '신규상담', color: '#ec4899' }, // pink-500
+  { value: 'after_enrollment_consultation', label: '입학후상담', color: '#a855f7' }, // purple-500
+  { value: 'after_test_consultation', label: '입테후상담', color: '#8b5cf6' }, // violet-500
+  { value: 'enrollment_guidance', label: '등록유도', color: '#6366f1' }, // indigo-500
+  { value: 'regular_consultation', label: '정기상담', color: '#3b82f6' }, // blue-500
+  { value: 'withdrawal_consultation', label: '퇴원상담', color: '#ef4444' }, // red-500
+  
+  // 테스트 및 등원
+  { value: 'entrance_test', label: '입학테스트', color: '#7c3aed' }, // violet-600
   { value: 'new_enrollment', label: '신규등원', color: '#14b8a6' }, // teal-500
-  { value: 'regular_consultation', label: '정기상담', color: '#6366f1' }, // indigo-500
-  { value: 'school_exam', label: '학교시험', color: '#84cc16' }, // lime-500
+  
+  // 수업 관련
+  { value: 'makeup', label: '보강', color: '#10b981' }, // emerald-500
   { value: 'last_minute_makeup', label: '직전보강', color: '#f97316' }, // orange-500
+  { value: 'absence', label: '결석', color: '#f59e0b' }, // amber-500
   { value: 'holiday', label: '휴강', color: '#6b7280' }, // gray-500
+  
+  // 시험
+  { value: 'school_exam', label: '학교시험', color: '#84cc16' }, // lime-500
+  
+  // 기타
+  { value: 'notice', label: '공지사항', color: '#dc2626' }, // red-600
+  { value: 'work', label: '근무관련', color: '#0891b2' }, // cyan-600
+  { value: 'project', label: '프로젝트', color: '#9333ea' }, // purple-600
 ]
 
 // 시간 옵션을 상수로 미리 생성 (성능 최적화)

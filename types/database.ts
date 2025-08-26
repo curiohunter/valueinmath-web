@@ -51,6 +51,92 @@ export type Database = {
         }
         Relationships: []
       }
+      consultations: {
+        Row: {
+          id: string
+          student_id: string
+          type: Database["public"]["Enums"]["consultation_type_enum"]
+          method: Database["public"]["Enums"]["consultation_method_enum"]
+          date: string
+          counselor_id: string
+          content: string | null
+          status: Database["public"]["Enums"]["consultation_status_enum"]
+          next_action: string | null
+          next_date: string | null
+          calendar_event_id: string | null
+          next_calendar_event_id: string | null
+          student_name_snapshot: string | null
+          counselor_name_snapshot: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          type: Database["public"]["Enums"]["consultation_type_enum"]
+          method: Database["public"]["Enums"]["consultation_method_enum"]
+          date: string
+          counselor_id: string
+          content?: string | null
+          status?: Database["public"]["Enums"]["consultation_status_enum"]
+          next_action?: string | null
+          next_date?: string | null
+          calendar_event_id?: string | null
+          next_calendar_event_id?: string | null
+          student_name_snapshot?: string | null
+          counselor_name_snapshot?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          type?: Database["public"]["Enums"]["consultation_type_enum"]
+          method?: Database["public"]["Enums"]["consultation_method_enum"]
+          date?: string
+          counselor_id?: string
+          content?: string | null
+          status?: Database["public"]["Enums"]["consultation_status_enum"]
+          next_action?: string | null
+          next_date?: string | null
+          calendar_event_id?: string | null
+          next_calendar_event_id?: string | null
+          student_name_snapshot?: string | null
+          counselor_name_snapshot?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultations_counselor_id_fkey"
+            columns: ["counselor_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultations_calendar_event_id_fkey"
+            columns: ["calendar_event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consultations_next_calendar_event_id_fkey"
+            columns: ["next_calendar_event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_students: {
         Row: {
           class_id: string | null
@@ -872,6 +958,15 @@ export type Database = {
       absence_reason_enum: "sick" | "travel" | "event" | "unauthorized" | "other"
       claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"
       claude_report_type: "monthly" | "quarterly" | "yearly" | "custom"
+      consultation_type_enum:
+        | "신규상담"
+        | "입학후상담"
+        | "등록유도"
+        | "적응상담"
+        | "정기상담"
+        | "퇴원상담"
+      consultation_method_enum: "대면" | "전화" | "문자"
+      consultation_status_enum: "예정" | "완료" | "취소"
       event_type_enum:
         | "notice"
         | "work"
@@ -885,6 +980,7 @@ export type Database = {
         | "last_minute_makeup"
         | "holiday"
         | "project"
+        | "consultation"
       makeup_status_enum: "scheduled" | "completed" | "cancelled"
       makeup_type_enum: "absence" | "additional"
       test_level_enum:

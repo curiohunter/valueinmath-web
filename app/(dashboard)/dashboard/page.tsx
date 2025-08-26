@@ -15,9 +15,12 @@ import ConsultationCard from "@/components/dashboard/ConsultationCard"
 import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
 import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
+import { StudentFormModal } from "@/app/(dashboard)/students/student-form-modal"
+import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { calendarService } from "@/services/calendar"
+import { atRiskSnapshotService } from "@/services/at-risk-snapshot-service"
 import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
 import type { Database } from "@/types/database"
 import { toast } from "sonner"
@@ -31,6 +34,7 @@ interface ConsultationData extends Student {
 
 interface EntranceTestData extends EntranceTest {
   student_name?: string
+  calendar_event_id?: string | null
 }
 
 interface DashboardStats {
@@ -83,6 +87,17 @@ export default function DashboardPage() {
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set())
   const [selectedStudent, setSelectedStudent] = useState<AtRiskStudent | null>(null)
   const [isStudentDetailModalOpen, setIsStudentDetailModalOpen] = useState(false)
+  
+  // 학생 정보 모달 관련 상태
+  const [isStudentFormModalOpen, setIsStudentFormModalOpen] = useState(false)
+  const [editingStudentForTest, setEditingStudentForTest] = useState<Student | null>(null)
+  const [currentTestId, setCurrentTestId] = useState<number | null>(null)
+  
+  // 반 등록 모달 관련 상태
+  const [isClassFormModalOpen, setIsClassFormModalOpen] = useState(false)
+  const [newlyEnrolledStudent, setNewlyEnrolledStudent] = useState<Student | null>(null)
+  const [teachers, setTeachers] = useState<any[]>([])
+  const [allStudents, setAllStudents] = useState<Student[]>([])
 
   // UTC로 저장된 datetime을 한국시간으로 정확히 변환하여 표시하는 헬퍼 함수
   const formatKoreanDateTime = (utcDateString: string): string => {
@@ -333,11 +348,12 @@ export default function DashboardPage() {
         return
       }
       
-      // 해당 학생들의 입학테스트만 가져옴
+      // 해당 학생들의 입학테스트만 가져옴 (calendar_event_id 포함)
       const { data, error } = await supabase
         .from('entrance_tests')
         .select(`
           *,
+          calendar_event_id,
           students!consultation_id (
             name,
             status
@@ -549,14 +565,56 @@ export default function DashboardPage() {
     }
     
     try {
-      // 기존 Google Calendar 일정이 있는지 확인
-      if (test.google_calendar_id) {
+      // 1. calendar_event_id가 있는지 먼저 확인 (양방향 동기화)
+      if (test.calendar_event_id) {
         // 기존 일정 업데이트
         const updateConfirm = confirm('이미 등록된 일정이 있습니다. 기존 일정을 업데이트하시겠습니까?')
         if (!updateConfirm) {
           return
         }
         
+        // 업데이트할 이벤트 데이터 준비
+        const studentName = test.student_name || '학생'
+        const subjects = []
+        if (test.test1_level) subjects.push(test.test1_level)
+        if (test.test2_level) subjects.push(test.test2_level)
+        
+        const title = `${studentName} ${subjects.join(', ')}`
+        
+        // 시간 형식을 통일하여 처리 (한국시간으로 저장)
+        let startTime = test.test_date
+        if (startTime.includes('+')) {
+          startTime = test.test_date
+        } else {
+          startTime = test.test_date.slice(0, 19)
+        }
+        
+        // 2시간 후 종료시간 계산
+        const startDate = new Date(startTime)
+        const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
+        const endTime = endDate.toISOString().slice(0, 19)
+        
+        const updateData = {
+          title,
+          start_time: startTime,
+          end_time: endTime,
+          description: `입학테스트 - ${studentName}`
+        }
+        
+        // calendarService를 사용하여 이벤트 업데이트
+        await calendarService.updateEvent(test.calendar_event_id, updateData)
+        
+        alert('캘린더 일정이 업데이트되었습니다.')
+        
+        // 통계만 업데이트 (일정 업데이트 후)
+        await loadStats()
+        window.dispatchEvent(new CustomEvent('refreshCalendar'))
+        
+        return
+      }
+      
+      // 2. Google Calendar ID가 있는 경우 (이전 방식 호환성)
+      if (test.google_calendar_id) {
         // 먼저 기존 calendar_events에서 해당 Google Calendar ID를 가진 이벤트 찾기
         const { data: existingCalendarEvent } = await supabase
           .from('calendar_events')
@@ -565,7 +623,13 @@ export default function DashboardPage() {
           .single()
         
         if (existingCalendarEvent) {
-          // 업데이트할 이벤트 데이터 준비
+          // calendar_event_id를 entrance_tests에 저장하여 이후 양방향 동기화 가능하게 함
+          await supabase
+            .from('entrance_tests')
+            .update({ calendar_event_id: existingCalendarEvent.id })
+            .eq('id', test.id)
+          
+          // 업데이트 로직 실행
           const studentName = test.student_name || '학생'
           const subjects = []
           if (test.test1_level) subjects.push(test.test1_level)
@@ -573,7 +637,6 @@ export default function DashboardPage() {
           
           const title = `${studentName} ${subjects.join(', ')}`
           
-          // 시간 형식을 통일하여 처리 (한국시간으로 저장)
           let startTime = test.test_date
           if (startTime.includes('+')) {
             startTime = test.test_date
@@ -581,7 +644,6 @@ export default function DashboardPage() {
             startTime = test.test_date.slice(0, 19)
           }
           
-          // 2시간 후 종료시간 계산
           const startDate = new Date(startTime)
           const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
           const endTime = endDate.toISOString().slice(0, 19)
@@ -593,13 +655,9 @@ export default function DashboardPage() {
             description: `입학테스트 - ${studentName}`
           }
           
-          
-          // calendarService를 사용하여 이벤트 업데이트
           await calendarService.updateEvent(existingCalendarEvent.id, updateData)
           
           alert('캘린더 일정이 업데이트되었습니다.')
-          
-          // 통계만 업데이트 (일정 업데이트 후)
           await loadStats()
           window.dispatchEvent(new CustomEvent('refreshCalendar'))
           
@@ -607,20 +665,7 @@ export default function DashboardPage() {
         }
       }
       
-      // 중복 등록 방지 - 이미 등록된 일정이 있는지 확인 (Google Calendar ID가 없는 경우)
-      const { data: existingEvents } = await supabase
-        .from('calendar_events')
-        .select('*')
-        .eq('event_type', 'entrance_test')
-        .ilike('description', `%${test.student_name || '학생'}%`)
-        .gte('start_time', test.test_date.slice(0, 10)) // 같은 날짜
-        .lt('start_time', test.test_date.slice(0, 10) + 'T23:59:59')
-      
-      if (existingEvents && existingEvents.length > 0) {
-        alert('해당 학생의 입학테스트 일정이 이미 등록되어 있습니다.')
-        return
-      }
-
+      // 3. 새로운 일정 생성
       const studentName = test.student_name || '학생'
       const subjects = []
       if (test.test1_level) subjects.push(test.test1_level)
@@ -631,10 +676,8 @@ export default function DashboardPage() {
       // 시간 형식을 통일하여 처리 (한국시간으로 저장)
       let startTime = test.test_date
       if (startTime.includes('+')) {
-        // 이미 시간대가 있는 경우 그대로 사용
         startTime = test.test_date
       } else {
-        // 시간대가 없는 경우 한국시간으로 처리
         startTime = test.test_date.slice(0, 19)
       }
       
@@ -647,29 +690,25 @@ export default function DashboardPage() {
         title,
         start_time: startTime,
         end_time: endTime,
-        event_type: 'entrance_test',
+        event_type: 'entrance_test' as any,
         description: `입학테스트 - ${studentName}`
       }
       
-      
-      // calendarService를 사용하여 Google Calendar 연동 포함한 이벤트 생성
+      // calendarService를 사용하여 이벤트 생성
       const response = await calendarService.createEvent(eventData)
       
-      
-      // Google Calendar ID가 있으면 entrance_tests 테이블에도 저장
-      if (response.google_calendar_id) {
-        try {
-          const { error: updateError } = await supabase
-            .from('entrance_tests')
-            .update({ google_calendar_id: response.google_calendar_id })
-            .eq('id', test.id)
-          
-          if (updateError) {
-            console.error('entrance_tests 테이블 Google Calendar ID 업데이트 실패:', updateError)
-          } else {
-          }
-        } catch (error) {
-          console.error('entrance_tests 테이블 업데이트 중 오류:', error)
+      // calendar_event_id를 entrance_tests 테이블에 저장 (양방향 동기화)
+      if (response.id) {
+        const { error: updateError } = await supabase
+          .from('entrance_tests')
+          .update({ 
+            calendar_event_id: response.id,
+            google_calendar_id: response.google_calendar_id // 호환성을 위해 유지
+          })
+          .eq('id', test.id)
+        
+        if (updateError) {
+          console.error('entrance_tests 테이블 업데이트 실패:', updateError)
         }
       }
       
@@ -687,8 +726,8 @@ export default function DashboardPage() {
     }
   }
   
-  // 등록 결정
-  const handleEnrollmentDecision = async (testId: number, status: '재원' | '미등록') => {
+  // 등록 결정 - 학생 정보 모달 열기
+  const handleEnrollmentDecision = async (testId: number) => {
     try {
       // 입학테스트에서 consultation_id 찾기
       const { data: testData, error: testError } = await supabase
@@ -698,24 +737,78 @@ export default function DashboardPage() {
         .single()
       
       if (testError || !testData?.consultation_id) {
-        alert('학생 정보를 찾을 수 없습니다.')
+        toast.error('학생 정보를 찾을 수 없습니다.')
         return
       }
       
-      const { error } = await supabase
+      // 학생 정보 가져오기
+      const { data: studentData, error: studentError } = await supabase
         .from('students')
-        .update({ status })
+        .select('*')
         .eq('id', testData.consultation_id)
+        .single()
       
-      if (error) throw error
+      if (studentError || !studentData) {
+        toast.error('학생 정보를 불러올 수 없습니다.')
+        return
+      }
       
-      alert(`학생 상태가 '${status}'로 변경되었습니다.`)
-      await loadStats() // 통계 업데이트
-      await loadConsultations() // 상담 목록 업데이트
+      // 학생 정보 모달 열기
+      setEditingStudentForTest(studentData)
+      setCurrentTestId(testId)
+      setIsStudentFormModalOpen(true)
+      
     } catch (error) {
-      console.error('상태 변경 오류:', error)
-      alert('상태 변경 중 오류가 발생했습니다.')
+      console.error('학생 정보 로드 오류:', error)
+      toast.error('학생 정보를 불러오는 중 오류가 발생했습니다.')
     }
+  }
+  
+  // 학생 정보 저장 성공 시 처리
+  const handleStudentFormSuccess = async () => {
+    if (!editingStudentForTest) return
+    
+    // 학생 정보를 다시 로드하여 최신 상태 확인
+    const { data: updatedStudent } = await supabase
+      .from('students')
+      .select('*')
+      .eq('id', editingStudentForTest.id)
+      .single()
+    
+    if (updatedStudent?.status === '재원') {
+      // 재원으로 변경된 경우 반 등록 여부 확인
+      const confirmClassRegistration = confirm('학생이 재원으로 등록되었습니다.\n이어서 반 등록도 진행하시겠습니까?')
+      
+      if (confirmClassRegistration) {
+        // 선생님 목록 로드
+        const { data: teachersData } = await supabase
+          .from('employees')
+          .select('id, name')
+          .order('name')
+        
+        // 모든 학생 목록 로드
+        const { data: studentsData } = await supabase
+          .from('students')
+          .select('*')
+          .eq('status', '재원')
+          .order('name')
+        
+        setTeachers(teachersData || [])
+        setAllStudents(studentsData || [])
+        setNewlyEnrolledStudent(updatedStudent)
+        setIsClassFormModalOpen(true)
+      }
+    }
+    
+    // 데이터 새로고침
+    await loadStats()
+    await loadConsultations()
+    await loadEntranceTests()
+    
+    // 모달 닫기
+    setIsStudentFormModalOpen(false)
+    setEditingStudentForTest(null)
+    setCurrentTestId(null)
   }
 
   // 데이터 로딩만 수행 (인증은 미들웨어에서 처리)
@@ -723,286 +816,12 @@ export default function DashboardPage() {
     // 미들웨어에서 이미 인증을 확인했으므로 여기서는 데이터만 로드
   }, [])
 
-  // 위험 학생 데이터 로딩
+  // 위험 학생 데이터 로딩 - 상담 페이지와 동일한 서비스 사용
   const loadAtRiskStudents = async () => {
     try {
-      // 한 달 전 날짜 계산
-      const monthAgo = new Date();
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      const monthAgoStr = monthAgo.toISOString().split('T')[0];
-      const todayStr = new Date().toISOString().split('T')[0];
-
-
-      // 1. 최근 1개월 study_logs 데이터 조회
-      const { data: studyLogs, error: studyError } = await supabase
-        .from('study_logs')
-        .select(`
-          student_id,
-          attendance_status,
-          homework,
-          focus,
-          class_id,
-          date,
-          students!inner(id, name, status),
-          classes!inner(id, name, teacher_id)
-        `)
-        .gte('date', monthAgoStr)
-        .lte('date', todayStr)
-        .eq('students.status', '재원');
-
-      if (studyError) {
-        console.error('학습 로그 조회 오류:', studyError);
-        return;
-      }
-
-
-      // 2. 최근 시험 데이터 조회
-      const { data: testLogs, error: testError } = await supabase
-        .from('test_logs')
-        .select(`
-          student_id,
-          test_score,
-          date,
-          class_id
-        `)
-        .gte('date', monthAgoStr)
-        .lte('date', todayStr);
-
-      if (testError) {
-        console.error('시험 로그 조회 오류:', testError);
-      }
-
-      // 3. 선생님 정보 조회
-      const { data: teachers, error: teacherError } = await supabase
-        .from('employees')
-        .select('id, name')
-        .eq('status', '재직');
-
-      if (teacherError) {
-        console.error('선생님 조회 오류:', teacherError);
-      }
-
-
-      // 4. 학생별 통계 계산 - 학생별로 통합 (반 구분 없이)
-      const studentStatsMap = new Map<string, {
-        studentId: string;
-        studentName: string;
-        classNames: Set<string>;
-        teacherIds: Set<string>;
-        attendanceSum: number;
-        attendanceCount: number;
-        homeworkSum: number;
-        homeworkCount: number;
-        focusSum: number;
-        focusCount: number;
-        testScores: number[];
-        expectedTests: number;
-      }>();
-
-      // study_logs 데이터 집계 - 학생별로 통합
-      studyLogs?.forEach(log => {
-        const studentId = log.student_id;
-        if (!studentStatsMap.has(studentId)) {
-          studentStatsMap.set(studentId, {
-            studentId: log.student_id,
-            studentName: (log.students as any).name,
-            classNames: new Set(),
-            teacherIds: new Set(),
-            attendanceSum: 0,
-            attendanceCount: 0,
-            homeworkSum: 0,
-            homeworkCount: 0,
-            focusSum: 0,
-            focusCount: 0,
-            testScores: [],
-            expectedTests: 0
-          });
-        }
-        
-        const stats = studentStatsMap.get(studentId)!;
-        stats.classNames.add((log.classes as any).name);
-        stats.teacherIds.add((log.classes as any).teacher_id);
-        
-        if (log.attendance_status) {
-          stats.attendanceSum += log.attendance_status;
-          stats.attendanceCount++;
-        }
-        if (log.homework) {
-          stats.homeworkSum += log.homework;
-          stats.homeworkCount++;
-        }
-        if (log.focus) {
-          stats.focusSum += log.focus;
-          stats.focusCount++;
-        }
-      });
-
-      // 학생-선생님 조합으로 변환 (한 학생이 여러 선생님에게 속할 수 있음)
-      const studentStats = new Map<string, {
-        studentId: string;
-        studentName: string;
-        className: string;
-        teacherId: string;
-        attendanceSum: number;
-        attendanceCount: number;
-        homeworkSum: number;
-        homeworkCount: number;
-        focusSum: number;
-        focusCount: number;
-        testScores: number[];
-        expectedTests: number;
-      }>();
-
-      studentStatsMap.forEach((stats, studentId) => {
-        // 각 선생님별로 엔트리 생성
-        stats.teacherIds.forEach(teacherId => {
-          const key = `${studentId}_${teacherId}`;
-          studentStats.set(key, {
-            studentId: stats.studentId,
-            studentName: stats.studentName,
-            className: Array.from(stats.classNames).join(', '),
-            teacherId,
-            attendanceSum: stats.attendanceSum,
-            attendanceCount: stats.attendanceCount,
-            homeworkSum: stats.homeworkSum,
-            homeworkCount: stats.homeworkCount,
-            focusSum: stats.focusSum,
-            focusCount: stats.focusCount,
-            testScores: stats.testScores,
-            expectedTests: stats.expectedTests
-          });
-        });
-      });
-
-      
-      // 선생님별 학생 수 확인
-      const teacherStudentCount = new Map<string, { name: string, count: number }>();
-      studentStats.forEach(stat => {
-        const teacherName = teachers?.find(t => t.id === stat.teacherId)?.name || '알 수 없음';
-        if (!teacherStudentCount.has(stat.teacherId)) {
-          teacherStudentCount.set(stat.teacherId, { name: teacherName, count: 0 });
-        }
-        teacherStudentCount.get(stat.teacherId)!.count++;
-      });
-      
-
-      // test_logs 데이터 추가 - 학생별로 통합
-      testLogs?.forEach(test => {
-        // 먼저 학생의 모든 stats 엔트리 찾기
-        studentStats.forEach((stats, key) => {
-          if (stats.studentId === test.student_id && test.test_score !== null) {
-            stats.testScores.push(test.test_score);
-          }
-        });
-      });
-
-      // 5. 위험도 계산 및 학생 변환 - 모든 학생의 점수를 계산
-      const allStudentScores: AtRiskStudent[] = [];
-      
-      
-      studentStats.forEach((stats, key) => {
-        const attendanceAvg = stats.attendanceCount > 0 ? stats.attendanceSum / stats.attendanceCount : 5;
-        const homeworkAvg = stats.homeworkCount > 0 ? stats.homeworkSum / stats.homeworkCount : 5;
-        const focusAvg = stats.focusCount > 0 ? stats.focusSum / stats.focusCount : 5;
-        const testScore = stats.testScores.length > 0 ? 
-          stats.testScores.reduce((a, b) => a + b, 0) / stats.testScores.length : null;
-        const missingTests = Math.max(0, 1 - stats.testScores.length); // 최소 1개 시험은 봐야 함
-        
-        // 종합 위험 점수 계산 (낮을수록 위험) - 미응시 감점 제거
-        let totalScore = (attendanceAvg + homeworkAvg + focusAvg) / 3;
-        if (testScore !== null) {
-          totalScore = (totalScore * 3 + (testScore / 20)) / 4; // 시험 점수를 5점 만점으로 환산
-        }
-        // 미응시 시험 감점을 제거하거나 줄임
-        // if (missingTests > 0) {
-        //   totalScore -= missingTests; // 미응시 시험당 1점 감점
-        // }
-        
-        
-        // 위험 레벨 결정 (기준 완화)
-        let riskLevel: 'high' | 'medium' | 'low';
-        if (totalScore < 3.0 || attendanceAvg < 2 || homeworkAvg < 2.5 || missingTests > 1) {
-          riskLevel = 'high';
-        } else if (totalScore < 4.0 || attendanceAvg < 3.5 || homeworkAvg < 3.5 || (testScore !== null && testScore < 70)) {
-          riskLevel = 'medium';
-        } else {
-          riskLevel = 'low';
-        }
-        
-        // 모든 학생을 추가 (나중에 선생님별로 하위 3명만 선별)
-        const teacherName = teachers?.find(t => t.id === stats.teacherId)?.name || '선생님';
-        
-        allStudentScores.push({
-          studentId: stats.studentId,
-          studentName: stats.studentName,
-          className: stats.className,
-          teacherId: stats.teacherId,
-          teacherName,
-          riskLevel,
-          factors: {
-            attendanceAvg,
-            homeworkAvg,
-            focusAvg,
-            testScore,
-            missingTests
-          },
-          totalScore
-        });
-      });
-
-
-      // 6. 먼저 모든 선생님의 그룹을 만들고 (선생님이 최소 1명의 학생이라도 있으면)
-      const teacherGroupMap = new Map<string, TeacherGroup>();
-      
-      // 모든 학생을 선생님별로 그룹화
-      allStudentScores.forEach(student => {
-        if (!teacherGroupMap.has(student.teacherId)) {
-          teacherGroupMap.set(student.teacherId, {
-            teacherId: student.teacherId,
-            teacherName: student.teacherName,
-            students: []
-          });
-        }
-        teacherGroupMap.get(student.teacherId)!.students.push(student);
-      });
-      
-      // 데이터가 없는 선생님도 추가 (반이 있지만 최근 데이터가 없는 경우)
-      // 모든 반 정보 가져오기
-      const { data: allClasses } = await supabase
-        .from('classes')
-        .select('teacher_id')
-        .not('teacher_id', 'is', null);
-        
-      const uniqueTeacherIds = new Set(allClasses?.map(c => c.teacher_id) || []);
-      
-      uniqueTeacherIds.forEach(teacherId => {
-        if (!teacherGroupMap.has(teacherId)) {
-          const teacherName = teachers?.find(t => t.id === teacherId)?.name;
-          if (teacherName) {
-            teacherGroupMap.set(teacherId, {
-              teacherId,
-              teacherName,
-              students: []
-            });
-          }
-        }
-      });
-      
-      // 각 선생님별로 위험도 순으로 정렬 후 하위 3명만 선별 (점수가 낮은 순)
-      const finalGroups: TeacherGroup[] = [];
-      teacherGroupMap.forEach(group => {
-        // 점수가 낮은 순으로 정렬 (위험도가 높은 순)
-        group.students.sort((a, b) => a.totalScore - b.totalScore);
-        // 하위 3명 선택 (점수 제한 없이 무조건 하위 3명)
-        group.students = group.students.slice(0, 3);
-        finalGroups.push(group); // 학생이 없어도 선생님은 표시
-      });
-      
-      // 선생님 이름으로 정렬
-      finalGroups.sort((a, b) => a.teacherName.localeCompare(b.teacherName, 'ko'));
-      
-      
-      setAtRiskStudents(finalGroups);
+      // atRiskSnapshotService를 사용하여 동일한 기준 적용
+      const groups = await atRiskSnapshotService.calculateAtRiskStudents();
+      setAtRiskStudents(groups);
     } catch (error) {
       console.error('위험 학생 데이터 로딩 오류:', error);
     }
@@ -1262,7 +1081,6 @@ export default function DashboardPage() {
                     setIsTestModalOpen(true)
                   }}
                   onDelete={() => handleTestDelete(test.id)}
-                  onCreateCalendarEvent={handleCreateCalendarEvent}
                   onEnrollmentDecision={handleEnrollmentDecision}
                 />
               ))}
@@ -1321,6 +1139,32 @@ export default function DashboardPage() {
           setSelectedStudent(null);
         }}
         student={selectedStudent}
+      />
+      
+      {/* 학생 정보 수정 모달 (등록 결정 시) */}
+      <StudentFormModal
+        open={isStudentFormModalOpen}
+        onOpenChange={setIsStudentFormModalOpen}
+        student={editingStudentForTest}
+        onSuccess={handleStudentFormSuccess}
+      />
+      
+      {/* 반 등록 모달 */}
+      <ClassFormModal
+        open={isClassFormModalOpen}
+        onClose={() => {
+          setIsClassFormModalOpen(false)
+          setNewlyEnrolledStudent(null)
+        }}
+        teachers={teachers}
+        students={allStudents}
+        mode="create"
+        initialData={newlyEnrolledStudent ? {
+          name: '',
+          subject: '',
+          teacher_id: '',
+          selectedStudentIds: [newlyEnrolledStudent.id]
+        } : undefined}
       />
     </div>
   )
