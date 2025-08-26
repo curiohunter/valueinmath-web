@@ -65,10 +65,15 @@ export function OperationStatsCharts() {
     
     try {
       // 현재 재원생
-      const { data: activeStudents } = await supabase
+      const { data: activeStudents, error: activeError } = await supabase
         .from('students')
         .select('*')
         .eq('status', '재원')
+      
+      if (activeError) {
+        console.error('재원생 조회 오류:', activeError)
+      }
+      
       
       const activeByDept: Record<string, number> = {}
       activeStudents?.forEach(s => {
@@ -76,12 +81,26 @@ export function OperationStatsCharts() {
         activeByDept[dept] = (activeByDept[dept] || 0) + 1
       })
       
-      // 이번달 신규상담
-      const monthStart = new Date(year, month - 1, 1).toISOString()
-      const { data: consultations } = await supabase
+      // 이번달 날짜 범위 (마지막 날 정확히 계산)
+      const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+      const lastDay = new Date(year, month, 0).getDate() // 해당 월의 마지막 날
+      const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      
+      // 이번달 신규상담 (first_contact_date가 이번달인 학생)
+      const { data: allStudentsWithContact, error: consultError } = await supabase
         .from('students')
         .select('*')
-        .gte('first_contact_date', monthStart)
+        .not('first_contact_date', 'is', null)
+      
+      if (consultError) {
+        console.error('신규상담 조회 오류:', consultError)
+      }
+      
+      // JavaScript에서 날짜 필터링
+      const consultations = allStudentsWithContact?.filter(s => {
+        if (!s.first_contact_date) return false
+        return s.first_contact_date >= monthStart && s.first_contact_date <= monthEnd
+      })
       
       const consultByDept: Record<string, number> = {}
       consultations?.forEach(s => {
@@ -89,12 +108,22 @@ export function OperationStatsCharts() {
         consultByDept[dept] = (consultByDept[dept] || 0) + 1
       })
       
-      // 이번달 신규등원
-      const { data: newEnrollments } = await supabase
+      // 이번달 신규등원 (start_date가 이번달인 재원생)
+      const { data: allActiveStudents, error: enrollError } = await supabase
         .from('students')
         .select('*')
-        .gte('start_date', monthStart)
         .eq('status', '재원')
+        .not('start_date', 'is', null)
+      
+      if (enrollError) {
+        console.error('신규등원 조회 오류:', enrollError)
+      }
+      
+      // JavaScript에서 날짜 필터링
+      const newEnrollments = allActiveStudents?.filter(s => {
+        if (!s.start_date) return false
+        return s.start_date >= monthStart && s.start_date <= monthEnd
+      })
       
       const enrollByDept: Record<string, number> = {}
       newEnrollments?.forEach(s => {
@@ -102,19 +131,17 @@ export function OperationStatsCharts() {
         enrollByDept[dept] = (enrollByDept[dept] || 0) + 1
       })
       
-      // 이번달 퇴원 (8월 1일 ~ 8월 31일)
-      // end_date는 YYYY-MM-DD 형식으로 저장되어 있으므로 문자열 비교
-      const thisMonthStartStr = `${year}-${String(month).padStart(2, '0')}-01`
-      const nextMonthStartStr = month === 12 
-        ? `${year + 1}-01-01`
-        : `${year}-${String(month + 1).padStart(2, '0')}-01`
-      
-      const { data: withdrawals } = await supabase
+      // 이번달 퇴원 (end_date가 이번달인 퇴원생)
+      const { data: withdrawals, error: withdrawError } = await supabase
         .from('students')
         .select('*')
-        .gte('end_date', thisMonthStartStr)
-        .lt('end_date', nextMonthStartStr)
+        .filter('end_date', 'gte', monthStart)
+        .filter('end_date', 'lte', monthEnd)
         .eq('status', '퇴원')
+      
+      if (withdrawError) {
+        console.error('퇴원 조회 오류:', withdrawError)
+      }
       
       const withdrawByDept: Record<string, number> = {}
       withdrawals?.forEach(s => {
@@ -122,15 +149,20 @@ export function OperationStatsCharts() {
         withdrawByDept[dept] = (withdrawByDept[dept] || 0) + 1
       })
       
-      // 이번달 입학테스트
-      const { data: tests } = await supabase
+      // 이번달 입학테스트 (entrance_tests 테이블에서 조회)
+      const { data: tests, error: testError } = await supabase
         .from('entrance_tests')
-        .select('*, students!consultation_id(department)')
+        .select('*, student:students!consultation_id(department)')
         .gte('test_date', monthStart)
+        .lte('test_date', monthEnd)
+      
+      if (testError) {
+        console.error('입학테스트 조회 오류:', testError)
+      }
       
       const testByDept: Record<string, number> = {}
       tests?.forEach(t => {
-        const dept = (t.students as any)?.department || '미분류'
+        const dept = (t.student as any)?.department || '미분류'
         testByDept[dept] = (testByDept[dept] || 0) + 1
       })
       
@@ -147,6 +179,7 @@ export function OperationStatsCharts() {
       const momChange = lastMonthData?.active_students_total 
         ? ((activeStudents?.length || 0) - lastMonthData.active_students_total) / lastMonthData.active_students_total * 100
         : 0
+      
       
       setCurrentMonthStats({
         id: 'current',
@@ -265,11 +298,18 @@ export function OperationStatsCharts() {
     if (allStats.length === 0) return []
     
     const latestStat = allStats[allStats.length - 1]
-    return Object.entries(latestStat.active_students_by_dept).map(([dept, count]) => ({
-      name: dept,
-      value: count,
-      percentage: ((count / latestStat.active_students_total) * 100).toFixed(1)
-    }))
+    
+    return Object.entries(latestStat.active_students_by_dept).map(([dept, count]) => {
+      const percentage = latestStat.active_students_total > 0 
+        ? ((count / latestStat.active_students_total) * 100).toFixed(1)
+        : '0.0'
+      
+      return {
+        name: dept,
+        value: count,
+        percentage: percentage
+      }
+    })
   }
 
   const getConversionFunnel = () => {

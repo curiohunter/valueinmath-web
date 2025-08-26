@@ -39,6 +39,20 @@ import type {
   formatDateTimeToKST
 } from "@/types/consultation";
 
+// Map consultation type to calendar event type - 그냥 한글 그대로 사용
+const getEventTypeFromConsultationType = (consultationType: string): string => {
+  // EventModal.tsx의 eventCategories와 동일한 value 사용
+  const typeMapping: { [key: string]: string } = {
+    '신규상담': 'new_consultation',
+    '입학후상담': 'after_enrollment_consultation',
+    '입테후상담': 'after_test_consultation',
+    '등록유도': 'enrollment_guidance',
+    '정기상담': 'regular_consultation',
+    '퇴원상담': 'withdrawal_consultation'
+  };
+  return typeMapping[consultationType] || 'consultation';
+};
+
 // Import date utility functions
 const formatDateToKST = (date: Date): string => {
   const year = date.getFullYear();
@@ -71,6 +85,30 @@ export function ConsultationModal({
   const [endMinute, setEndMinute] = useState<string>("00");
   const [counselorId, setCounselorId] = useState<string>("");
   const [content, setContent] = useState("");
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  
+  // Auto-set end time when start time changes (only for new consultations)
+  useEffect(() => {
+    // Skip auto-setting if editing existing consultation or on initial load
+    if (editingConsultation || isInitialLoad) {
+      return;
+    }
+    
+    // Calculate end time as 1 hour after start time
+    const startH = parseInt(startHour);
+    const startM = parseInt(startMinute);
+    
+    let endH = startH + 1;
+    let endM = startM;
+    
+    // Handle hour overflow
+    if (endH >= 24) {
+      endH = endH - 24;
+    }
+    
+    setEndHour(endH.toString().padStart(2, '0'));
+    setEndMinute(endM.toString().padStart(2, '0'));
+  }, [startHour, startMinute, editingConsultation, isInitialLoad]);
   const [status, setStatus] = useState<ConsultationStatus>("예정");
   const [nextAction, setNextAction] = useState("");
   const [nextDate, setNextDate] = useState<Date | undefined>();
@@ -96,6 +134,8 @@ export function ConsultationModal({
   
   // Initialize form data for editing mode
   useEffect(() => {
+    setIsInitialLoad(true);
+    
     if (editingConsultation) {
       setConsultationType(editingConsultation.type);
       setConsultationMethod(editingConsultation.method);
@@ -136,6 +176,9 @@ export function ConsultationModal({
       setNextAction("");
       setNextDate(undefined);
     }
+    
+    // Set initial load flag after form initialization
+    setTimeout(() => setIsInitialLoad(false), 100);
   }, [editingConsultation]);
   
   const handleSubmit = async () => {
@@ -198,7 +241,7 @@ export function ConsultationModal({
           title: `${editingConsultation.student_name_snapshot || studentInfo?.studentName} ${consultationType}`,
           start_time: `${consultationDateStr}T${startHour}:${startMinute}:00`,
           end_time: `${consultationDateStr}T${endHour}:${endMinute}:00`,
-          event_type: "consultation" as any,
+          event_type: getEventTypeFromConsultationType(consultationType) as any,
           description: `담당: ${counselorName}\n방법: ${consultationMethod}\n${content || ''}`,
           location: consultationMethod === "대면" ? "상담실" : consultationMethod,
         };
@@ -227,7 +270,7 @@ export function ConsultationModal({
             title: `${editingConsultation.student_name_snapshot || studentInfo?.studentName} 후속 상담`,
             start_time: `${nextDateStr}T14:00:00`,
             end_time: `${nextDateStr}T15:00:00`,
-            event_type: "consultation" as any,
+            event_type: getEventTypeFromConsultationType(consultationType) as any,
             description: `이전 상담 후속 조치: ${nextAction || ''}`,
             location: "미정",
           };
@@ -303,7 +346,7 @@ export function ConsultationModal({
               title: `${studentInfo!.studentName} ${consultationType}`,
               start_time: `${consultationDateStr}T${startHour}:${startMinute}:00`,
               end_time: `${consultationDateStr}T${endHour}:${endMinute}:00`,
-              event_type: "consultation" as any,
+              event_type: getEventTypeFromConsultationType(consultationType) as any,
               description: `담당: ${counselorName}\n방법: ${consultationMethod}\n${content || ''}`,
               location: consultationMethod === "대면" ? "상담실" : consultationMethod,
             });
@@ -321,7 +364,7 @@ export function ConsultationModal({
               title: `${studentInfo!.studentName} 후속 상담`,
               start_time: `${nextDateStr}T14:00:00`,
               end_time: `${nextDateStr}T15:00:00`,
-              event_type: "consultation" as any,
+              event_type: getEventTypeFromConsultationType(consultationType) as any,
               description: `이전 상담 후속 조치: ${nextAction || ''}`,
               location: "미정",
             });

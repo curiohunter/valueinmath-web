@@ -17,6 +17,7 @@ import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/com
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { StudentFormModal } from "@/app/(dashboard)/students/student-form-modal"
 import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal"
+import { QuickAccessSection } from "@/components/dashboard/QuickAccessSection"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { calendarService } from "@/services/calendar"
@@ -990,6 +991,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 바로가기 섹션 */}
+      <QuickAccessSection />
 
       {/* 중간 영역: 신규상담 + 입학테스트 관리 */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
