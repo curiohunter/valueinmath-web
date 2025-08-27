@@ -1192,7 +1192,7 @@ export default function DashboardPage() {
                 </div>
                 {parseFloat(stats.testConversionRate) < 60 && (
                   <p className="text-xs text-amber-600 font-medium mt-1 truncate">
-                    엄해미: 적극 연락 필요!
+                    적극 연락 필요!
                   </p>
                 )}
               </div>
@@ -1208,7 +1208,7 @@ export default function DashboardPage() {
                 </div>
                 {parseFloat(stats.enrollmentConversionRate) < 50 && (
                   <p className="text-xs text-red-600 font-medium mt-1 truncate">
-                    엄해미: 등록 유도 강화!
+                    등록 유도 강화!
                   </p>
                 )}
               </div>
