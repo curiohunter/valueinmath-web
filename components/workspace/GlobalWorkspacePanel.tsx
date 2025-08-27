@@ -214,7 +214,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         </TabsList>
 
         {/* 투두리스트 탭 */}
-        <TabsContent value="todos" className="flex-1 flex flex-col p-4 space-y-3 mt-0">
+        <TabsContent value="todos" className="flex-1 flex flex-col p-4 space-y-3 !mt-0">
           {/* 통계 */}
           <div className="text-sm text-muted-foreground">
             활성 업무: {activeTodos}개 | 오늘 완료: {todayCompleted}개
@@ -279,7 +279,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         </TabsContent>
 
         {/* 메모 탭 */}
-        <TabsContent value="memos" className="flex-1 flex flex-col p-4 space-y-3 mt-0">
+        <TabsContent value="memos" className="flex-1 flex flex-col p-4 space-y-3 !mt-0">
           {/* 새 메모 추가 버튼 */}
           <Button 
             onClick={() => {

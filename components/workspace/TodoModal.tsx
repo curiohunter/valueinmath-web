@@ -214,14 +214,14 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
           <div>
             <Label htmlFor="assigned_to">담당자</Label>
             <Select
-              value={formData.assigned_to}
-              onValueChange={(value) => setFormData({ ...formData, assigned_to: value })}
+              value={formData.assigned_to || "unassigned"}
+              onValueChange={(value) => setFormData({ ...formData, assigned_to: value === "unassigned" ? "" : value })}
             >
               <SelectTrigger id="assigned_to">
                 <SelectValue placeholder="담당자를 선택하세요" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">미지정</SelectItem>
+                <SelectItem value="unassigned">미지정</SelectItem>
                 {employees.map((employee) => (
                   <SelectItem key={employee.id} value={employee.id}>
                     {employee.name}
