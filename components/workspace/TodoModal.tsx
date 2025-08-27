@@ -70,6 +70,7 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
         .from('employees')
         .select('auth_id, name')
         .eq('status', '재직')
+        .not('auth_id', 'is', null)  // auth_id가 null이 아닌 것만
         .order('name')
       
       if (error) throw error
@@ -245,7 +246,7 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
               <SelectContent>
                 <SelectItem value="unassigned">미지정</SelectItem>
                 {profiles.map((profile) => (
-                  <SelectItem key={profile.id || profile.name} value={profile.id || "unassigned"}>
+                  <SelectItem key={profile.id} value={profile.id}>
                     {profile.name}
                   </SelectItem>
                 ))}
