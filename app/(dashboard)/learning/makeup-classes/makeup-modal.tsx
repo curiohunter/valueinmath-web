@@ -238,51 +238,58 @@ export function MakeupModal({
 
         if (error) throw error;
 
-        // 상태가 완료로 변경되고 결석일이 있는 경우, study_logs 업데이트
-        if (status === "completed" && makeupType === "absence" && absenceDates.length > 0) {
+        // 상태가 완료로 변경되고 보강일이 있는 경우, study_logs에 보강 기록 생성
+        if (status === "completed" && makeupDate && makeupType === "absence" && absenceDates.length > 0) {
+          const makeupDateStr = formatDateToKST(makeupDate);
           const absenceDate = formatDateToKST(absenceDates[0]);
           
           try {
-            // 해당 날짜의 study_log 찾기
-            const { data: studyLog } = await supabase
+            // 보강일에 이미 해당 학생의 기록이 있는지 확인
+            const { data: existingLog } = await supabase
               .from("study_logs")
-              .select("id, attendance_status, homework, focus")
+              .select("id")
               .eq("student_id", studentInfo.studentId)
               .eq("class_id", studentInfo.classId)
-              .eq("date", absenceDate)
+              .eq("date", makeupDateStr)
               .single();
             
-            if (studyLog) {
-              // 결석(1)이었던 경우 보강(2)으로 변경하고, 숙제와 집중도도 업데이트
-              const updateData: any = {};
+            if (!existingLog) {
+              // 보강일에 새로운 study_log 생성
+              const { error: insertError } = await supabase
+                .from("study_logs")
+                .insert({
+                  student_id: studentInfo.studentId,
+                  class_id: studentInfo.classId,
+                  date: makeupDateStr,
+                  attendance_status: 2, // 보강
+                  homework: 5, // 정상
+                  focus: 5, // 정상
+                  note: `${absenceDate} 결석 보강`,
+                  created_by: employee?.id || null,
+                  student_name_snapshot: studentInfo.studentName,
+                  class_name_snapshot: studentInfo.className
+                });
               
-              // 출석 상태를 보강(2)으로 변경
-              if (studyLog.attendance_status === 1) {
-                updateData.attendance_status = 2;
+              if (!insertError) {
+                console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
+              } else {
+                console.error("보강 study_log 생성 실패:", insertError);
               }
+            } else {
+              // 이미 해당 날짜에 기록이 있으면 업데이트
+              const { error: updateError } = await supabase
+                .from("study_logs")
+                .update({
+                  attendance_status: 2, // 보강
+                  note: `${absenceDate} 결석 보강`,
+                  last_modified_by: employee?.id || null
+                })
+                .eq("id", existingLog.id);
               
-              // 숙제와 집중도가 결석(1)이었다면 정상(5)으로 변경
-              if (studyLog.homework === 1) {
-                updateData.homework = 5;
-              }
-              if (studyLog.focus === 1) {
-                updateData.focus = 5;
-              }
-              
-              // 변경사항이 있으면 업데이트
-              if (Object.keys(updateData).length > 0) {
-                updateData.last_modified_by = employee?.id || null;
-                
-                const { error: updateError } = await supabase
-                  .from("study_logs")
-                  .update(updateData)
-                  .eq("id", studyLog.id);
-                
-                if (!updateError) {
-                  console.log(`study_logs 업데이트 완료: ${absenceDate} - 보강 완료 처리`);
-                } else {
-                  console.error("study_logs 업데이트 실패:", updateError);
-                }
+              if (!updateError) {
+                console.log(`기존 study_log 업데이트 완료: ${makeupDateStr}`);
+              } else {
+                console.error("study_log 업데이트 실패:", updateError);
               }
             }
           } catch (error) {
@@ -418,51 +425,58 @@ export function MakeupModal({
 
           if (makeupError) throw makeupError;
 
-          // 새로 추가하면서 상태가 완료인 경우 study_logs 업데이트
-          if (status === "completed" && makeupType === "absence" && newMakeup) {
-            const absenceDate = formatDateToKST(date);
+          // 새로 추가하면서 상태가 완료이고 보강일이 있는 경우 study_logs에 보강 기록 생성
+          if (status === "completed" && makeupDate && makeupType === "absence" && newMakeup) {
+            const makeupDateStr = formatDateToKST(makeupDate);
+            const absenceDateStr = formatDateToKST(date);
             
             try {
-              // 해당 날짜의 study_log 찾기
-              const { data: studyLog } = await supabase
+              // 보강일에 이미 해당 학생의 기록이 있는지 확인
+              const { data: existingLog } = await supabase
                 .from("study_logs")
-                .select("id, attendance_status, homework, focus")
+                .select("id")
                 .eq("student_id", studentInfo.studentId)
                 .eq("class_id", studentInfo.classId)
-                .eq("date", absenceDate)
+                .eq("date", makeupDateStr)
                 .single();
               
-              if (studyLog) {
-                // 결석(1)이었던 경우 보강(2)으로 변경하고, 숙제와 집중도도 업데이트
-                const updateData: any = {};
+              if (!existingLog) {
+                // 보강일에 새로운 study_log 생성
+                const { error: insertError } = await supabase
+                  .from("study_logs")
+                  .insert({
+                    student_id: studentInfo.studentId,
+                    class_id: studentInfo.classId,
+                    date: makeupDateStr,
+                    attendance_status: 2, // 보강
+                    homework: 5, // 정상
+                    focus: 5, // 정상
+                    note: `${absenceDateStr} 결석 보강`,
+                    created_by: employee?.id || null,
+                    student_name_snapshot: studentInfo.studentName,
+                    class_name_snapshot: studentInfo.className
+                  });
                 
-                // 출석 상태를 보강(2)으로 변경
-                if (studyLog.attendance_status === 1) {
-                  updateData.attendance_status = 2;
+                if (!insertError) {
+                  console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
+                } else {
+                  console.error("보강 study_log 생성 실패:", insertError);
                 }
+              } else {
+                // 이미 해당 날짜에 기록이 있으면 업데이트
+                const { error: updateError } = await supabase
+                  .from("study_logs")
+                  .update({
+                    attendance_status: 2, // 보강
+                    note: `${absenceDateStr} 결석 보강`,
+                    last_modified_by: employee?.id || null
+                  })
+                  .eq("id", existingLog.id);
                 
-                // 숙제와 집중도가 결석(1)이었다면 정상(5)으로 변경
-                if (studyLog.homework === 1) {
-                  updateData.homework = 5;
-                }
-                if (studyLog.focus === 1) {
-                  updateData.focus = 5;
-                }
-                
-                // 변경사항이 있으면 업데이트
-                if (Object.keys(updateData).length > 0) {
-                  updateData.last_modified_by = employee?.id || null;
-                  
-                  const { error: updateError } = await supabase
-                    .from("study_logs")
-                    .update(updateData)
-                    .eq("id", studyLog.id);
-                  
-                  if (!updateError) {
-                    console.log(`study_logs 업데이트 완료: ${absenceDate} - 보강 완료 처리`);
-                  } else {
-                    console.error("study_logs 업데이트 실패:", updateError);
-                  }
+                if (!updateError) {
+                  console.log(`기존 study_log 업데이트 완료: ${makeupDateStr}`);
+                } else {
+                  console.error("study_log 업데이트 실패:", updateError);
                 }
               }
             } catch (error) {
@@ -485,6 +499,7 @@ export function MakeupModal({
                 event_type: "absence",
                 description: absenceReason ? `결석 사유: ${absenceReason}` : undefined,
                 location: studentInfo.className,
+                makeup_class_id: newMakeup.id,
               });
               absenceEventId = absenceEvent.id;
             } catch (error) {
@@ -507,6 +522,7 @@ export function MakeupModal({
                 event_type: "makeup",
                 description: content || undefined,
                 location: studentInfo.className,
+                makeup_class_id: newMakeup.id,
               });
               makeupEventId = makeupEvent.id;
             } catch (error) {

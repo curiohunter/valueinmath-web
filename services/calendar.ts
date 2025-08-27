@@ -22,8 +22,9 @@ export const calendarService = {
 
   /**
    * 새 캘린더 이벤트 생성 (Google Calendar 동기화 포함)
+   * makeup_class_id를 포함할 수 있음
    */
-  async createEvent(event: CalendarEventInput): Promise<CalendarEvent> {
+  async createEvent(event: CalendarEventInput & { makeup_class_id?: string }): Promise<CalendarEvent> {
     try {
       const response = await fetch('/api/calendar/events', {
         method: 'POST',
