@@ -5,13 +5,17 @@ import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { DashboardContent } from "@/components/layout/dashboard-content"
-import GlobalChatButton from "@/components/chat/GlobalChatButton"
-import GlobalChatPanel from "@/components/chat/GlobalChatPanel"
+import dynamic from "next/dynamic"
 import { useAuth } from "@/providers/auth-provider"
 
+// Dynamic import to avoid SSR issues
+const GlobalWorkspacePanel = dynamic(
+  () => import("@/components/workspace/GlobalWorkspacePanel"),
+  { ssr: false }
+)
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [chatOpen, setChatOpen] = useState(false)
-  const [chatMinimized, setChatMinimized] = useState(false)
+  const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const { user, loading } = useAuth()
 
   // Prevent hydration mismatch by only rendering after mount
@@ -32,22 +36,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-300 ${chatOpen && !chatMinimized ? 'mr-80' : ''}`}>
+      <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-300 ${workspaceOpen ? 'mr-80' : ''}`}>
         <Header 
-          setChatOpen={setChatOpen} 
-          chatOpen={chatOpen}
-          chatMinimized={chatMinimized}
-          setChatMinimized={setChatMinimized}
+          setWorkspaceOpen={setWorkspaceOpen} 
+          workspaceOpen={workspaceOpen}
         />
         <DashboardContent>{children}</DashboardContent>
       </div>
       
-      {/* 고정 사이드 채팅 패널 */}
-      {user && chatOpen && (
-        <GlobalChatPanel 
+      {/* 고정 사이드 업무공간 패널 */}
+      {user && workspaceOpen && (
+        <GlobalWorkspacePanel 
           user={user} 
-          isOpen={chatOpen} 
-          onClose={() => setChatOpen(false)} 
+          isOpen={workspaceOpen} 
+          onClose={() => setWorkspaceOpen(false)} 
         />
       )}
     </div>

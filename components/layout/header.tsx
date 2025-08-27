@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, User, MessageCircle } from "lucide-react"
+import { Bell, User, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -17,20 +17,15 @@ import { getCurrentUser, withdrawUser } from "@/actions/auth-actions"
 import { useRouter } from "next/navigation"
 import { getSupabaseBrowserClient, resetSupabaseBrowserClient } from "@/lib/supabase/client"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import GlobalChatButton from "@/components/chat/GlobalChatButton"
 import { Badge } from "@/components/ui/badge"
 import { NotificationBell } from "./notification-bell"
 
 export function Header({ 
-  setChatOpen, 
-  chatOpen, 
-  chatMinimized, 
-  setChatMinimized 
+  setWorkspaceOpen,
+  workspaceOpen
 }: { 
-  setChatOpen?: (open: boolean) => void;
-  chatOpen?: boolean;
-  chatMinimized?: boolean;
-  setChatMinimized?: (minimized: boolean) => void;
+  setWorkspaceOpen?: (open: boolean) => void;
+  workspaceOpen?: boolean;
 }) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
@@ -61,15 +56,14 @@ export function Header({
           <div className="flex flex-1 items-center gap-4 md:gap-8">{/* 전체 검색 입력 필드 제거 */}</div>
           <div className="flex items-center gap-2">
             <NotificationBell user={user} />
-            <GlobalChatButton 
-              user={user} 
-              asHeaderIcon 
-              chatOpen={chatOpen}
-              setChatOpen={setChatOpen}
-              chatMinimized={chatMinimized}
-              setChatMinimized={setChatMinimized}
-              onClick={() => setChatOpen?.(true)} 
-            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full hover:bg-gray-100 transition-colors relative"
+              onClick={() => setWorkspaceOpen?.(!workspaceOpen)}
+            >
+              <ClipboardList className="h-4 w-4" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
