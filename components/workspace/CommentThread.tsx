@@ -13,9 +13,10 @@ import { toast } from "sonner"
 interface CommentThreadProps {
   parentType: 'todo' | 'memo'
   parentId: string
+  onCommentCountChange?: (change: number) => void
 }
 
-export function CommentThread({ parentType, parentId }: CommentThreadProps) {
+export function CommentThread({ parentType, parentId, onCommentCountChange }: CommentThreadProps) {
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [loading, setLoading] = useState(false)
@@ -36,13 +37,14 @@ export function CommentThread({ parentType, parentId }: CommentThreadProps) {
   const loadUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
+      const { data: employee } = await supabase
+        .from('employees')
         .select('name')
-        .eq('id', user.id)
+        .eq('auth_id', user.id)
+        .eq('status', '재직')
         .single()
       
-      setUser({ ...user, name: profile?.name || user.email })
+      setUser({ ...user, name: employee?.name || user.email })
     }
   }
 
@@ -73,18 +75,28 @@ export function CommentThread({ parentType, parentId }: CommentThreadProps) {
           filter: `parent_id=eq.${parentId}`
         },
         (payload) => {
+          console.log('Comment realtime event:', payload)
           if (payload.eventType === 'INSERT') {
-            setComments(prev => [...prev, payload.new as Comment])
+            // 중복 방지를 위해 이미 존재하는지 확인
+            setComments(prev => {
+              const exists = prev.some(c => c.id === payload.new.id)
+              if (!exists) {
+                return [...prev, payload.new as Comment]
+              }
+              return prev
+            })
           } else if (payload.eventType === 'DELETE') {
-            setComments(prev => prev.filter(c => c.id !== payload.old.id))
+            setComments(prev => prev.filter(c => c.id !== (payload.old as any).id))
           } else if (payload.eventType === 'UPDATE') {
             setComments(prev => prev.map(c => 
-              c.id === payload.new.id ? payload.new as Comment : c
+              c.id === (payload.new as any).id ? payload.new as Comment : c
             ))
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Comment subscription status:', status)
+      })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,17 +106,28 @@ export function CommentThread({ parentType, parentId }: CommentThreadProps) {
     
     setLoading(true)
     try {
-      const { error } = await supabase
+      const commentData = {
+        parent_type: parentType,
+        parent_id: parentId,
+        content: newComment.trim(),
+        created_by: user.id,
+        created_by_name: user.name
+      }
+      
+      const { data, error } = await supabase
         .from('comments')
-        .insert({
-          parent_type: parentType,
-          parent_id: parentId,
-          content: newComment.trim(),
-          created_by: user.id,
-          created_by_name: user.name
-        })
+        .insert(commentData)
+        .select()
+        .single()
       
       if (error) throw error
+      
+      // 실시간 업데이트가 느릴 경우를 대비해 즉시 로컬 상태 업데이트
+      if (data) {
+        setComments(prev => [...prev, data])
+        // 부모 컴포넌트에 댓글 수 증가 알림
+        onCommentCountChange?.(1)
+      }
       
       setNewComment("")
       toast.success('댓글이 등록되었습니다')
@@ -120,12 +143,22 @@ export function CommentThread({ parentType, parentId }: CommentThreadProps) {
     if (!confirm('댓글을 삭제하시겠습니까?')) return
     
     try {
+      // 즉시 로컬 상태 업데이트
+      setComments(prev => prev.filter(c => c.id !== commentId))
+      // 부모 컴포넌트에 댓글 수 감소 알림
+      onCommentCountChange?.(-1)
+      
       const { error } = await supabase
         .from('comments')
         .delete()
         .eq('id', commentId)
       
-      if (error) throw error
+      if (error) {
+        // 에러 시 롤백
+        loadComments()
+        onCommentCountChange?.(1) // 롤백 시 다시 증가
+        throw error
+      }
       toast.success('댓글이 삭제되었습니다')
     } catch (error) {
       console.error('댓글 삭제 오류:', error)

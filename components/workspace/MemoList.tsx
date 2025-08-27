@@ -1,15 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { Pin, Archive, MoreVertical, MessageSquare, Calendar, User, Tag } from "lucide-react"
+import React, { useState } from "react"
+import { Pin, Archive, MessageSquare, Calendar, User, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { CommentThread } from "./CommentThread"
 import type { Memo } from "@/types/workspace"
 import { format, isPast, isToday } from "date-fns"
@@ -24,6 +18,12 @@ interface MemoListProps {
 
 export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
+  const [localMemos, setLocalMemos] = useState(memos)
+  
+  // memos prop이 변경되면 localMemos 업데이트
+  React.useEffect(() => {
+    setLocalMemos(memos)
+  }, [memos])
 
   const getCategoryColor = (category: string) => {
     switch (category) {
@@ -56,8 +56,8 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
   }
 
   // 고정된 메모와 일반 메모 분리
-  const pinnedMemos = memos.filter(m => m.is_pinned)
-  const regularMemos = memos.filter(m => !m.is_pinned)
+  const pinnedMemos = localMemos.filter(m => m.is_pinned)
+  const regularMemos = localMemos.filter(m => !m.is_pinned)
 
   const renderMemoItem = (memo: Memo) => {
     const isExpired = memo.expires_at && isPast(new Date(memo.expires_at))
@@ -82,28 +82,36 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
               )}
             </div>
 
-            {/* 액션 메뉴 */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <MoreVertical className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onPin(memo.id, !memo.is_pinned)}>
-                  {memo.is_pinned ? '고정 해제' : '고정'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onEdit(memo)}>
-                  수정
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => onDelete(memo.id)}
-                  className="text-red-600"
-                >
-                  삭제
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* 액션 버튼 */}
+            <div className="flex items-center space-x-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 hover:bg-yellow-50"
+                onClick={() => onPin(memo.id, !memo.is_pinned)}
+                title={memo.is_pinned ? '고정 해제' : '고정'}
+              >
+                <span className="text-sm">{memo.is_pinned ? '📌' : '📍'}</span>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 hover:bg-blue-50"
+                onClick={() => onEdit(memo)}
+                title="수정"
+              >
+                <span className="text-sm">✏️</span>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 hover:bg-red-50"
+                onClick={() => onDelete(memo.id)}
+                title="삭제"
+              >
+                <span className="text-sm">🗑️</span>
+              </Button>
+            </div>
           </div>
 
           {/* 제목 */}
@@ -147,7 +155,7 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
               className="flex items-center hover:text-gray-700"
             >
               <MessageSquare className="h-3 w-3 mr-1" />
-              0
+              {memo.comment_count || 0}
             </button>
           </div>
         </div>
@@ -158,6 +166,14 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
             <CommentThread
               parentType="memo"
               parentId={memo.id}
+              onCommentCountChange={(change) => {
+                // 로컬 상태에서 댓글 수 즉시 업데이트
+                setLocalMemos(prev => prev.map(m => 
+                  m.id === memo.id 
+                    ? { ...m, comment_count: Math.max((m.comment_count || 0) + change, 0) }
+                    : m
+                ))
+              }}
             />
           </div>
         )}
@@ -191,7 +207,7 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
       )}
 
       {/* 빈 상태 */}
-      {memos.length === 0 && (
+      {localMemos.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           등록된 메모가 없습니다
         </div>

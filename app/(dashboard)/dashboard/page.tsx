@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, AlertCircle, Clock, CheckCircle2, CreditCard } from "lucide-react"
+import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, AlertCircle, Clock, CheckCircle2, CreditCard, CheckSquare } from "lucide-react"
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import ConsultationCard from "@/components/dashboard/ConsultationCard"
 import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
@@ -61,6 +61,8 @@ interface DashboardStats {
   overdueTeachers: string[] // 기한 초과 담당 선생님들
   currentMonthPaidCount: number // 이번달 완납
   currentMonthUnpaidCount: number // 이번달 미납
+  todosByAssignee: { [key: string]: number } // 담당자별 미완료 투두
+  totalIncompleteTodos: number // 전체 미완료 투두 수
 }
 
 export default function DashboardPage() {
@@ -90,7 +92,9 @@ export default function DashboardPage() {
     overdueScheduledMakeups: 0,
     overdueTeachers: [],
     currentMonthPaidCount: 0,
-    currentMonthUnpaidCount: 0
+    currentMonthUnpaidCount: 0,
+    todosByAssignee: {},
+    totalIncompleteTodos: 0
   })
   const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
@@ -371,6 +375,43 @@ export default function DashboardPage() {
       const currentMonthPaidCount = tuitionData?.filter(t => t.payment_status === '완납').length || 0
       const currentMonthUnpaidCount = tuitionData?.filter(t => t.payment_status !== '완납').length || 0
 
+      // 투두 통계 로드
+      const { data: todosData } = await supabase
+        .from('todos')
+        .select('*')
+        .neq('status', 'completed')
+        .not('assigned_to', 'is', null)
+      
+      // 담당자별 미완료 건수 계산
+      const todosByAssignee: Record<string, number> = {}
+      let totalIncompleteTodos = 0
+      
+      if (todosData && todosData.length > 0) {
+        // 먼저 모든 고유한 assigned_to ID 수집
+        const assigneeIds = [...new Set(todosData.map(t => t.assigned_to).filter(Boolean))]
+        
+        // 직원 이름 가져오기
+        const { data: employeesData } = await supabase
+          .from('employees')
+          .select('auth_id, name')
+          .in('auth_id', assigneeIds)
+          .eq('status', '재직')
+        
+        const employeeMap: Record<string, string> = {}
+        employeesData?.forEach(emp => {
+          employeeMap[emp.auth_id] = emp.name
+        })
+        
+        // 담당자별 카운트
+        todosData.forEach(todo => {
+          if (todo.assigned_to) {
+            const assigneeName = employeeMap[todo.assigned_to] || '알 수 없음'
+            todosByAssignee[assigneeName] = (todosByAssignee[assigneeName] || 0) + 1
+            totalIncompleteTodos++
+          }
+        })
+      }
+
       setStats({
         activeStudents: activeStudents?.length || 0,
         activeStudentsByDept,
@@ -392,7 +433,9 @@ export default function DashboardPage() {
         overdueScheduledMakeups,
         overdueTeachers,
         currentMonthPaidCount,
-        currentMonthUnpaidCount
+        currentMonthUnpaidCount,
+        todosByAssignee,
+        totalIncompleteTodos
       })
 
     } catch (error) {
@@ -1211,17 +1254,40 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* 5번째 카드 - 비워둠 */}
+        {/* 5번째 카드 - Todo 관리 */}
         <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">준비 중</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Todo 관리</CardTitle>
+            <CheckSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">-</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              추가 기능 예정
-            </p>
+            <div className="space-y-1">
+              {Object.keys(stats.todosByAssignee).length > 0 ? (
+                Object.entries(stats.todosByAssignee).slice(0, 3).map(([assignee, count]) => (
+                  <div key={assignee} className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground truncate">{assignee}</span>
+                    <span className="text-sm font-semibold text-orange-600">{count}건</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground text-center py-2">
+                  없음
+                </div>
+              )}
+              {Object.keys(stats.todosByAssignee).length > 3 && (
+                <div className="text-xs text-muted-foreground text-center">
+                  외 {Object.keys(stats.todosByAssignee).length - 3}명
+                </div>
+              )}
+              {stats.totalIncompleteTodos > 0 && (
+                <div className="pt-1 border-t mt-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium">전체 미완료</span>
+                    <span className="text-sm font-bold text-red-600">{stats.totalIncompleteTodos}건</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

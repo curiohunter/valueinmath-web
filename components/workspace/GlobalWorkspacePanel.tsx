@@ -75,13 +75,43 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
   // 투두 로드
   const loadTodos = async () => {
     try {
-      const { data, error } = await supabase
+      // 먼저 todos 가져오기
+      const { data: todosData, error: todosError } = await supabase
         .from('todos')
         .select('*')
         .order('created_at', { ascending: false })
       
-      if (error) throw error
-      setTodos(data || [])
+      if (todosError) throw todosError
+      
+      // 각 todo의 댓글 수 가져오기
+      if (todosData && todosData.length > 0) {
+        const todoIds = todosData.map(t => t.id)
+        const { data: commentCounts, error: commentError } = await supabase
+          .from('comments')
+          .select('parent_id')
+          .eq('parent_type', 'todo')
+          .in('parent_id', todoIds)
+        
+        if (!commentError && commentCounts) {
+          // 댓글 수 계산
+          const countMap = commentCounts.reduce((acc, comment) => {
+            acc[comment.parent_id] = (acc[comment.parent_id] || 0) + 1
+            return acc
+          }, {} as Record<string, number>)
+          
+          // todos에 댓글 수 추가
+          const todosWithComments = todosData.map(todo => ({
+            ...todo,
+            comment_count: countMap[todo.id] || 0
+          }))
+          
+          setTodos(todosWithComments)
+        } else {
+          setTodos(todosData || [])
+        }
+      } else {
+        setTodos([])
+      }
     } catch (error) {
       console.error('투두 로드 오류:', error)
     }
@@ -90,14 +120,44 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
   // 메모 로드
   const loadMemos = async () => {
     try {
-      const { data, error } = await supabase
+      // 먼저 memos 가져오기
+      const { data: memosData, error: memosError } = await supabase
         .from('memos')
         .select('*')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
       
-      if (error) throw error
-      setMemos(data || [])
+      if (memosError) throw memosError
+      
+      // 각 memo의 댓글 수 가져오기
+      if (memosData && memosData.length > 0) {
+        const memoIds = memosData.map(m => m.id)
+        const { data: commentCounts, error: commentError } = await supabase
+          .from('comments')
+          .select('parent_id')
+          .eq('parent_type', 'memo')
+          .in('parent_id', memoIds)
+        
+        if (!commentError && commentCounts) {
+          // 댓글 수 계산
+          const countMap = commentCounts.reduce((acc, comment) => {
+            acc[comment.parent_id] = (acc[comment.parent_id] || 0) + 1
+            return acc
+          }, {} as Record<string, number>)
+          
+          // memos에 댓글 수 추가
+          const memosWithComments = memosData.map(memo => ({
+            ...memo,
+            comment_count: countMap[memo.id] || 0
+          }))
+          
+          setMemos(memosWithComments)
+        } else {
+          setMemos(memosData || [])
+        }
+      } else {
+        setMemos([])
+      }
     } catch (error) {
       console.error('메모 로드 오류:', error)
     }
@@ -113,9 +173,13 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         (payload) => {
           console.log('Todo change:', payload)
           if (payload.eventType === 'INSERT') {
-            setTodos(prev => [payload.new as Todo, ...prev])
+            setTodos(prev => [{ ...(payload.new as Todo), comment_count: 0 }, ...prev])
           } else if (payload.eventType === 'UPDATE') {
-            setTodos(prev => prev.map(t => t.id === payload.new.id ? payload.new as Todo : t))
+            setTodos(prev => prev.map(t => 
+              t.id === payload.new.id 
+                ? { ...(payload.new as Todo), comment_count: t.comment_count || 0 } 
+                : t
+            ))
           } else if (payload.eventType === 'DELETE') {
             setTodos(prev => prev.filter(t => t.id !== payload.old.id))
           }
@@ -131,11 +195,57 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         (payload) => {
           console.log('Memo change:', payload)
           if (payload.eventType === 'INSERT') {
-            setMemos(prev => [payload.new as Memo, ...prev])
+            setMemos(prev => [{ ...(payload.new as Memo), comment_count: 0 }, ...prev])
           } else if (payload.eventType === 'UPDATE') {
-            setMemos(prev => prev.map(m => m.id === payload.new.id ? payload.new as Memo : m))
+            setMemos(prev => prev.map(m => 
+              m.id === payload.new.id 
+                ? { ...(payload.new as Memo), comment_count: m.comment_count || 0 }
+                : m
+            ))
           } else if (payload.eventType === 'DELETE') {
             setMemos(prev => prev.filter(m => m.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+    
+    // 댓글 실시간 구독 - 댓글 수 업데이트용
+    supabase
+      .channel('comments-channel')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'comments' },
+        (payload: any) => {
+          console.log('Comment change:', payload)
+          if (payload.eventType === 'INSERT') {
+            // 새 댓글 추가 시 해당 todo/memo의 댓글 수 증가
+            if (payload.new.parent_type === 'todo') {
+              setTodos(prev => prev.map(t => 
+                t.id === payload.new.parent_id 
+                  ? { ...t, comment_count: (t.comment_count || 0) + 1 }
+                  : t
+              ))
+            } else if (payload.new.parent_type === 'memo') {
+              setMemos(prev => prev.map(m => 
+                m.id === payload.new.parent_id 
+                  ? { ...m, comment_count: (m.comment_count || 0) + 1 }
+                  : m
+              ))
+            }
+          } else if (payload.eventType === 'DELETE') {
+            // 댓글 삭제 시 해당 todo/memo의 댓글 수 감소
+            if (payload.old.parent_type === 'todo') {
+              setTodos(prev => prev.map(t => 
+                t.id === payload.old.parent_id 
+                  ? { ...t, comment_count: Math.max((t.comment_count || 0) - 1, 0) }
+                  : t
+              ))
+            } else if (payload.old.parent_type === 'memo') {
+              setMemos(prev => prev.map(m => 
+                m.id === payload.old.parent_id 
+                  ? { ...m, comment_count: Math.max((m.comment_count || 0) - 1, 0) }
+                  : m
+              ))
+            }
           }
         }
       )
@@ -291,12 +401,20 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
                 }}
                 onDelete={async (todoId) => {
                   if (confirm('정말 삭제하시겠습니까?')) {
+                    // 먼저 로컬 상태 업데이트 (즉시 UI 반영)
+                    setTodos(prev => prev.filter(t => t.id !== todoId))
+                    
+                    // 그 다음 DB 삭제
                     const { error } = await supabase
                       .from('todos')
                       .delete()
                       .eq('id', todoId)
                     
-                    if (error) console.error('삭제 오류:', error)
+                    if (error) {
+                      console.error('삭제 오류:', error)
+                      // 에러 시 롤백
+                      loadTodos()
+                    }
                   }
                 }}
               />
@@ -352,21 +470,39 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
                   setMemoModalOpen(true)
                 }}
                 onPin={async (memoId, isPinned) => {
+                  // 먼저 로컬 상태 업데이트 (즉시 UI 반영)
+                  setMemos(prev => prev.map(m => 
+                    m.id === memoId ? { ...m, is_pinned: isPinned } : m
+                  ))
+                  
+                  // 그 다음 DB 업데이트
                   const { error } = await supabase
                     .from('memos')
                     .update({ is_pinned: isPinned })
                     .eq('id', memoId)
                   
-                  if (error) console.error('고정 변경 오류:', error)
+                  if (error) {
+                    console.error('고정 변경 오류:', error)
+                    // 에러 시 롤백
+                    loadMemos()
+                  }
                 }}
                 onDelete={async (memoId) => {
                   if (confirm('정말 삭제하시겠습니까?')) {
+                    // 먼저 로컬 상태 업데이트 (즉시 UI 반영)
+                    setMemos(prev => prev.filter(m => m.id !== memoId))
+                    
+                    // 그 다음 DB 삭제
                     const { error } = await supabase
                       .from('memos')
                       .delete()
                       .eq('id', memoId)
                     
-                    if (error) console.error('삭제 오류:', error)
+                    if (error) {
+                      console.error('삭제 오류:', error)
+                      // 에러 시 롤백
+                      loadMemos()
+                    }
                   }
                 }}
               />

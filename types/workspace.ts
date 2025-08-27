@@ -14,6 +14,7 @@ export interface Todo {
   archived_at?: string | null
   created_at: string
   updated_at: string
+  comment_count?: number
 }
 
 export interface Memo {
@@ -29,6 +30,7 @@ export interface Memo {
   expires_at?: string | null
   created_at: string
   updated_at: string
+  comment_count?: number
 }
 
 export interface Comment {
