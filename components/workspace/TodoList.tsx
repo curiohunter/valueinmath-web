@@ -82,7 +82,9 @@ export function TodoList({ todos, onEdit, onStatusChange, onDelete }: TodoListPr
     return (
       <div key={todo.id} className="space-y-2">
         <div className={`p-3 rounded-lg border ${
-          todo.status === 'completed' ? 'bg-gray-50 opacity-70' : 'bg-white hover:bg-gray-50'
+          todo.status === 'completed' ? 'bg-gray-50 opacity-70 border-gray-200' : 
+          todo.status === 'in_progress' ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' : 
+          'bg-white border-gray-200 hover:bg-gray-50'
         }`}>
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center space-x-2">
@@ -90,9 +92,30 @@ export function TodoList({ todos, onEdit, onStatusChange, onDelete }: TodoListPr
               <Checkbox
                 checked={todo.status === 'completed'}
                 onCheckedChange={(checked) => {
-                  onStatusChange(todo.id, checked ? 'completed' : 'pending')
+                  if (checked) {
+                    onStatusChange(todo.id, 'completed')
+                  } else if (todo.status === 'completed') {
+                    // 완료 상태에서 체크 해제시 진행중으로
+                    onStatusChange(todo.id, 'in_progress')
+                  } else {
+                    onStatusChange(todo.id, 'pending')
+                  }
                 }}
               />
+              {/* 상태 변경 버튼 (완료되지 않은 항목만) */}
+              {todo.status !== 'completed' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => {
+                    const nextStatus = todo.status === 'pending' ? 'in_progress' : 'pending'
+                    onStatusChange(todo.id, nextStatus)
+                  }}
+                >
+                  {todo.status === 'pending' ? '▶️' : '⏸️'}
+                </Button>
+              )}
               {/* 우선순위 뱃지 */}
               <Badge className={getPriorityColor(todo.priority)}>
                 {getPriorityIcon(todo.priority)} {todo.priority === 'urgent' ? '긴급' : todo.priority === 'high' ? '높음' : todo.priority === 'medium' ? '보통' : '낮음'}

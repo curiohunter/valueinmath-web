@@ -346,8 +346,8 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         </TabsList>
 
         {/* 투두리스트 탭 */}
-        <TabsContent value="todos" className="flex-1 !mt-0">
-          <div className="flex flex-col h-full p-4 space-y-3">
+        <TabsContent value="todos" className="flex-1 overflow-auto !mt-0">
+          <div className="p-4 space-y-3">
             {/* 통계 */}
             <div className="text-sm text-muted-foreground">
               활성 업무: {activeTodos}개 | 오늘 완료: {todayCompleted}개
@@ -366,20 +366,8 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
               새 업무 추가
             </Button>
 
-            {/* 필터 토글 */}
-            <div className="flex items-center space-x-2 text-sm">
-              <Button
-                variant={todoFilter.showCompleted ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setTodoFilter(prev => ({ ...prev, showCompleted: !prev.showCompleted }))}
-              >
-                완료 항목 {todoFilter.showCompleted ? '숨기기' : '보기'}
-              </Button>
-            </div>
-
             {/* 투두 리스트 */}
-            <ScrollArea className="flex-1">
-              <TodoList
+            <TodoList
                 todos={sortedTodos}
                 onEdit={(todo) => {
                   setEditingTodo(todo)
@@ -428,13 +416,12 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
                   }
                 }}
               />
-            </ScrollArea>
           </div>
         </TabsContent>
 
         {/* 메모 탭 */}
-        <TabsContent value="memos" className="flex-1 !mt-0">
-          <div className="flex flex-col h-full p-4 space-y-3">
+        <TabsContent value="memos" className="flex-1 overflow-auto !mt-0">
+          <div className="p-4 space-y-3">
             {/* 통계 */}
             <div className="text-sm text-muted-foreground">
               전체 메모: {memos.filter(m => !m.is_archived).length}개 | 고정: {memos.filter(m => m.is_pinned).length}개
@@ -477,8 +464,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
             </div>
 
             {/* 메모 리스트 */}
-            <ScrollArea className="flex-1">
-              <MemoList
+            <MemoList
                 memos={filteredMemos}
                 onEdit={(memo) => {
                   setEditingMemo(memo)
@@ -521,7 +507,6 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
                   }
                 }}
               />
-            </ScrollArea>
           </div>
         </TabsContent>
       </Tabs>
