@@ -238,6 +238,58 @@ export function MakeupModal({
 
         if (error) throw error;
 
+        // 상태가 완료로 변경되고 결석일이 있는 경우, study_logs 업데이트
+        if (status === "completed" && makeupType === "absence" && absenceDates.length > 0) {
+          const absenceDate = formatDateToKST(absenceDates[0]);
+          
+          try {
+            // 해당 날짜의 study_log 찾기
+            const { data: studyLog } = await supabase
+              .from("study_logs")
+              .select("id, attendance_status, homework, focus")
+              .eq("student_id", studentInfo.studentId)
+              .eq("class_id", studentInfo.classId)
+              .eq("date", absenceDate)
+              .single();
+            
+            if (studyLog) {
+              // 결석(1)이었던 경우 보강(2)으로 변경하고, 숙제와 집중도도 업데이트
+              const updateData: any = {};
+              
+              // 출석 상태를 보강(2)으로 변경
+              if (studyLog.attendance_status === 1) {
+                updateData.attendance_status = 2;
+              }
+              
+              // 숙제와 집중도가 결석(1)이었다면 정상(5)으로 변경
+              if (studyLog.homework === 1) {
+                updateData.homework = 5;
+              }
+              if (studyLog.focus === 1) {
+                updateData.focus = 5;
+              }
+              
+              // 변경사항이 있으면 업데이트
+              if (Object.keys(updateData).length > 0) {
+                updateData.last_modified_by = employee?.id || null;
+                
+                const { error: updateError } = await supabase
+                  .from("study_logs")
+                  .update(updateData)
+                  .eq("id", studyLog.id);
+                
+                if (!updateError) {
+                  console.log(`study_logs 업데이트 완료: ${absenceDate} - 보강 완료 처리`);
+                } else {
+                  console.error("study_logs 업데이트 실패:", updateError);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("study_logs 동기화 중 오류:", error);
+          }
+        }
+
         // 캘린더 이벤트 ID 업데이트를 위한 변수
         let newAbsenceEventId = editingMakeup.absence_calendar_event_id;
         let newMakeupEventId = editingMakeup.makeup_calendar_event_id;
@@ -365,6 +417,58 @@ export function MakeupModal({
             .single();
 
           if (makeupError) throw makeupError;
+
+          // 새로 추가하면서 상태가 완료인 경우 study_logs 업데이트
+          if (status === "completed" && makeupType === "absence" && newMakeup) {
+            const absenceDate = formatDateToKST(date);
+            
+            try {
+              // 해당 날짜의 study_log 찾기
+              const { data: studyLog } = await supabase
+                .from("study_logs")
+                .select("id, attendance_status, homework, focus")
+                .eq("student_id", studentInfo.studentId)
+                .eq("class_id", studentInfo.classId)
+                .eq("date", absenceDate)
+                .single();
+              
+              if (studyLog) {
+                // 결석(1)이었던 경우 보강(2)으로 변경하고, 숙제와 집중도도 업데이트
+                const updateData: any = {};
+                
+                // 출석 상태를 보강(2)으로 변경
+                if (studyLog.attendance_status === 1) {
+                  updateData.attendance_status = 2;
+                }
+                
+                // 숙제와 집중도가 결석(1)이었다면 정상(5)으로 변경
+                if (studyLog.homework === 1) {
+                  updateData.homework = 5;
+                }
+                if (studyLog.focus === 1) {
+                  updateData.focus = 5;
+                }
+                
+                // 변경사항이 있으면 업데이트
+                if (Object.keys(updateData).length > 0) {
+                  updateData.last_modified_by = employee?.id || null;
+                  
+                  const { error: updateError } = await supabase
+                    .from("study_logs")
+                    .update(updateData)
+                    .eq("id", studyLog.id);
+                  
+                  if (!updateError) {
+                    console.log(`study_logs 업데이트 완료: ${absenceDate} - 보강 완료 처리`);
+                  } else {
+                    console.error("study_logs 업데이트 실패:", updateError);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("study_logs 동기화 중 오류:", error);
+            }
+          }
 
           // 캘린더 이벤트 자동 생성
           let absenceEventId = null;

@@ -446,8 +446,8 @@ export function ConsultationModal({
             </div>
           </div>
           
-          {/* Row 2: Date and Time */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Row 2: Date and Time - Improved Layout */}
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label>상담 날짜</Label>
               <Popover>
@@ -475,55 +475,57 @@ export function ConsultationModal({
               </Popover>
             </div>
             
-            <div className="space-y-2">
-              <Label>시작 시간</Label>
-              <div className="flex gap-1">
-                <Select value={startHour} onValueChange={setStartHour}>
-                  <SelectTrigger className="w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOUR_OPTIONS.map(hour => (
-                      <SelectItem key={hour} value={hour}>{hour}시</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={startMinute} onValueChange={setStartMinute}>
-                  <SelectTrigger className="w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MINUTE_OPTIONS.map(minute => (
-                      <SelectItem key={minute} value={minute}>{minute}분</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>시작 시간</Label>
+                <div className="flex gap-2">
+                  <Select value={startHour} onValueChange={setStartHour}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOUR_OPTIONS.map(hour => (
+                        <SelectItem key={hour} value={hour}>{hour}시</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={startMinute} onValueChange={setStartMinute}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MINUTE_OPTIONS.map(minute => (
+                        <SelectItem key={minute} value={minute}>{minute}분</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>종료 시간</Label>
-              <div className="flex gap-1">
-                <Select value={endHour} onValueChange={setEndHour}>
-                  <SelectTrigger className="w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOUR_OPTIONS.map(hour => (
-                      <SelectItem key={hour} value={hour}>{hour}시</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={endMinute} onValueChange={setEndMinute}>
-                  <SelectTrigger className="w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MINUTE_OPTIONS.map(minute => (
-                      <SelectItem key={minute} value={minute}>{minute}분</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              
+              <div className="space-y-2">
+                <Label>종료 시간</Label>
+                <div className="flex gap-2">
+                  <Select value={endHour} onValueChange={setEndHour}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOUR_OPTIONS.map(hour => (
+                        <SelectItem key={hour} value={hour}>{hour}시</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={endMinute} onValueChange={setEndMinute}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MINUTE_OPTIONS.map(minute => (
+                        <SelectItem key={minute} value={minute}>{minute}분</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>
