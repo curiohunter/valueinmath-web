@@ -53,11 +53,21 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
     if (isOpen) {
       loadTodos()
       loadMemos()
-      setupRealtimeSubscriptions()
     }
     
     return () => {
       // 구독 정리
+      supabase.removeAllChannels()
+    }
+  }, [isOpen])
+  
+  // 실시간 구독은 별도 useEffect
+  useEffect(() => {
+    if (isOpen) {
+      setupRealtimeSubscriptions()
+    }
+    
+    return () => {
       supabase.removeAllChannels()
     }
   }, [isOpen])
@@ -256,6 +266,14 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
                   setTodoModalOpen(true)
                 }}
                 onStatusChange={async (todoId, newStatus) => {
+                  // 먼저 로컬 상태 업데이트 (즉시 UI 반영)
+                  setTodos(prev => prev.map(t => 
+                    t.id === todoId 
+                      ? { ...t, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null }
+                      : t
+                  ))
+                  
+                  // 그 다음 DB 업데이트
                   const { error } = await supabase
                     .from('todos')
                     .update({ 
@@ -265,7 +283,11 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
                     })
                     .eq('id', todoId)
                   
-                  if (error) console.error('상태 변경 오류:', error)
+                  if (error) {
+                    console.error('상태 변경 오류:', error)
+                    // 에러 시 롤백
+                    loadTodos()
+                  }
                 }}
                 onDelete={async (todoId) => {
                   if (confirm('정말 삭제하시겠습니까?')) {

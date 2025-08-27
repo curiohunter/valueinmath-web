@@ -26,7 +26,7 @@ interface TodoModalProps {
 
 export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
   const [loading, setLoading] = useState(false)
-  const [employees, setEmployees] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -68,19 +68,19 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('auth_user_id, name')
-        .eq('status', 'active')
+        .select('auth_id, name')
+        .eq('status', '재직')
         .order('name')
       
       if (error) throw error
-      // auth_user_id를 id로 사용하도록 매핑
+      // auth_id를 id로 사용하도록 매핑
       const mappedData = data?.map(emp => ({
-        id: emp.auth_user_id,
+        id: emp.auth_id,
         name: emp.name
       })) || []
-      setEmployees(mappedData)
+      setProfiles(mappedData)
     } catch (error) {
-      console.error('직원 목록 로드 오류:', error)
+      console.error('프로필 목록 로드 오류:', error)
     }
   }
 
@@ -99,18 +99,19 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
       let userName = currentUser?.email
       
       if (currentUser) {
-        const { data: profile } = await supabase
-          .from('profiles')
+        // employees 테이블에서 이름 가져오기
+        const { data: employee } = await supabase
+          .from('employees')
           .select('name')
-          .eq('id', currentUser.id)
+          .eq('auth_id', currentUser.id)
           .single()
         
-        if (profile?.name) {
-          userName = profile.name
+        if (employee?.name) {
+          userName = employee.name
         }
       }
       
-      const assignedEmployee = employees.find(e => e.id === formData.assigned_to)
+      const assignedProfile = profiles.find(p => p.id === formData.assigned_to)
       
       const todoData = {
         title: formData.title.trim(),
@@ -118,7 +119,7 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
         priority: formData.priority,
         status: formData.status,
         assigned_to: formData.assigned_to || null,
-        assigned_name: assignedEmployee?.name || null,
+        assigned_name: assignedProfile?.name || null,
         due_date: formData.due_date ? format(formData.due_date, 'yyyy-MM-dd') : null,
         created_by: currentUser?.id || null,
         created_by_name: userName || null,
@@ -243,9 +244,9 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unassigned">미지정</SelectItem>
-                {employees.map((employee) => (
-                  <SelectItem key={employee.id} value={employee.id}>
-                    {employee.name}
+                {profiles.map((profile) => (
+                  <SelectItem key={profile.id || profile.name} value={profile.id || "unassigned"}>
+                    {profile.name}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -130,9 +130,7 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
               {/* 작성일 */}
               <div className="flex items-center">
                 <Calendar className="h-3 w-3 mr-1" />
-                {isToday(new Date(memo.created_at)) 
-                  ? format(new Date(memo.created_at), 'HH:mm', { locale: ko })
-                  : format(new Date(memo.created_at), 'M월 d일', { locale: ko })}
+                {format(new Date(memo.created_at), 'M월 d일', { locale: ko })}
               </div>
 
               {/* 만료일 */}

@@ -131,12 +131,10 @@ export function TodoList({ todos, onEdit, onStatusChange, onDelete }: TodoListPr
                     </div>
                   )}
 
-                  {/* 완료 시간 */}
+                  {/* 완료 날짜 */}
                   {todo.status === 'completed' && todo.completed_at && (
                     <div className="text-green-600">
-                      ✓ {isToday(new Date(todo.completed_at)) 
-                        ? format(new Date(todo.completed_at), 'HH:mm', { locale: ko })
-                        : format(new Date(todo.completed_at), 'M월 d일', { locale: ko })}
+                      ✓ {format(new Date(todo.completed_at), 'M월 d일', { locale: ko })}
                     </div>
                   )}
 

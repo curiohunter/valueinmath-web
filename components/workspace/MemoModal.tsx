@@ -72,14 +72,16 @@ export function MemoModal({ isOpen, onClose, memo, user }: MemoModalProps) {
       let userName = currentUser?.email
       
       if (currentUser) {
-        const { data: profile } = await supabase
-          .from('profiles')
+        // employees 테이블에서 이름 가져오기  
+        const { data: employee } = await supabase
+          .from('employees')
           .select('name')
-          .eq('id', currentUser.id)
+          .eq('auth_id', currentUser.id)
+          .eq('status', '재직')
           .single()
         
-        if (profile?.name) {
-          userName = profile.name
+        if (employee?.name) {
+          userName = employee.name
         }
       }
       
