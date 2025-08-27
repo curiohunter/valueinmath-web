@@ -251,7 +251,7 @@ export function MakeupModal({
               .eq("student_id", studentInfo.studentId)
               .eq("class_id", studentInfo.classId)
               .eq("date", makeupDateStr)
-              .single();
+              .maybeSingle();
             
             if (!existingLog) {
               // 보강일에 새로운 study_log 생성
@@ -424,6 +424,44 @@ export function MakeupModal({
             .single();
 
           if (makeupError) throw makeupError;
+
+          // 결석 보강인 경우, 결석일에 study_log 생성 (없는 경우만)
+          if (makeupType === "absence" && newMakeup) {
+            const absenceDateStr = formatDateToKST(date);
+            
+            // 해당 날짜에 이미 study_log가 있는지 확인
+            const { data: existingLog } = await supabase
+              .from("study_logs")
+              .select("id")
+              .eq("student_id", studentInfo.studentId)
+              .eq("class_id", studentInfo.classId)
+              .eq("date", absenceDateStr)
+              .maybeSingle();
+            
+            if (!existingLog) {
+              // 결석일에 study_log 생성
+              const { error: logError } = await supabase
+                .from("study_logs")
+                .insert({
+                  student_id: studentInfo.studentId,
+                  class_id: studentInfo.classId,
+                  date: absenceDateStr,
+                  attendance_status: 1, // 결석
+                  homework: 1, // 결석
+                  focus: 1, // 결석
+                  note: absenceReason ? `결석 사유: ${absenceReason}` : '결석',
+                  created_by: employee?.id || null,
+                  student_name_snapshot: studentInfo.studentName,
+                  class_name_snapshot: studentInfo.className
+                });
+              
+              if (!logError) {
+                console.log(`결석 study_log 생성 완료: ${absenceDateStr}`);
+              } else {
+                console.error("결석 study_log 생성 실패:", logError);
+              }
+            }
+          }
 
           // 새로 추가하면서 상태가 완료이고 보강일이 있는 경우 study_logs에 보강 기록 생성
           if (status === "completed" && makeupDate && makeupType === "absence" && newMakeup) {

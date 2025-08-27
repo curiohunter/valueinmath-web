@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2 } from "lucide-react"
+import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, AlertCircle, Clock, CheckCircle2, CreditCard } from "lucide-react"
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import ConsultationCard from "@/components/dashboard/ConsultationCard"
 import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
@@ -54,6 +54,13 @@ interface DashboardStats {
   withdrawalsThisMonth: number
   withdrawalsByDept: { [key: string]: number }
   withdrawalsYoY: string
+  // 새로운 통계 추가
+  pendingMakeups: number // 보강 미정
+  weeklyScheduledMakeups: number // 7일내 예정
+  overdueScheduledMakeups: number // 기한 지난 미완료
+  overdueTeachers: string[] // 기한 초과 담당 선생님들
+  currentMonthPaidCount: number // 이번달 완납
+  currentMonthUnpaidCount: number // 이번달 미납
 }
 
 export default function DashboardPage() {
@@ -77,7 +84,13 @@ export default function DashboardPage() {
     enrollmentConversionRate: "0%",
     withdrawalsThisMonth: 0,
     withdrawalsByDept: {},
-    withdrawalsYoY: "+0%"
+    withdrawalsYoY: "+0%",
+    pendingMakeups: 0,
+    weeklyScheduledMakeups: 0,
+    overdueScheduledMakeups: 0,
+    overdueTeachers: [],
+    currentMonthPaidCount: 0,
+    currentMonthUnpaidCount: 0
   })
   const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
@@ -293,6 +306,71 @@ export default function DashboardPage() {
         withdrawalsYoY = "+100%" // 작년에 데이터가 없고 올해는 있는 경우
       }
 
+      // 보강 관련 통계 - 한국시간 기준
+      const today = getKoreanDateString()
+      const weekFromNow = new Date(today)
+      weekFromNow.setDate(weekFromNow.getDate() + 7)
+      const weekFromNowStr = weekFromNow.toISOString().split('T')[0]
+      
+      // 보강 데이터와 관련 정보 조회
+      const { data: makeupData } = await supabase
+        .from('makeup_classes')
+        .select(`
+          *,
+          classes!inner (
+            id,
+            name,
+            teacher_id,
+            employees!teacher_id (
+              id,
+              name
+            )
+          )
+        `)
+        .eq('status', 'scheduled')
+      
+      let pendingMakeups = 0
+      let weeklyScheduledMakeups = 0
+      let overdueScheduledMakeups = 0
+      const overdueTeacherSet = new Set<string>()
+      
+      makeupData?.forEach(makeup => {
+        if (!makeup.makeup_date) {
+          // 날짜 미정
+          pendingMakeups++
+        } else {
+          // 날짜가 있는 경우
+          if (makeup.makeup_date < today) {
+            // 기한 지났는데 아직 예정 상태
+            overdueScheduledMakeups++
+            // 선생님 이름 추가
+            const teacherName = (makeup.classes as any)?.employees?.name
+            if (teacherName) {
+              overdueTeacherSet.add(teacherName)
+            }
+          } else if (makeup.makeup_date <= weekFromNowStr) {
+            // 7일 내 예정
+            weeklyScheduledMakeups++
+          }
+        }
+      })
+      
+      const overdueTeachers = Array.from(overdueTeacherSet)
+      
+      // 학원비 납부 통계 - 이번달
+      const currentDate = new Date()
+      const currentYear = currentDate.getFullYear()
+      const currentMonth = currentDate.getMonth() + 1
+      
+      const { data: tuitionData } = await supabase
+        .from('tuition_fees')
+        .select('*')
+        .eq('year', currentYear)
+        .eq('month', currentMonth)
+      
+      const currentMonthPaidCount = tuitionData?.filter(t => t.payment_status === '완납').length || 0
+      const currentMonthUnpaidCount = tuitionData?.filter(t => t.payment_status !== '완납').length || 0
+
       setStats({
         activeStudents: activeStudents?.length || 0,
         activeStudentsByDept,
@@ -308,7 +386,13 @@ export default function DashboardPage() {
         enrollmentConversionRate: `${enrollmentConversionRate}%`,
         withdrawalsThisMonth: withdrawals?.length || 0,
         withdrawalsByDept,
-        withdrawalsYoY
+        withdrawalsYoY,
+        pendingMakeups,
+        weeklyScheduledMakeups,
+        overdueScheduledMakeups,
+        overdueTeachers,
+        currentMonthPaidCount,
+        currentMonthUnpaidCount
       })
 
     } catch (error) {
@@ -988,6 +1072,156 @@ export default function DashboardPage() {
                 <div key={dept}>{dept}: {count}명</div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 추가 통계 카드 5개 - 새로운 섹션 */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {/* 관리 필요 학생 */}
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">관리 필요 학생</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {atRiskStudents.reduce((total, group) => total + group.students.length, 0)}명
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              상담/케어 필요
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1 mt-1">
+              {atRiskStudents.slice(0, 3).map((group, index) => (
+                <div key={`${group.teacherName}-${index}`}>
+                  {group.teacherName}: {group.students.length}명
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 보강 관리 현황 */}
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">보강 관리</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">날짜 미정</span>
+                <span className="text-sm font-semibold">{stats.pendingMakeups}건</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">7일내 예정</span>
+                <span className="text-sm font-semibold text-blue-600">{stats.weeklyScheduledMakeups}건</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">기한 초과</span>
+                <span className="text-sm font-semibold text-red-600">{stats.overdueScheduledMakeups}건</span>
+              </div>
+            </div>
+            {stats.overdueScheduledMakeups > 0 && stats.overdueTeachers.length > 0 && (
+              <p className="text-xs text-red-600 font-medium mt-2 truncate">
+                {stats.overdueTeachers.join(', ')}: 관리 필요!
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 전환율 알림 */}
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">전환율 관리</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">입학테스트<span className="text-[10px]">(목표60%)</span></span>
+                  <span className={`text-sm font-semibold ${
+                    parseFloat(stats.testConversionRate) >= 60 ? 'text-green-600' : 'text-amber-600'
+                  }`}>
+                    {stats.testConversionRate}
+                  </span>
+                </div>
+                {parseFloat(stats.testConversionRate) < 60 && (
+                  <p className="text-xs text-amber-600 font-medium mt-1 truncate">
+                    엄해미: 적극 연락 필요!
+                  </p>
+                )}
+              </div>
+              <div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">신규등원<span className="text-[10px]">(목표50%)</span></span>
+                  <span className={`text-sm font-semibold ${
+                    parseFloat(stats.enrollmentConversionRate) >= 50 ? 'text-green-600' : 
+                    parseFloat(stats.enrollmentConversionRate) >= 40 ? 'text-amber-600' : 'text-red-600'
+                  }`}>
+                    {stats.enrollmentConversionRate}
+                  </span>
+                </div>
+                {parseFloat(stats.enrollmentConversionRate) < 50 && (
+                  <p className="text-xs text-red-600 font-medium mt-1 truncate">
+                    엄해미: 등록 유도 강화!
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 학원비 납부 현황 */}
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">이번달 학원비</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">완납</span>
+                <span className="text-sm font-semibold text-green-600">
+                  {stats.currentMonthPaidCount}건
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">미납</span>
+                <span className="text-sm font-semibold text-red-600">
+                  {stats.currentMonthUnpaidCount}건
+                </span>
+              </div>
+              <div className="pt-1 border-t">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">납부율</span>
+                  <span className="text-sm font-semibold">
+                    {stats.currentMonthPaidCount + stats.currentMonthUnpaidCount > 0
+                      ? `${Math.round(
+                          (stats.currentMonthPaidCount /
+                            (stats.currentMonthPaidCount + stats.currentMonthUnpaidCount)) *
+                            100
+                        )}%`
+                      : '0%'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 5번째 카드 - 비워둠 */}
+        <Card className="min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">준비 중</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-muted-foreground">-</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              추가 기능 예정
+            </p>
           </CardContent>
         </Card>
       </div>
