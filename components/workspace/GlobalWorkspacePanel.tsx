@@ -198,23 +198,23 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
 
       {/* 탭 */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "todos" | "memos")} className="flex-1 flex flex-col">
-        <TabsList className="w-full rounded-none">
-          <TabsTrigger value="todos" className="flex-1">
+        <TabsList className="w-full rounded-none border-b">
+          <TabsTrigger value="todos" className="flex-1 gap-1">
             투두리스트
-            <Badge variant="outline" className="ml-2">
+            <Badge variant="outline" className="ml-1 text-xs">
               {activeTodos}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="memos" className="flex-1">
+          <TabsTrigger value="memos" className="flex-1 gap-1">
             메모/아이디어
-            <Badge variant="outline" className="ml-2">
+            <Badge variant="outline" className="ml-1 text-xs">
               {memos.filter(m => !m.is_archived).length}
             </Badge>
           </TabsTrigger>
         </TabsList>
 
         {/* 투두리스트 탭 */}
-        <TabsContent value="todos" className="flex-1 flex flex-col p-4 space-y-3">
+        <TabsContent value="todos" className="flex-1 flex flex-col p-4 space-y-3 mt-0">
           {/* 통계 */}
           <div className="text-sm text-muted-foreground">
             활성 업무: {activeTodos}개 | 오늘 완료: {todayCompleted}개
@@ -279,7 +279,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         </TabsContent>
 
         {/* 메모 탭 */}
-        <TabsContent value="memos" className="flex-1 flex flex-col p-4 space-y-3">
+        <TabsContent value="memos" className="flex-1 flex flex-col p-4 space-y-3 mt-0">
           {/* 새 메모 추가 버튼 */}
           <Button 
             onClick={() => {
