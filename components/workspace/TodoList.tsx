@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Check, Circle, Clock, AlertCircle, MoreVertical, MessageSquare, Calendar, User, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,21 +86,14 @@ export function TodoList({ todos, onEdit, onStatusChange, onDelete }: TodoListPr
         }`}>
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-3 flex-1">
-              {/* 체크박스/상태 아이콘 */}
-              <button
-                onClick={() => {
-                  if (todo.status === 'pending') {
-                    onStatusChange(todo.id, 'in_progress')
-                  } else if (todo.status === 'in_progress') {
-                    onStatusChange(todo.id, 'completed')
-                  } else if (todo.status === 'completed') {
-                    onStatusChange(todo.id, 'pending')
-                  }
+              {/* 체크박스 */}
+              <Checkbox
+                checked={todo.status === 'completed'}
+                onCheckedChange={(checked) => {
+                  onStatusChange(todo.id, checked ? 'completed' : 'pending')
                 }}
                 className="mt-1"
-              >
-                {getStatusIcon(todo.status)}
-              </button>
+              />
 
               <div className="flex-1 space-y-1">
                 {/* 제목 */}

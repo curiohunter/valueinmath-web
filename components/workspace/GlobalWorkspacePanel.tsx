@@ -96,11 +96,12 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
   // 실시간 구독 설정
   const setupRealtimeSubscriptions = () => {
     // 투두 실시간 구독
-    const todoChannel = supabase
+    supabase
       .channel('todos-channel')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'todos' },
         (payload) => {
+          console.log('Todo change:', payload)
           if (payload.eventType === 'INSERT') {
             setTodos(prev => [payload.new as Todo, ...prev])
           } else if (payload.eventType === 'UPDATE') {
@@ -113,11 +114,12 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       .subscribe()
 
     // 메모 실시간 구독
-    const memoChannel = supabase
+    supabase
       .channel('memos-channel')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'memos' },
         (payload) => {
+          console.log('Memo change:', payload)
           if (payload.eventType === 'INSERT') {
             setMemos(prev => [payload.new as Memo, ...prev])
           } else if (payload.eventType === 'UPDATE') {
@@ -355,7 +357,10 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       {todoModalOpen && (
         <TodoModal
           isOpen={todoModalOpen}
-          onClose={() => setTodoModalOpen(false)}
+          onClose={() => {
+            setTodoModalOpen(false)
+            loadTodos() // 모달 닫힐 때 다시 로드
+          }}
           todo={editingTodo}
           user={user}
         />
@@ -364,7 +369,10 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       {memoModalOpen && (
         <MemoModal
           isOpen={memoModalOpen}
-          onClose={() => setMemoModalOpen(false)}
+          onClose={() => {
+            setMemoModalOpen(false)
+            loadMemos() // 모달 닫힐 때 다시 로드
+          }}
           memo={editingMemo}
           user={user}
         />

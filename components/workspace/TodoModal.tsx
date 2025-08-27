@@ -68,12 +68,17 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
     try {
       const { data, error } = await supabase
         .from('employees')
-        .select('id, name')
+        .select('auth_user_id, name')
         .eq('status', 'active')
         .order('name')
       
       if (error) throw error
-      setEmployees(data || [])
+      // auth_user_id를 id로 사용하도록 매핑
+      const mappedData = data?.map(emp => ({
+        id: emp.auth_user_id,
+        name: emp.name
+      })) || []
+      setEmployees(mappedData)
     } catch (error) {
       console.error('직원 목록 로드 오류:', error)
     }
@@ -89,6 +94,22 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
 
     setLoading(true)
     try {
+      // 현재 유저 정보 가져오기
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      let userName = currentUser?.email
+      
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', currentUser.id)
+          .single()
+        
+        if (profile?.name) {
+          userName = profile.name
+        }
+      }
+      
       const assignedEmployee = employees.find(e => e.id === formData.assigned_to)
       
       const todoData = {
@@ -99,8 +120,8 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
         assigned_to: formData.assigned_to || null,
         assigned_name: assignedEmployee?.name || null,
         due_date: formData.due_date ? format(formData.due_date, 'yyyy-MM-dd') : null,
-        created_by: user?.id || null,
-        created_by_name: user?.name || user?.email || null,
+        created_by: currentUser?.id || null,
+        created_by_name: userName || null,
       }
 
       if (todo) {

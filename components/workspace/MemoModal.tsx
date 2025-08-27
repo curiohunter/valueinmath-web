@@ -67,14 +67,30 @@ export function MemoModal({ isOpen, onClose, memo, user }: MemoModalProps) {
 
     setLoading(true)
     try {
+      // 현재 유저 정보 가져오기
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      let userName = currentUser?.email
+      
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', currentUser.id)
+          .single()
+        
+        if (profile?.name) {
+          userName = profile.name
+        }
+      }
+      
       const memoData = {
         title: formData.title.trim(),
         content: formData.content.trim(),
         category: formData.category,
         is_pinned: formData.is_pinned,
         expires_at: formData.expires_at ? format(formData.expires_at, 'yyyy-MM-dd') : null,
-        created_by: user?.id || null,
-        created_by_name: user?.name || user?.email || null,
+        created_by: currentUser?.id || null,
+        created_by_name: userName || null,
         last_activity_at: new Date().toISOString(),
       }
 
