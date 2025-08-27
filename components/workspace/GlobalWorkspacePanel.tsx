@@ -214,136 +214,140 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         </TabsList>
 
         {/* 투두리스트 탭 */}
-        <TabsContent value="todos" className="flex-1 flex flex-col p-4 space-y-3 !mt-0">
-          {/* 통계 */}
-          <div className="text-sm text-muted-foreground">
-            활성 업무: {activeTodos}개 | 오늘 완료: {todayCompleted}개
-          </div>
+        <TabsContent value="todos" className="flex-1 !mt-0">
+          <div className="flex flex-col h-full p-4 space-y-3">
+            {/* 통계 */}
+            <div className="text-sm text-muted-foreground">
+              활성 업무: {activeTodos}개 | 오늘 완료: {todayCompleted}개
+            </div>
 
-          {/* 새 투두 추가 버튼 */}
-          <Button 
-            onClick={() => {
-              setEditingTodo(null)
-              setTodoModalOpen(true)
-            }}
-            className="w-full"
-            size="sm"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            새 업무 추가
-          </Button>
-
-          {/* 필터 토글 */}
-          <div className="flex items-center space-x-2 text-sm">
-            <Button
-              variant={todoFilter.showCompleted ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setTodoFilter(prev => ({ ...prev, showCompleted: !prev.showCompleted }))}
-            >
-              완료 항목 {todoFilter.showCompleted ? '숨기기' : '보기'}
-            </Button>
-          </div>
-
-          {/* 투두 리스트 */}
-          <ScrollArea className="flex-1">
-            <TodoList
-              todos={sortedTodos}
-              onEdit={(todo) => {
-                setEditingTodo(todo)
+            {/* 새 투두 추가 버튼 */}
+            <Button 
+              onClick={() => {
+                setEditingTodo(null)
                 setTodoModalOpen(true)
               }}
-              onStatusChange={async (todoId, newStatus) => {
-                const { error } = await supabase
-                  .from('todos')
-                  .update({ 
-                    status: newStatus,
-                    completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
-                    completed_by: newStatus === 'completed' ? user?.id : null
-                  })
-                  .eq('id', todoId)
-                
-                if (error) console.error('상태 변경 오류:', error)
-              }}
-              onDelete={async (todoId) => {
-                if (confirm('정말 삭제하시겠습니까?')) {
+              className="w-full"
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              새 업무 추가
+            </Button>
+
+            {/* 필터 토글 */}
+            <div className="flex items-center space-x-2 text-sm">
+              <Button
+                variant={todoFilter.showCompleted ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setTodoFilter(prev => ({ ...prev, showCompleted: !prev.showCompleted }))}
+              >
+                완료 항목 {todoFilter.showCompleted ? '숨기기' : '보기'}
+              </Button>
+            </div>
+
+            {/* 투두 리스트 */}
+            <ScrollArea className="flex-1">
+              <TodoList
+                todos={sortedTodos}
+                onEdit={(todo) => {
+                  setEditingTodo(todo)
+                  setTodoModalOpen(true)
+                }}
+                onStatusChange={async (todoId, newStatus) => {
                   const { error } = await supabase
                     .from('todos')
-                    .delete()
+                    .update({ 
+                      status: newStatus,
+                      completed_at: newStatus === 'completed' ? new Date().toISOString() : null,
+                      completed_by: newStatus === 'completed' ? user?.id : null
+                    })
                     .eq('id', todoId)
                   
-                  if (error) console.error('삭제 오류:', error)
-                }
-              }}
-            />
-          </ScrollArea>
+                  if (error) console.error('상태 변경 오류:', error)
+                }}
+                onDelete={async (todoId) => {
+                  if (confirm('정말 삭제하시겠습니까?')) {
+                    const { error } = await supabase
+                      .from('todos')
+                      .delete()
+                      .eq('id', todoId)
+                    
+                    if (error) console.error('삭제 오류:', error)
+                  }
+                }}
+              />
+            </ScrollArea>
+          </div>
         </TabsContent>
 
         {/* 메모 탭 */}
-        <TabsContent value="memos" className="flex-1 flex flex-col p-4 space-y-3 !mt-0">
-          {/* 새 메모 추가 버튼 */}
-          <Button 
-            onClick={() => {
-              setEditingMemo(null)
-              setMemoModalOpen(true)
-            }}
-            className="w-full"
-            size="sm"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            새 메모 작성
-          </Button>
-
-          {/* 카테고리 필터 */}
-          <div className="flex items-center space-x-2 text-sm">
-            <select
-              value={memoFilter.category}
-              onChange={(e) => setMemoFilter(prev => ({ ...prev, category: e.target.value as any }))}
-              className="text-xs border rounded px-2 py-1"
-            >
-              <option value="all">전체</option>
-              <option value="notice">공지</option>
-              <option value="idea">아이디어</option>
-              <option value="reminder">리마인더</option>
-              <option value="general">일반</option>
-            </select>
-            <Button
-              variant={memoFilter.showPinnedOnly ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setMemoFilter(prev => ({ ...prev, showPinnedOnly: !prev.showPinnedOnly }))}
-            >
-              <Pin className="h-3 w-3 mr-1" />
-              고정
-            </Button>
-          </div>
-
-          {/* 메모 리스트 */}
-          <ScrollArea className="flex-1">
-            <MemoList
-              memos={filteredMemos}
-              onEdit={(memo) => {
-                setEditingMemo(memo)
+        <TabsContent value="memos" className="flex-1 !mt-0">
+          <div className="flex flex-col h-full p-4 space-y-3">
+            {/* 새 메모 추가 버튼 */}
+            <Button 
+              onClick={() => {
+                setEditingMemo(null)
                 setMemoModalOpen(true)
               }}
-              onPin={async (memoId, isPinned) => {
-                const { error } = await supabase
-                  .from('memos')
-                  .update({ is_pinned: isPinned })
-                  .eq('id', memoId)
-                
-                if (error) console.error('고정 변경 오류:', error)
-              }}
-              onDelete={async (memoId) => {
-                if (confirm('정말 삭제하시겠습니까?')) {
+              className="w-full"
+              size="sm"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              새 메모 작성
+            </Button>
+
+            {/* 카테고리 필터 */}
+            <div className="flex items-center space-x-2 text-sm">
+              <select
+                value={memoFilter.category}
+                onChange={(e) => setMemoFilter(prev => ({ ...prev, category: e.target.value as any }))}
+                className="text-xs border rounded px-2 py-1"
+              >
+                <option value="all">전체</option>
+                <option value="notice">공지</option>
+                <option value="idea">아이디어</option>
+                <option value="reminder">리마인더</option>
+                <option value="general">일반</option>
+              </select>
+              <Button
+                variant={memoFilter.showPinnedOnly ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setMemoFilter(prev => ({ ...prev, showPinnedOnly: !prev.showPinnedOnly }))}
+              >
+                <Pin className="h-3 w-3 mr-1" />
+                고정
+              </Button>
+            </div>
+
+            {/* 메모 리스트 */}
+            <ScrollArea className="flex-1">
+              <MemoList
+                memos={filteredMemos}
+                onEdit={(memo) => {
+                  setEditingMemo(memo)
+                  setMemoModalOpen(true)
+                }}
+                onPin={async (memoId, isPinned) => {
                   const { error } = await supabase
                     .from('memos')
-                    .delete()
+                    .update({ is_pinned: isPinned })
                     .eq('id', memoId)
                   
-                  if (error) console.error('삭제 오류:', error)
-                }
-              }}
-            />
-          </ScrollArea>
+                  if (error) console.error('고정 변경 오류:', error)
+                }}
+                onDelete={async (memoId) => {
+                  if (confirm('정말 삭제하시겠습니까?')) {
+                    const { error } = await supabase
+                      .from('memos')
+                      .delete()
+                      .eq('id', memoId)
+                    
+                    if (error) console.error('삭제 오류:', error)
+                  }
+                }}
+              />
+            </ScrollArea>
+          </div>
         </TabsContent>
       </Tabs>
 
