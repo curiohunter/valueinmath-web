@@ -173,7 +173,12 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         (payload) => {
           console.log('Todo change:', payload)
           if (payload.eventType === 'INSERT') {
-            setTodos(prev => [{ ...(payload.new as Todo), comment_count: 0 }, ...prev])
+            setTodos(prev => {
+              // Check if already exists to prevent duplicates
+              const exists = prev.some(t => t.id === (payload.new as Todo).id)
+              if (exists) return prev
+              return [{ ...(payload.new as Todo), comment_count: 0 }, ...prev]
+            })
           } else if (payload.eventType === 'UPDATE') {
             setTodos(prev => prev.map(t => 
               t.id === payload.new.id 
@@ -195,7 +200,12 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         (payload) => {
           console.log('Memo change:', payload)
           if (payload.eventType === 'INSERT') {
-            setMemos(prev => [{ ...(payload.new as Memo), comment_count: 0 }, ...prev])
+            setMemos(prev => {
+              // Check if already exists to prevent duplicates
+              const exists = prev.some(m => m.id === (payload.new as Memo).id)
+              if (exists) return prev
+              return [{ ...(payload.new as Memo), comment_count: 0 }, ...prev]
+            })
           } else if (payload.eventType === 'UPDATE') {
             setMemos(prev => prev.map(m => 
               m.id === payload.new.id 
@@ -311,7 +321,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
   return (
     <div className="fixed right-0 top-0 h-full w-80 bg-background border-l shadow-lg z-50 flex flex-col">
       {/* 헤더 */}
-      <div className="p-4 border-b flex items-center justify-between">
+      <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
         <h2 className="text-lg font-semibold">📋 업무공간</h2>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -319,8 +329,8 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       </div>
 
       {/* 탭 */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "todos" | "memos")} className="flex-1 flex flex-col">
-        <TabsList className="w-full rounded-none border-b">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "todos" | "memos")} className="flex-1 flex flex-col min-h-0">
+        <TabsList className="w-full rounded-none border-b flex-shrink-0">
           <TabsTrigger value="todos" className="flex-1 gap-1">
             투두리스트
             <Badge variant="outline" className="ml-1 text-xs">
@@ -425,6 +435,11 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         {/* 메모 탭 */}
         <TabsContent value="memos" className="flex-1 !mt-0">
           <div className="flex flex-col h-full p-4 space-y-3">
+            {/* 통계 */}
+            <div className="text-sm text-muted-foreground">
+              전체 메모: {memos.filter(m => !m.is_archived).length}개 | 고정: {memos.filter(m => m.is_pinned).length}개
+            </div>
+
             {/* 새 메모 추가 버튼 */}
             <Button 
               onClick={() => {
@@ -517,7 +532,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
           isOpen={todoModalOpen}
           onClose={() => {
             setTodoModalOpen(false)
-            loadTodos() // 모달 닫힐 때 다시 로드
+            // Realtime subscription will handle the update
           }}
           todo={editingTodo}
           user={user}
@@ -529,7 +544,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
           isOpen={memoModalOpen}
           onClose={() => {
             setMemoModalOpen(false)
-            loadMemos() // 모달 닫힐 때 다시 로드
+            // Realtime subscription will handle the update
           }}
           memo={editingMemo}
           user={user}
