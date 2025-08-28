@@ -51,3 +51,6 @@ supabase/seed.sql
 TODO.md
 NOTES.md
 private/
+
+# 아카이브 폴더 (참고용 미사용 코드)
+archive/

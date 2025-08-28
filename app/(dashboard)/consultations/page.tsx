@@ -31,7 +31,9 @@ import {
   Edit,
   Trash2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  FileText,
+  Eye
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -74,6 +76,9 @@ export default function ConsultationsPage() {
   const [consultationStatusFilter, setConsultationStatusFilter] = useState("all");
   const [consultationCounselorFilter, setConsultationCounselorFilter] = useState("all");
   const [consultationDateOrder, setConsultationDateOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // State for content preview
+  const [expandedContent, setExpandedContent] = useState<Set<string>>(new Set());
   
   // State for statistics
   const [stats, setStats] = useState<ConsultationPageStats>({
@@ -521,6 +526,16 @@ export default function ConsultationsPage() {
     }
   };
   
+  const toggleContentExpansion = (consultationId: string) => {
+    const newExpanded = new Set(expandedContent);
+    if (newExpanded.has(consultationId)) {
+      newExpanded.delete(consultationId);
+    } else {
+      newExpanded.add(consultationId);
+    }
+    setExpandedContent(newExpanded);
+  };
+  
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case "재원":
@@ -926,14 +941,15 @@ export default function ConsultationsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>날짜</TableHead>
-                    <TableHead>시간</TableHead>
-                    <TableHead>학생</TableHead>
-                    <TableHead>유형</TableHead>
-                    <TableHead>담당자</TableHead>
-                    <TableHead>방법</TableHead>
-                    <TableHead>상태</TableHead>
-                    <TableHead className="text-right">액션</TableHead>
+                    <TableHead className="w-24">날짜</TableHead>
+                    <TableHead className="w-16">시간</TableHead>
+                    <TableHead className="w-20">학생</TableHead>
+                    <TableHead className="w-24">유형</TableHead>
+                    <TableHead className="w-20">담당자</TableHead>
+                    <TableHead className="w-20">방법</TableHead>
+                    <TableHead className="w-32">내용</TableHead>
+                    <TableHead className="w-16">상태</TableHead>
+                    <TableHead className="w-24 text-right">액션</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -941,6 +957,8 @@ export default function ConsultationsPage() {
                     const date = new Date(consultation.date);
                     const dateStr = date.toLocaleDateString('ko-KR');
                     const timeStr = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                    const isExpanded = expandedContent.has(consultation.id);
+                    const hasContent = consultation.content && consultation.content.trim().length > 0;
                     
                     return (
                       <TableRow key={consultation.id}>
@@ -958,6 +976,31 @@ export default function ConsultationsPage() {
                           {consultation.counselor_name_snapshot || consultation.counselor?.name || '-'}
                         </TableCell>
                         <TableCell>{consultation.method}</TableCell>
+                        <TableCell className="w-32 max-w-[128px]">
+                          {hasContent ? (
+                            <div className="space-y-1">
+                              <div 
+                                className={`text-xs text-gray-600 break-words ${isExpanded ? '' : 'line-clamp-1'}`}
+                                title={!isExpanded ? consultation.content : undefined}
+                              >
+                                {consultation.content}
+                              </div>
+                              {consultation.content.length > 30 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 px-1 text-xs text-blue-600 hover:text-blue-700"
+                                  onClick={() => toggleContentExpansion(consultation.id)}
+                                >
+                                  <Eye className="h-3 w-3 mr-0.5" />
+                                  {isExpanded ? '접기' : '더보기'}
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge className={getConsultationStatusBadgeColor(consultation.status)}>
                             {consultation.status}

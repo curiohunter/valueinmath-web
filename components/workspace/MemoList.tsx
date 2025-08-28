@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { Pin, Archive, MessageSquare, Calendar, User, Tag } from "lucide-react"
+import { Pin, Archive, MessageSquare, Calendar, User, Tag, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CommentThread } from "./CommentThread"
@@ -18,6 +18,7 @@ interface MemoListProps {
 
 export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
+  const [expandedMemos, setExpandedMemos] = useState<Set<string>>(new Set())
   const [localMemos, setLocalMemos] = useState(memos)
   
   // memos prop이 변경되면 localMemos 업데이트
@@ -55,18 +56,32 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
     setExpandedComments(newExpanded)
   }
 
+  const toggleMemoExpand = (memoId: string) => {
+    const newExpanded = new Set(expandedMemos)
+    if (newExpanded.has(memoId)) {
+      newExpanded.delete(memoId)
+    } else {
+      newExpanded.add(memoId)
+    }
+    setExpandedMemos(newExpanded)
+  }
+
   // 고정된 메모와 일반 메모 분리
   const pinnedMemos = localMemos.filter(m => m.is_pinned)
   const regularMemos = localMemos.filter(m => !m.is_pinned)
 
   const renderMemoItem = (memo: Memo) => {
     const isExpired = memo.expires_at && isPast(new Date(memo.expires_at))
+    const isExpanded = expandedMemos.has(memo.id)
+    const needsExpansion = memo.content.length > 50 // 50자 이상이면 토글 필요
     
     return (
       <div key={memo.id} className="space-y-2">
-        <div className={`p-4 rounded-lg border ${
+        <div className={`p-4 rounded-lg border transition-all duration-200 ${
           memo.is_pinned ? 'bg-yellow-50 border-yellow-200' : 'bg-white'
-        } ${isExpired ? 'opacity-60' : ''}`}>
+        } ${isExpired ? 'opacity-60' : ''} ${
+          isExpanded ? 'shadow-md' : 'hover:shadow-sm'
+        }`}>
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center space-x-2">
               {memo.is_pinned && (
@@ -117,12 +132,35 @@ export function MemoList({ memos, onEdit, onPin, onDelete }: MemoListProps) {
           {/* 제목 */}
           <h4 className="font-medium text-sm mb-2">{memo.title}</h4>
 
-          {/* 내용 (처음 100자만 표시) */}
-          <div className="text-sm text-gray-600 mb-2">
-            {memo.content.length > 100 
-              ? `${memo.content.substring(0, 100)}...` 
-              : memo.content}
+          {/* 내용 - 토글 가능 */}
+          <div 
+            className={`text-sm text-gray-600 mb-2 cursor-pointer transition-all duration-200 ${
+              !isExpanded && needsExpansion ? 'line-clamp-2' : ''
+            }`}
+            onClick={() => needsExpansion && toggleMemoExpand(memo.id)}
+          >
+            {memo.content}
           </div>
+
+          {/* 더보기/접기 버튼 */}
+          {needsExpansion && (
+            <button
+              onClick={() => toggleMemoExpand(memo.id)}
+              className="text-xs text-blue-600 hover:text-blue-700 flex items-center mb-2"
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp className="h-3 w-3 mr-1" />
+                  접기
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3 mr-1" />
+                  더보기
+                </>
+              )}
+            </button>
+          )}
 
           {/* 메타 정보 */}
           <div className="flex items-center justify-between text-xs text-gray-500">

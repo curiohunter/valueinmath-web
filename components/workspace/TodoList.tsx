@@ -76,8 +76,21 @@ export function TodoList({ todos, onEdit, onStatusChange, onDelete }: TodoListPr
   }
 
   const renderTodoItem = (todo: Todo) => {
-    const isOverdue = todo.due_date && isPast(new Date(todo.due_date)) && todo.status !== 'completed'
-    const isDueToday = todo.due_date && isToday(new Date(todo.due_date))
+    // 한국 시간으로 날짜 비교를 위해 시간을 제거하고 날짜만 비교
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    
+    let isOverdue = false
+    let isDueToday = false
+    
+    if (todo.due_date) {
+      // due_date는 'YYYY-MM-DD' 형식의 문자열
+      const [year, month, day] = todo.due_date.split('-').map(Number)
+      const dueDate = new Date(year, month - 1, day) // month는 0-based
+      
+      isDueToday = dueDate.getTime() === today.getTime()
+      isOverdue = dueDate < today && todo.status !== 'completed'
+    }
     
     return (
       <div key={todo.id} className="space-y-2">

@@ -64,11 +64,10 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
   // 실시간 구독은 별도 useEffect
   useEffect(() => {
     if (isOpen) {
-      setupRealtimeSubscriptions()
-    }
-    
-    return () => {
-      supabase.removeAllChannels()
+      const subscription = setupRealtimeSubscriptions()
+      return () => {
+        subscription
+      }
     }
   }, [isOpen])
 
@@ -165,26 +164,19 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
 
   // 실시간 구독 설정
   const setupRealtimeSubscriptions = () => {
+    // 이전 구독 정리
+    supabase.removeAllChannels()
+    
     // 투두 실시간 구독
-    supabase
+    const todosChannel = supabase
       .channel('todos-channel')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'todos' },
-        (payload) => {
+        async (payload) => {
           console.log('Todo change:', payload)
-          if (payload.eventType === 'INSERT') {
-            setTodos(prev => {
-              // Check if already exists to prevent duplicates
-              const exists = prev.some(t => t.id === (payload.new as Todo).id)
-              if (exists) return prev
-              return [{ ...(payload.new as Todo), comment_count: 0 }, ...prev]
-            })
-          } else if (payload.eventType === 'UPDATE') {
-            setTodos(prev => prev.map(t => 
-              t.id === payload.new.id 
-                ? { ...(payload.new as Todo), comment_count: t.comment_count || 0 } 
-                : t
-            ))
+          // INSERT와 UPDATE의 경우 데이터 새로고침
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            await loadTodos()
           } else if (payload.eventType === 'DELETE') {
             setTodos(prev => prev.filter(t => t.id !== payload.old.id))
           }
@@ -193,25 +185,15 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       .subscribe()
 
     // 메모 실시간 구독
-    supabase
+    const memosChannel = supabase
       .channel('memos-channel')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'memos' },
-        (payload) => {
+        async (payload) => {
           console.log('Memo change:', payload)
-          if (payload.eventType === 'INSERT') {
-            setMemos(prev => {
-              // Check if already exists to prevent duplicates
-              const exists = prev.some(m => m.id === (payload.new as Memo).id)
-              if (exists) return prev
-              return [{ ...(payload.new as Memo), comment_count: 0 }, ...prev]
-            })
-          } else if (payload.eventType === 'UPDATE') {
-            setMemos(prev => prev.map(m => 
-              m.id === payload.new.id 
-                ? { ...(payload.new as Memo), comment_count: m.comment_count || 0 }
-                : m
-            ))
+          // INSERT와 UPDATE의 경우 데이터 새로고침
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            await loadMemos()
           } else if (payload.eventType === 'DELETE') {
             setMemos(prev => prev.filter(m => m.id !== payload.old.id))
           }
@@ -220,6 +202,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       .subscribe()
     
     // 댓글 실시간 구독 - 댓글 수 업데이트용
+    const commentsChannel =
     supabase
       .channel('comments-channel')
       .on('postgres_changes',
@@ -260,6 +243,13 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
         }
       )
       .subscribe()
+    
+    // Cleanup 함수 반환
+    return () => {
+      todosChannel.unsubscribe()
+      memosChannel.unsubscribe()
+      commentsChannel.unsubscribe()
+    }
   }
 
   // 필터링된 투두
@@ -332,7 +322,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "todos" | "memos")} className="flex-1 flex flex-col min-h-0">
         <TabsList className="w-full rounded-none border-b flex-shrink-0">
           <TabsTrigger value="todos" className="flex-1 gap-1">
-            투두리스트
+            Todo리스트
             <Badge variant="outline" className="ml-1 text-xs">
               {activeTodos}
             </Badge>
@@ -345,7 +335,7 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
           </TabsTrigger>
         </TabsList>
 
-        {/* 투두리스트 탭 */}
+        {/* Todo리스트 탭 */}
         <TabsContent value="todos" className="flex-1 overflow-auto !mt-0">
           <div className="p-4 space-y-3">
             {/* 통계 */}
@@ -517,7 +507,9 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
           isOpen={todoModalOpen}
           onClose={() => {
             setTodoModalOpen(false)
-            // Realtime subscription will handle the update
+            setEditingTodo(null)
+            // 모달 닫을 때 데이터 새로고침
+            loadTodos()
           }}
           todo={editingTodo}
           user={user}
@@ -529,7 +521,9 @@ export default function GlobalWorkspacePanel({ user, isOpen, onClose }: GlobalWo
           isOpen={memoModalOpen}
           onClose={() => {
             setMemoModalOpen(false)
-            // Realtime subscription will handle the update
+            setEditingMemo(null)
+            // 모달 닫을 때 데이터 새로고침
+            loadMemos()
           }}
           memo={editingMemo}
           user={user}
