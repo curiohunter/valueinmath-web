@@ -217,6 +217,24 @@ export async function DELETE(
       }
     }
     
+    // 연결된 입학테스트 삭제 (캘린더에서 삭제 = 입학테스트 취소)
+    if (eventToDelete && eventToDelete.event_type === 'entrance_test') {
+      try {
+        const { error } = await supabase
+          .from('entrance_tests')
+          .delete()
+          .eq('calendar_event_id', params.id);
+        
+        if (error) {
+          console.error('입학테스트 삭제 실패:', error);
+        } else {
+          console.log(`입학테스트 삭제 완료 (캘린더 이벤트 삭제로 인한): ${params.id}`);
+        }
+      } catch (syncError) {
+        console.error('입학테스트 삭제 실패:', syncError);
+      }
+    }
+    
     // 메인 DB 작업 - 이벤트 삭제
     const { error } = await supabase
       .from('calendar_events')

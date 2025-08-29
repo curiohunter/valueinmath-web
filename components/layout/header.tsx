@@ -1,7 +1,8 @@
 "use client"
 
-import { Bell, User, ClipboardList } from "lucide-react"
+import { Bell, User, ClipboardList, Moon, Sun } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useTheme } from "next-themes"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,7 @@ export function Header({
   const [profileOpen, setProfileOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
 
   useEffect(() => {
     (async () => {
@@ -55,11 +57,23 @@ export function Header({
         <div className="flex h-16 items-center px-6">
           <div className="flex flex-1 items-center gap-4 md:gap-8">{/* 전체 검색 입력 필드 제거 */}</div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </Button>
             <NotificationBell user={user} />
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-full hover:bg-gray-100 transition-colors relative"
+              className="h-9 w-9 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
               onClick={() => setWorkspaceOpen?.(!workspaceOpen)}
             >
               <ClipboardList className="h-4 w-4" />
@@ -69,7 +83,7 @@ export function Header({
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
+                  className="h-9 w-9 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                   <User className="h-4 w-4" />
                 </Button>

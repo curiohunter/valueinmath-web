@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import LearningTabs from "@/components/LearningTabs";
+import LearningTabs from "@/components/learning/LearningTabs";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/providers/auth-provider";

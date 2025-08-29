@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/get-user"
-import { AnalyticsPageClient } from "./analytics-page-client"
+import { AnalyticsPageClient } from "@/components/analytics/analytics-page-client"
 
 export default async function AnalyticsPage() {
   await requireAuth()

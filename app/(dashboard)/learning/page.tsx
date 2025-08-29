@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, Fragment } from "react";
-import LearningTabs from "@/components/LearningTabs";
+import LearningTabs from "@/components/learning/LearningTabs";
 import { BulkDatePicker } from "@/components/ui/bulk-date-picker";
 import { ClassAccordion } from "@/components/ui/class-accordion";
 import { ScoreDropdown } from "@/components/ui/score-dropdown";
@@ -14,7 +14,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { HelpCircle, Trash2, ChevronLeft, ChevronRight, Plus, Calendar, Users, ChevronDown, Filter, X } from "lucide-react";
-import { ClassFormModal } from "@/app/(dashboard)/students/classes/class-form-modal";
+import { ClassFormModal } from "@/components/students/classes/class-form-modal";
 
 // 한국 시간대(KST) 기준으로 오늘 날짜 가져오기
 const getKoreanDate = () => {

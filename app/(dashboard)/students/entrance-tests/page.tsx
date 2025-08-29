@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { EntranceTestsTable } from "./entrance-tests-table";
-import { StudentsHeader } from "../students-header";
+import { EntranceTestsTable } from "@/components/students/entrance-tests/entrance-tests-table";
+import { StudentsHeader } from "@/components/students/students-header";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

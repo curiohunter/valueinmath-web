@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/get-user"
-import { StudentsPageClient } from "@/app/(dashboard)/students/students-page-client"
+import { StudentsPageClient } from "@/components/students/students-page-client"
 
 export default async function StudentsPage() {
   await requireAuth()

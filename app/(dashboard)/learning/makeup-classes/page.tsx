@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import LearningTabs from "@/components/LearningTabs";
-import { MakeupSidebar } from "./makeup-sidebar";
-import { MakeupTable } from "./makeup-table";
-import { MakeupStats } from "./makeup-stats";
-import { MakeupModal } from "./makeup-modal";
+import LearningTabs from "@/components/learning/LearningTabs";
+import { MakeupSidebar } from "@/components/learning/makeup-classes/makeup-sidebar";
+import { MakeupTable } from "@/components/learning/makeup-classes/makeup-table";
+import { MakeupStats } from "@/components/learning/makeup-classes/makeup-stats";
+import { MakeupModal } from "@/components/learning/makeup-classes/makeup-modal";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { toast } from "sonner";

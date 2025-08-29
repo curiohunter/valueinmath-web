@@ -12,7 +12,7 @@ import { toast as sonnerToast } from "sonner"
 import { useClassesWithStudents, useTuitionMutate } from "@/hooks/use-tuition"
 import { useEmployees } from "@/hooks/use-employees"
 import { useNewConsultStudents } from "@/hooks/use-students"
-import StudentClassTabs from "@/components/StudentClassTabs"
+import StudentClassTabs from "@/components/students/StudentClassTabs"
 import { Download, ChevronLeft, ChevronRight } from "lucide-react"
 import type { TuitionRow, TuitionFeeInput } from "@/types/tuition"
 

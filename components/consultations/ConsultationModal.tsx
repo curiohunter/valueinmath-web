@@ -132,8 +132,10 @@ export function ConsultationModal({
     loadEmployees();
   }, []);
   
-  // Initialize form data for editing mode
+  // Initialize form data when modal opens
   useEffect(() => {
+    if (!isOpen) return; // Skip if modal is closed
+    
     setIsInitialLoad(true);
     
     if (editingConsultation) {
@@ -165,7 +167,7 @@ export function ConsultationModal({
       // Reset form for new consultation
       setConsultationType("신규상담");
       setConsultationMethod("대면");
-      setConsultationDate(undefined);
+      setConsultationDate(new Date()); // Set today's date by default
       setStartHour("14");
       setStartMinute("00");
       setEndHour("15");
@@ -179,7 +181,7 @@ export function ConsultationModal({
     
     // Set initial load flag after form initialization
     setTimeout(() => setIsInitialLoad(false), 100);
-  }, [editingConsultation]);
+  }, [isOpen, editingConsultation]); // Add isOpen to dependencies
   
   const handleSubmit = async () => {
     if (!consultationDate || !counselorId) {

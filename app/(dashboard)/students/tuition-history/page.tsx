@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 import React, { useState, useEffect } from "react";
-import StudentClassTabs from "@/components/StudentClassTabs";
+import StudentClassTabs from "@/components/students/StudentClassTabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

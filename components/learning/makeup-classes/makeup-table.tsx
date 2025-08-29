@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit2, Trash2, Calendar, Clock, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Edit2, Trash2, Calendar, Clock, User, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
@@ -55,36 +55,80 @@ export function MakeupTable({
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [sortBy, setSortBy] = useState<"date" | "name">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   // 탭 변경 시 페이지 초기화
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedTab]);
 
-  // 탭별 데이터 필터링
-  const filteredMakeups = makeupClasses.filter(makeup => {
-    switch (selectedTab) {
-      case "pending":
-        return makeup.status === "scheduled" && !makeup.makeup_date;
-      case "scheduled":
-        return makeup.status === "scheduled" && makeup.makeup_date;
-      case "completed":
-        return makeup.status === "completed";
-      case "cancelled":
-        return makeup.status === "cancelled";
-      default:
-        return false;
+  // 탭별 데이터 필터링 및 정렬
+  const filteredAndSortedMakeups = React.useMemo(() => {
+    // 먼저 필터링
+    const filtered = makeupClasses.filter(makeup => {
+      switch (selectedTab) {
+        case "pending":
+          return makeup.status === "scheduled" && !makeup.makeup_date;
+        case "scheduled":
+          return makeup.status === "scheduled" && makeup.makeup_date;
+        case "completed":
+          return makeup.status === "completed";
+        case "cancelled":
+          return makeup.status === "cancelled";
+        default:
+          return false;
+      }
+    });
+
+    // 보강 미정 탭에서만 정렬 적용
+    if (selectedTab === "pending") {
+      return filtered.sort((a, b) => {
+        if (sortBy === "date") {
+          // 결석일 기준 정렬
+          const dateA = a.absence_date || "";
+          const dateB = b.absence_date || "";
+          
+          if (dateA !== dateB) {
+            // 결석일이 다르면 날짜로 정렬
+            return sortOrder === "desc" 
+              ? dateB.localeCompare(dateA) 
+              : dateA.localeCompare(dateB);
+          } else {
+            // 같은 날짜면 학생 이름으로 정렬 (가나다순)
+            const nameA = students.find(s => s.id === a.student_id)?.name || "";
+            const nameB = students.find(s => s.id === b.student_id)?.name || "";
+            return nameA.localeCompare(nameB, 'ko');
+          }
+        } else {
+          // 학생 이름 기준 정렬
+          const nameA = students.find(s => s.id === a.student_id)?.name || "";
+          const nameB = students.find(s => s.id === b.student_id)?.name || "";
+          
+          const nameCompare = nameA.localeCompare(nameB, 'ko');
+          if (nameCompare !== 0) {
+            return sortOrder === "asc" ? nameCompare : -nameCompare;
+          } else {
+            // 이름이 같으면 결석일로 정렬 (최신순)
+            const dateA = a.absence_date || "";
+            const dateB = b.absence_date || "";
+            return dateB.localeCompare(dateA);
+          }
+        }
+      });
     }
-  });
+    
+    return filtered;
+  }, [makeupClasses, selectedTab, sortBy, sortOrder, students]);
 
   // 페이지네이션 계산 (completed와 cancelled 탭에만 적용)
   const needsPagination = selectedTab === "completed" || selectedTab === "cancelled";
-  const totalPages = needsPagination ? Math.ceil(filteredMakeups.length / itemsPerPage) : 1;
+  const totalPages = needsPagination ? Math.ceil(filteredAndSortedMakeups.length / itemsPerPage) : 1;
   
   // 현재 페이지에 표시할 데이터
   const paginatedMakeups = needsPagination
-    ? filteredMakeups.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-    : filteredMakeups;
+    ? filteredAndSortedMakeups.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : filteredAndSortedMakeups;
 
   // 학생/반 이름 찾기 헬퍼 함수
   const getStudentName = (studentId: string) => {
@@ -201,6 +245,16 @@ export function MakeupTable({
     cancelled: makeupClasses.filter(m => m.status === "cancelled").length,
   };
 
+  // 정렬 버튼 클릭 핸들러
+  const handleSort = (field: "date" | "name") => {
+    if (sortBy === field) {
+      setSortOrder(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder(field === "date" ? "desc" : "asc");
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border">
       <Tabs value={selectedTab} onValueChange={(value) => onTabChange(value as any)}>
@@ -234,7 +288,41 @@ export function MakeupTable({
         </div>
 
         <TabsContent value={selectedTab} className="mt-0">
-          {filteredMakeups.length === 0 ? (
+          {/* 보강 미정 탭에만 정렬 버튼 표시 */}
+          {selectedTab === "pending" && filteredAndSortedMakeups.length > 0 && (
+            <div className="px-4 py-2 border-b bg-gray-50 flex items-center gap-2">
+              <span className="text-sm text-gray-600">정렬:</span>
+              <Button
+                variant={sortBy === "date" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleSort("date")}
+                className="h-8"
+              >
+                결석일
+                {sortBy === "date" && (
+                  sortOrder === "desc" ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUp className="ml-1 h-3 w-3" />
+                )}
+              </Button>
+              <Button
+                variant={sortBy === "name" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleSort("name")}
+                className="h-8"
+              >
+                학생 이름
+                {sortBy === "name" && (
+                  sortOrder === "asc" ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUp className="ml-1 h-3 w-3" />
+                )}
+              </Button>
+              <span className="text-xs text-gray-500 ml-2">
+                {sortBy === "date" 
+                  ? (sortOrder === "desc" ? "(최신순)" : "(과거순)")
+                  : (sortOrder === "asc" ? "(가나다순)" : "(가나다 역순)")}
+              </span>
+            </div>
+          )}
+          
+          {filteredAndSortedMakeups.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>해당하는 보강 내역이 없습니다.</p>
@@ -359,8 +447,8 @@ export function MakeupTable({
             {needsPagination && totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t">
                 <div className="text-sm text-gray-500">
-                  전체 {filteredMakeups.length}개 중 {((currentPage - 1) * itemsPerPage) + 1}-
-                  {Math.min(currentPage * itemsPerPage, filteredMakeups.length)}개 표시
+                  전체 {filteredAndSortedMakeups.length}개 중 {((currentPage - 1) * itemsPerPage) + 1}-
+                  {Math.min(currentPage * itemsPerPage, filteredAndSortedMakeups.length)}개 표시
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
