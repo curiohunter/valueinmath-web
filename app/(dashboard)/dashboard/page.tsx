@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, AlertCircle, Clock, CheckCircle2, CreditCard, CheckSquare } from "lucide-react"
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
-import ConsultationCard from "@/components/dashboard/ConsultationCard"
-import EntranceTestCard from "@/components/dashboard/EntranceTestCard"
+import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
+import { EntranceTestTable, type EntranceTestData as EntranceTestTableData } from "@/components/dashboard/EntranceTestTable"
 import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
@@ -94,8 +94,9 @@ export default function DashboardPage() {
   const [editingTest, setEditingTest] = useState<EntranceTestData | null>(null)
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
-  const [expandedConsultations, setExpandedConsultations] = useState<Set<string>>(new Set())
-  const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set())
+  // 테이블로 변경되어 더 이상 필요하지 않음
+  // const [expandedConsultations, setExpandedConsultations] = useState<Set<string>>(new Set())
+  // const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set())
   const [selectedStudent, setSelectedStudent] = useState<AtRiskStudent | null>(null)
   const [isStudentDetailModalOpen, setIsStudentDetailModalOpen] = useState(false)
   
@@ -510,8 +511,7 @@ export default function DashboardPage() {
     // 새로운 테스트를 위한 기본 데이터 설정
     const newTest: Partial<EntranceTestData> = {
       consultation_id: consultationId,
-      student_id: consultationId, // consultation_id와 student_id가 같음
-      student_name: consultation.name,
+      student_name: consultation.name,  // student_id 필드 제거 (DB에 없음)
       status: '테스트예정',
       test_date: new Date().toISOString(),
       test1_level: '',
@@ -670,18 +670,37 @@ export default function DashboardPage() {
 
   const handleTestSave = async (testData: Partial<EntranceTestData>) => {
     try {
+      console.log('받은 testData:', testData)
+      console.log('editingTest:', editingTest)
       
       // test_result가 빈 문자열이면 null로 변환
-      const cleanedTestData = {
+      const cleanedTestData: any = {
         ...testData,
         // @ts-ignore - test_result 타입 이슈 임시 해결
         test_result: (testData as any).test_result === '' ? null : (testData as any).test_result
       }
       
+      // 신규 테스트 생성 시 editingTest에서 consultation_id 가져오기
+      if (!editingTest?.id && editingTest) {
+        cleanedTestData.consultation_id = editingTest.consultation_id
+        // student_id, student_name은 데이터베이스에 없는 필드이므로 제거
+        delete cleanedTestData.student_id
+        delete cleanedTestData.student_name
+      }
+      
+      // id가 undefined인 경우 제거
+      if (cleanedTestData.id === undefined) {
+        delete cleanedTestData.id
+      }
+      
+      console.log('정리된 cleanedTestData:', cleanedTestData)
+      
       const cleanData = cleanObj(cleanedTestData)
       
-      if (editingTest) {
-        // 기존 테스트 수정
+      console.log('최종 cleanData:', cleanData)
+      
+      if (editingTest?.id) {
+        // 기존 테스트 수정 (id가 있는 경우)
         const { data, error } = await supabase
           .from('entrance_tests')
           .update(cleanData)
@@ -700,7 +719,7 @@ export default function DashboardPage() {
         }
         
         // 캘린더 이벤트가 있으면 업데이트
-        if (editingTest.calendar_event_id && cleanData.test_date) {
+        if (editingTest.google_calendar_id && cleanData.test_date) {
           const studentName = editingTest.student_name || '학생'
           const testDate = new Date(cleanData.test_date as string)
           const startTime = testDate.toISOString()
@@ -713,7 +732,7 @@ export default function DashboardPage() {
             description: `입학테스트 - ${studentName}`
           }
           
-          await calendarService.updateEvent(editingTest.calendar_event_id, updateData)
+          await calendarService.updateEvent(editingTest.google_calendar_id, updateData)
         }
         
         await loadStats() // 통계만 업데이트
@@ -728,11 +747,11 @@ export default function DashboardPage() {
         // 테스트 날짜가 있으면 캘린더 이벤트 먼저 생성
         if (cleanData.test_date) {
           try {
-            // student_id로 학생 정보 조회
+            // consultation_id로 학생 정보 조회
             const { data: studentData } = await supabase
               .from('students')
               .select('name')
-              .eq('id', cleanData.student_id)
+              .eq('id', cleanData.consultation_id)
               .single()
             
             const studentName = studentData?.name || '학생'
@@ -747,8 +766,7 @@ export default function DashboardPage() {
               end_time: endTime,
               event_type: 'entrance_test',
               description: `입학테스트 - ${studentName}`,
-              location: null,
-              all_day: false
+              location: null
             })
             
             calendarEventId = calendarEvent.id
@@ -761,7 +779,7 @@ export default function DashboardPage() {
         // 캘린더 이벤트 ID와 함께 입학테스트 저장
         const insertData = {
           ...cleanData,
-          calendar_event_id: calendarEventId
+          calendar_event_id: calendarEventId  // 로컬 calendar_events 테이블 ID 저장
         }
         
         const { data, error } = await supabase
@@ -1135,36 +1153,15 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-3">
-            <div className="space-y-2">
-              {consultations.map((consultation) => (
-                <ConsultationCard
-                  key={consultation.id}
-                  student={consultation}
-                  isExpanded={expandedConsultations.has(consultation.id)}
-                  onToggle={() => {
-                    const newExpanded = new Set(expandedConsultations)
-                    if (newExpanded.has(consultation.id)) {
-                      newExpanded.delete(consultation.id)
-                    } else {
-                      newExpanded.add(consultation.id)
-                    }
-                    setExpandedConsultations(newExpanded)
-                  }}
-                  onEdit={() => {
-                    setEditingConsultation(consultation)
-                    setIsConsultationModalOpen(true)
-                  }}
-                  onDelete={() => handleConsultationDelete(consultation.id)}
-                  onCreateTest={handleCreateTest}
-                />
-              ))}
-              
-              {consultations.length === 0 && (
-                <div className="text-center py-6 text-sm text-muted-foreground">
-                  신규상담 데이터가 없습니다
-                </div>
-              )}
-            </div>
+            <ConsultationTable
+              consultations={consultations}
+              onEdit={(consultation) => {
+                setEditingConsultation(consultation)
+                setIsConsultationModalOpen(true)
+              }}
+              onDelete={handleConsultationDelete}
+              onCreateTest={handleCreateTest}
+            />
           </CardContent>
         </Card>
 
@@ -1179,37 +1176,15 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-3">
-            <div className="space-y-2">
-              {entranceTests.map((test) => (
-                <EntranceTestCard
-                  key={test.id}
-                  entranceTest={test}
-                  isExpanded={expandedTests.has(test.id.toString())}
-                  onToggle={() => {
-                    const newExpanded = new Set(expandedTests)
-                    const testId = test.id.toString()
-                    if (newExpanded.has(testId)) {
-                      newExpanded.delete(testId)
-                    } else {
-                      newExpanded.add(testId)
-                    }
-                    setExpandedTests(newExpanded)
-                  }}
-                  onEdit={() => {
-                    setEditingTest(test)
-                    setIsTestModalOpen(true)
-                  }}
-                  onDelete={() => handleTestDelete(test.id)}
-                  onEnrollmentDecision={handleEnrollmentDecision}
-                />
-              ))}
-              
-              {entranceTests.length === 0 && (
-                <div className="text-center py-6 text-sm text-muted-foreground">
-                  신규상담에서 + 버튼을 눌러 입학테스트를 등록해주세요
-                </div>
-              )}
-            </div>
+            <EntranceTestTable
+              entranceTests={entranceTests}
+              onEdit={(test) => {
+                setEditingTest(test)
+                setIsTestModalOpen(true)
+              }}
+              onDelete={handleTestDelete}
+              onEnrollmentDecision={handleEnrollmentDecision}
+            />
           </CardContent>
         </Card>
       </div>
