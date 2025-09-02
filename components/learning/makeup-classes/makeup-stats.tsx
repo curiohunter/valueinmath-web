@@ -65,10 +65,10 @@ export function MakeupStats({ stats }: MakeupStatsProps) {
         </CardContent>
       </Card>
 
-      {/* 최근 30일 선생님별 */}
+      {/* 최근 한달 선생님별 완료 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">선생님별 완료</CardTitle>
+          <CardTitle className="text-sm font-medium">최근 한달 선생님별 완료</CardTitle>
           <Users className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>

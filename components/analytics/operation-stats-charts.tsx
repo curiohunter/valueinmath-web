@@ -11,10 +11,11 @@ import {
 } from "recharts"
 import { 
   TrendingUp, TrendingDown, Users, GraduationCap, 
-  UserPlus, LogOut, Download, Calendar 
+  UserPlus, LogOut, Download, Calendar, Save
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { saveMonthlySnapshot, collectMonthlySnapshot } from "@/app/actions/analytics-snapshot"
 
 interface MonthlyStats {
   id: string
@@ -420,10 +421,28 @@ export function OperationStatsCharts() {
           )}
         </div>
         
-        <Button variant="outline" onClick={downloadCSV}>
-          <Download className="w-4 h-4 mr-2" />
-          CSV 다운로드
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              const result = await saveMonthlySnapshot()
+              if (result.success) {
+                toast.success(result.message)
+                loadStats() // 데이터 새로고침
+              } else {
+                toast.error(result.message)
+              }
+            }}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            이번달 저장
+          </Button>
+          
+          <Button variant="outline" onClick={downloadCSV}>
+            <Download className="w-4 h-4 mr-2" />
+            CSV 다운로드
+          </Button>
+        </div>
       </div>
 
       {/* 핵심 지표 카드 */}

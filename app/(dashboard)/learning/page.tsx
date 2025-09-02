@@ -72,6 +72,7 @@ export default function LearningPage() {
   const [rows, setRows] = useState<
     Array<{
       id?: string;
+      tempId?: string;  // 임시 고유 ID (로컬에서만 사용)
       classId: string;
       studentId: string;
       name: string;
@@ -458,39 +459,34 @@ export default function LearningPage() {
 
   // 학생별 추가
   const handleAddStudent = (classId: string, student: { id: string; name: string }) => {
-    setRows(prev => {
-      // 같은 반, 같은 학생, 같은 날짜인 경우만 중복 체크
-      const existingRow = prev.find(r => 
-        r.classId === classId && 
-        r.studentId === student.id && 
-        r.date === date
-      );
-      if (existingRow) {
-        return prev;
-      } else {
-        return [
-          ...prev,
-          {
-            classId,
-            studentId: student.id,
-            name: student.name,
-            date,
-            attendance: 5,
-            homework: 5,
-            focus: 5,
-            note: "",
-            book1: "",
-            book1log: "",
-            book2: "",
-            book2log: "",
-          },
-        ];
-      }
-    });
+    setRows(prev => [
+      ...prev,
+      {
+        tempId: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // 고유 임시 ID
+        classId,
+        studentId: student.id,
+        name: student.name,
+        date,
+        attendance: 5,
+        homework: 5,
+        focus: 5,
+        note: "",
+        book1: "",
+        book1log: "",
+        book2: "",
+        book2log: "",
+      },
+    ]);
   };
 
   // 표 입력 변경 (부분 업데이트를 위한 변경 추적 포함)
   const handleChange = async (idx: number, key: keyof (typeof rows)[number], value: any) => {
+    // 인덱스 유효성 검사
+    if (idx < 0 || idx >= rows.length) {
+      console.error(`Invalid index: ${idx}, rows length: ${rows.length}`);
+      return;
+    }
+    
     const row = rows[idx];
     
     // originalRows에서 id로 매칭 (id가 있는 경우)
@@ -650,41 +646,8 @@ export default function LearningPage() {
       const newRows = rows.filter(r => !r.id);
       
       
-      // 중복 체크: 같은 학생, 같은 반, 같은 날짜가 이미 DB에 있는지 확인
-      const potentiallyDuplicateRows: typeof rows = [];
-      const trulyNewRows: typeof rows = [];
-      const duplicateRowsOriginalData = new Map<string, any>(); // 중복 행의 원본 DB 데이터 저장
-      
-      if (newRows.length > 0) {
-        // 해당 날짜의 모든 기존 데이터 조회 (전체 필드 포함)
-        const { data: existingData } = await supabase
-          .from("study_logs")
-          .select("*")
-          .eq("date", date);
-        
-        for (const row of newRows) {
-          const exists = existingData?.find(
-            existing => 
-              existing.student_id === row.studentId && 
-              existing.class_id === row.classId &&
-              existing.date === row.date
-          );
-          
-          if (exists) {
-            // 이미 존재하는 행이면 업데이트 대상으로 변경
-            const rowWithId = { ...row, id: exists.id };
-            potentiallyDuplicateRows.push(rowWithId);
-            // 원본 DB 데이터 저장 (나중에 병합용)
-            duplicateRowsOriginalData.set(exists.id, exists);
-          } else {
-            // 진짜 새로운 행
-            trulyNewRows.push(row);
-          }
-        }
-        
-        // 중복된 행들을 기존 행 목록에 추가
-        existingRows.push(...potentiallyDuplicateRows);
-      }
+      // 모든 새로운 행은 실제로 새로운 행으로 처리 (중복 체크 제거)
+      const trulyNewRows = newRows;
       
       let error = null;
       
@@ -705,96 +668,64 @@ export default function LearningPage() {
           const changedFields = dirtyFields.get(rowKey);
           const latestData = latestDbMap.get(row.id);
           
-          // potentiallyDuplicateRows에서 온 행인지 확인
-          const isDuplicateRow = potentiallyDuplicateRows.some(r => r.id === row.id);
-          
-          // 중복 행이거나 변경된 필드가 있는 경우 업데이트
-          
-          if (isDuplicateRow || (changedFields && changedFields.size > 0)) {
+          // 변경된 필드가 있는 경우만 업데이트
+          if (changedFields && changedFields.size > 0) {
             const updateData: any = {
               last_modified_by: currentEmployee?.id
               // updated_at은 DB 트리거가 자동으로 처리
             };
             
-            // 중복 행인 경우 모든 필드 업데이트, 아니면 변경된 필드만 업데이트
-            if (isDuplicateRow) {
-              // 중복 행은 기존 DB 값과 병합하여 업데이트
-              const originalData = duplicateRowsOriginalData.get(row.id!);
-              
-              // 로컬 값이 초기값(5)과 다르면 로컬 값 사용, 같으면 기존 DB 값 사용
-              // 숫자 필드: 로컬에서 변경했으면 그 값 사용, 안 했으면 DB 값 유지
-              updateData.attendance_status = row.attendance !== 5 ? 
-                (typeof row.attendance === "number" ? row.attendance : attendanceMap[row.attendance]) :
-                (originalData?.attendance_status || 5);
-              
-              updateData.homework = row.homework !== 5 ?
-                (typeof row.homework === "number" ? row.homework : homeworkMap[row.homework]) :
-                (originalData?.homework || 5);
-              
-              updateData.focus = row.focus !== 5 ?
-                (typeof row.focus === "number" ? row.focus : focusMap[row.focus]) :
-                (originalData?.focus || 5);
-              
-              // 텍스트 필드: 빈 문자열이 아니면 로컬 값 사용, 빈 문자열이면 DB 값 유지
-              updateData.book1 = row.book1 !== "" ? row.book1 : (originalData?.book1 || "");
-              updateData.book1log = row.book1log !== "" ? row.book1log : (originalData?.book1log || "");
-              updateData.book2 = row.book2 !== "" ? row.book2 : (originalData?.book2 || "");
-              updateData.book2log = row.book2log !== "" ? row.book2log : (originalData?.book2log || "");
-              updateData.note = row.note !== "" ? row.note : (originalData?.note || "");
-              updateData.date = row.date;
-            } else if (changedFields && changedFields.size > 0) {
-              // 일반 행은 변경된 필드만 업데이트
-              
-              // 중요: DB의 최신 데이터로 시작하여 다른 사용자의 변경사항 보존
-              if (latestData) {
-                // 모든 필드를 DB 값으로 초기화
-                updateData.attendance_status = latestData.attendance_status || 5;
-                updateData.homework = latestData.homework || 5;
-                updateData.focus = latestData.focus || 5;
-                updateData.book1 = latestData.book1 || "";
-                updateData.book1log = latestData.book1log || "";
-                updateData.book2 = latestData.book2 || "";
-                updateData.book2log = latestData.book2log || "";
-                updateData.note = latestData.note || "";
-                updateData.date = latestData.date || row.date;
-              }
-              
-              // 그 다음 현재 사용자가 변경한 필드만 덮어쓰기
-              changedFields.forEach(field => {
-                switch(field) {
-                  case 'attendance':
-                    updateData.attendance_status = typeof row.attendance === "number" ? 
-                      row.attendance : attendanceMap[row.attendance];
-                    break;
-                  case 'homework':
-                    updateData.homework = typeof row.homework === "number" ? 
-                      row.homework : homeworkMap[row.homework];
-                    break;
-                  case 'focus':
-                    updateData.focus = typeof row.focus === "number" ? 
-                      row.focus : focusMap[row.focus];
-                    break;
-                  case 'book1':
-                    updateData.book1 = row.book1;
-                    break;
-                  case 'book1log':
-                    updateData.book1log = row.book1log;
-                    break;
-                  case 'book2':
-                    updateData.book2 = row.book2;
-                    break;
-                  case 'book2log':
-                    updateData.book2log = row.book2log;
-                    break;
-                  case 'note':
-                    updateData.note = row.note;
-                    break;
-                  case 'date':
-                    updateData.date = row.date;
-                    break;
-                }
-              });
+            // 변경된 필드만 업데이트
+            
+            // 중요: DB의 최신 데이터로 시작하여 다른 사용자의 변경사항 보존
+            if (latestData) {
+              // 모든 필드를 DB 값으로 초기화
+              updateData.attendance_status = latestData.attendance_status || 5;
+              updateData.homework = latestData.homework || 5;
+              updateData.focus = latestData.focus || 5;
+              updateData.book1 = latestData.book1 || "";
+              updateData.book1log = latestData.book1log || "";
+              updateData.book2 = latestData.book2 || "";
+              updateData.book2log = latestData.book2log || "";
+              updateData.note = latestData.note || "";
+              updateData.date = latestData.date || row.date;
             }
+            
+            // 그 다음 현재 사용자가 변경한 필드만 덮어쓰기
+            changedFields.forEach(field => {
+              switch(field) {
+                case 'attendance':
+                  updateData.attendance_status = typeof row.attendance === "number" ? 
+                    row.attendance : attendanceMap[row.attendance];
+                  break;
+                case 'homework':
+                  updateData.homework = typeof row.homework === "number" ? 
+                    row.homework : homeworkMap[row.homework];
+                  break;
+                case 'focus':
+                  updateData.focus = typeof row.focus === "number" ? 
+                    row.focus : focusMap[row.focus];
+                  break;
+                case 'book1':
+                  updateData.book1 = row.book1;
+                  break;
+                case 'book1log':
+                  updateData.book1log = row.book1log;
+                  break;
+                case 'book2':
+                  updateData.book2 = row.book2;
+                  break;
+                case 'book2log':
+                  updateData.book2log = row.book2log;
+                  break;
+                case 'note':
+                  updateData.note = row.note;
+                  break;
+                case 'date':
+                  updateData.date = row.date;
+                  break;
+              }
+            });
             
             
             // 개별 행 업데이트
@@ -814,7 +745,6 @@ export default function LearningPage() {
               });
               error = updateError;
               break;
-            } else {
             }
           }
         }
@@ -1053,7 +983,6 @@ export default function LearningPage() {
                             <div className="space-y-2 ml-2">
                               {teacherClasses.map(cls => {
                                 const classStudentList = getClassStudents(cls.id);
-                                const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
                                 const isOpen = openClassIds.includes(cls.id);
                                 return (
                         <div key={cls.id}>
@@ -1107,9 +1036,7 @@ export default function LearningPage() {
                           
                           {isOpen && (
                             <div className="mt-2 ml-4 space-y-2">
-                              {classStudentList
-                                .filter(s => !addedStudentIds.includes(s.id))
-                                .map(s => (
+                              {classStudentList.map(s => (
                                   <Card 
                                     key={s.id}
                                     className="border border-gray-100 hover:border-gray-200 transition-colors"
@@ -1135,9 +1062,9 @@ export default function LearningPage() {
                                   </Card>
                                 ))}
                               
-                              {classStudentList.filter(s => !addedStudentIds.includes(s.id)).length === 0 && (
+                              {classStudentList.length === 0 && (
                                 <div className="text-center py-4 text-gray-400 text-sm">
-                                  이미 모든 학생이 추가됨
+                                  등록된 학생이 없습니다
                                 </div>
                               )}
                             </div>
@@ -1328,7 +1255,7 @@ export default function LearningPage() {
                       <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">집중도</th>
                       <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
                         <div className="flex items-center gap-2">
-                          <span>교재1</span>
+                          <span>교재</span>
                           <button
                             onClick={() => handleBulkApply("book1")}
                             className="text-gray-400 hover:text-gray-600"
@@ -1340,7 +1267,7 @@ export default function LearningPage() {
                       </th>
                       <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
                         <div className="flex items-center gap-2">
-                          <span>진도1</span>
+                          <span>진도</span>
                           <button
                             onClick={() => handleBulkApply("book1log")}
                             className="text-gray-400 hover:text-gray-600"
@@ -1352,7 +1279,7 @@ export default function LearningPage() {
                       </th>
                       <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
                         <div className="flex items-center gap-2">
-                          <span>교재2</span>
+                          <span>숙제교재</span>
                           <button
                             onClick={() => handleBulkApply("book2")}
                             className="text-gray-400 hover:text-gray-600"
@@ -1364,7 +1291,7 @@ export default function LearningPage() {
                       </th>
                       <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
                         <div className="flex items-center gap-2">
-                          <span>진도2</span>
+                          <span>숙제진도</span>
                           <button
                             onClick={() => handleBulkApply("book2log")}
                             className="text-gray-400 hover:text-gray-600"
@@ -1408,10 +1335,16 @@ export default function LearningPage() {
                           </td>
                         </tr>
                         {/* 그룹 내 학생들 */}
-                        {classRows.map((row, idx) => {
-                          const originalIdx = rows.findIndex(r => r.studentId === row.studentId && r.classId === row.classId);
+                        {classRows.map((row, rowIndex) => {
+                          // id 또는 tempId로 정확한 행 찾기
+                          const originalIdx = rows.findIndex(r => {
+                            if (row.id && r.id === row.id) return true;
+                            if (row.tempId && r.tempId === row.tempId) return true;
+                            // 둘 다 없으면 객체 참조 비교 (fallback)
+                            return r === row;
+                          });
                           return (
-                            <tr key={row.classId + row.studentId} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+                            <tr key={row.tempId || row.id || `${row.classId}-${row.studentId}-${rowIndex}`} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
                               <td className="px-4 py-3 text-sm text-gray-600">
                                 {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
                               </td>

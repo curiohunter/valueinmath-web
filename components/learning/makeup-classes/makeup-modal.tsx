@@ -245,13 +245,17 @@ export function MakeupModal({
           
           try {
             // 보강일에 이미 해당 학생의 기록이 있는지 확인
-            const { data: existingLog } = await supabase
+            const { data: existingLog, error: selectError } = await supabase
               .from("study_logs")
               .select("id")
               .eq("student_id", studentInfo.studentId)
               .eq("class_id", studentInfo.classId)
               .eq("date", makeupDateStr)
               .maybeSingle();
+            
+            if (selectError) {
+              console.error("study_log 조회 오류:", selectError);
+            }
             
             if (!existingLog) {
               // 보강일에 새로운 study_log 생성
@@ -272,8 +276,10 @@ export function MakeupModal({
               
               if (!insertError) {
                 console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
+                toast.success(`${makeupDateStr} 학습일지에 보강 기록이 생성되었습니다.`);
               } else {
                 console.error("보강 study_log 생성 실패:", insertError);
+                toast.error("학습일지 생성 실패. 수동으로 추가해주세요.");
               }
             } else {
               // 이미 해당 날짜에 기록이 있으면 업데이트
@@ -288,12 +294,14 @@ export function MakeupModal({
               
               if (!updateError) {
                 console.log(`기존 study_log 업데이트 완료: ${makeupDateStr}`);
+                toast.info(`${makeupDateStr} 학습일지가 보강으로 업데이트되었습니다.`);
               } else {
                 console.error("study_log 업데이트 실패:", updateError);
               }
             }
           } catch (error) {
             console.error("study_logs 동기화 중 오류:", error);
+            toast.error("학습일지 동기화 실패");
           }
         }
 
@@ -470,13 +478,17 @@ export function MakeupModal({
             
             try {
               // 보강일에 이미 해당 학생의 기록이 있는지 확인
-              const { data: existingLog } = await supabase
+              const { data: existingLog, error: selectError } = await supabase
                 .from("study_logs")
                 .select("id")
                 .eq("student_id", studentInfo.studentId)
                 .eq("class_id", studentInfo.classId)
                 .eq("date", makeupDateStr)
-                .single();
+                .maybeSingle();
+              
+              if (selectError) {
+                console.error("study_log 조회 오류:", selectError);
+              }
               
               if (!existingLog) {
                 // 보강일에 새로운 study_log 생성
@@ -497,8 +509,10 @@ export function MakeupModal({
                 
                 if (!insertError) {
                   console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
+                  toast.success(`${makeupDateStr} 학습일지에 보강 기록이 생성되었습니다.`);
                 } else {
                   console.error("보강 study_log 생성 실패:", insertError);
+                  toast.error("학습일지 생성 실패. 수동으로 추가해주세요.");
                 }
               } else {
                 // 이미 해당 날짜에 기록이 있으면 업데이트
@@ -513,12 +527,14 @@ export function MakeupModal({
                 
                 if (!updateError) {
                   console.log(`기존 study_log 업데이트 완료: ${makeupDateStr}`);
+                  toast.info(`${makeupDateStr} 학습일지가 보강으로 업데이트되었습니다.`);
                 } else {
                   console.error("study_log 업데이트 실패:", updateError);
                 }
               }
             } catch (error) {
               console.error("study_logs 동기화 중 오류:", error);
+              toast.error("학습일지 동기화 실패");
             }
           }
 

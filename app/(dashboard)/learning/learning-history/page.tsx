@@ -552,10 +552,10 @@ export default function LearningHistoryPage() {
                     <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">출결</th>
                     <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">숙제</th>
                     <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-20">집중도</th>
-                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-44 max-w-[240px]">교재1</th>
-                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-36 max-w-[180px]">진도1</th>
-                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-44 max-w-[240px]">교재2</th>
-                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-36 max-w-[180px]">진도2</th>
+                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-44 max-w-[240px]">교재</th>
+                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-36 max-w-[180px]">진도</th>
+                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-44 max-w-[240px]">숙제교재</th>
+                    <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-36 max-w-[180px]">숙제진도</th>
                     <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-32 max-w-[120px]">특이사항</th>
                     <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-20">관리</th>
                   </tr>
@@ -614,19 +614,19 @@ export default function LearningHistoryPage() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline font-medium max-w-[240px] truncate"
-                                onClick={() => handleCellClick("교재1", row.book1)}>
+                                onClick={() => handleCellClick("교재", row.book1)}>
                               {row.book1 || '-'}
                             </td>
                             <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline max-w-[180px] truncate"
-                                onClick={() => handleCellClick("진도1", row.book1log)}>
+                                onClick={() => handleCellClick("진도", row.book1log)}>
                               {row.book1log || '-'}
                             </td>
                             <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline font-medium max-w-[240px] truncate"
-                                onClick={() => handleCellClick("교재2", row.book2)}>
+                                onClick={() => handleCellClick("숙제교재", row.book2)}>
                               {row.book2 || '-'}
                             </td>
                             <td className="px-4 py-3 text-sm text-blue-600 hover:text-blue-800 cursor-pointer hover:underline max-w-[180px] truncate"
-                                onClick={() => handleCellClick("진도2", row.book2log)}>
+                                onClick={() => handleCellClick("숙제진도", row.book2log)}>
                               {row.book2log || '-'}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600 cursor-pointer hover:text-gray-800 hover:bg-gray-50 rounded max-w-[120px] truncate"
