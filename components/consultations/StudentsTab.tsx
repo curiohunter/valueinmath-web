@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Plus, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import type { Database } from "@/types/database";
 
 type Student = Database['public']['Tables']['students']['Row'];
@@ -34,7 +34,7 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
   const [statusFilter, setStatusFilter] = useState("신규상담");
   const [schoolTypeFilter, setSchoolTypeFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
-  const [sortBy, setSortBy] = useState<'name' | 'school_type' | 'grade' | 'school'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
   // Filter students when search or filters change
@@ -86,6 +86,18 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
         case 'school':
           compareValue = (a.school || '').localeCompare(b.school || '', 'ko');
           break;
+        case 'lead_source':
+          compareValue = (a.lead_source || '').localeCompare(b.lead_source || '', 'ko');
+          break;
+        case 'first_contact_date':
+          compareValue = (a.first_contact_date || '').localeCompare(b.first_contact_date || '');
+          break;
+        case 'start_date':
+          compareValue = (a.start_date || '').localeCompare(b.start_date || '');
+          break;
+        case 'end_date':
+          compareValue = (a.end_date || '').localeCompare(b.end_date || '');
+          break;
       }
       
       return sortOrder === 'asc' ? compareValue : -compareValue;
@@ -94,7 +106,7 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
     setFilteredStudents(filtered);
   }, [students, searchTerm, statusFilter, schoolTypeFilter, gradeFilter, sortBy, sortOrder]);
   
-  const handleSort = (column: 'name' | 'school_type' | 'grade' | 'school') => {
+  const handleSort = (column: 'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date') => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -111,7 +123,7 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
         return "bg-blue-100 text-blue-800";
       case "퇴원":
         return "bg-gray-100 text-gray-800";
-      case "휴원":
+      case "미등록":
         return "bg-yellow-100 text-yellow-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -148,7 +160,7 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
               <SelectItem value="재원">재원</SelectItem>
               <SelectItem value="신규상담">신규상담</SelectItem>
               <SelectItem value="퇴원">퇴원</SelectItem>
-              <SelectItem value="휴원">휴원</SelectItem>
+              <SelectItem value="미등록">미등록</SelectItem>
             </SelectContent>
           </Select>
           
@@ -184,50 +196,110 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
           <TableHeader>
             <TableRow>
               <TableHead 
-                className="cursor-pointer"
+                className="cursor-pointer hover:bg-gray-50"
                 onClick={() => handleSort('name')}
               >
                 <div className="flex items-center">
                   이름
-                  {sortBy === 'name' && (
-                    sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+                  {sortBy === 'name' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
                   )}
                 </div>
               </TableHead>
               <TableHead 
-                className="cursor-pointer"
+                className="cursor-pointer hover:bg-gray-50"
                 onClick={() => handleSort('school_type')}
               >
                 <div className="flex items-center">
                   학교급
-                  {sortBy === 'school_type' && (
-                    sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+                  {sortBy === 'school_type' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
                   )}
                 </div>
               </TableHead>
               <TableHead 
-                className="cursor-pointer"
+                className="cursor-pointer hover:bg-gray-50"
                 onClick={() => handleSort('grade')}
               >
                 <div className="flex items-center">
                   학년
-                  {sortBy === 'grade' && (
-                    sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+                  {sortBy === 'grade' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
                   )}
                 </div>
               </TableHead>
               <TableHead 
-                className="cursor-pointer"
+                className="cursor-pointer hover:bg-gray-50"
                 onClick={() => handleSort('school')}
               >
                 <div className="flex items-center">
                   학교
-                  {sortBy === 'school' && (
-                    sortOrder === 'asc' ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />
+                  {sortBy === 'school' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
                   )}
                 </div>
               </TableHead>
               <TableHead>상태</TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-gray-50"
+                onClick={() => handleSort('lead_source')}
+              >
+                <div className="flex items-center">
+                  유입경로
+                  {sortBy === 'lead_source' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-gray-50"
+                onClick={() => handleSort('first_contact_date')}
+              >
+                <div className="flex items-center">
+                  최초상담일
+                  {sortBy === 'first_contact_date' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-gray-50"
+                onClick={() => handleSort('start_date')}
+              >
+                <div className="flex items-center">
+                  등록일
+                  {sortBy === 'start_date' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-gray-50"
+                onClick={() => handleSort('end_date')}
+              >
+                <div className="flex items-center">
+                  종료일
+                  {sortBy === 'end_date' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600" /> : <ArrowDown className="ml-2 h-4 w-4 text-blue-600" />
+                  ) : (
+                    <ArrowUpDown className="ml-2 h-4 w-4 text-gray-400" />
+                  )}
+                </div>
+              </TableHead>
               <TableHead className="text-right">액션</TableHead>
             </TableRow>
           </TableHeader>
@@ -243,6 +315,10 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
                     {student.status}
                   </Badge>
                 </TableCell>
+                <TableCell>{student.lead_source || '-'}</TableCell>
+                <TableCell>{student.first_contact_date || '-'}</TableCell>
+                <TableCell>{student.start_date || '-'}</TableCell>
+                <TableCell>{student.end_date || '-'}</TableCell>
                 <TableCell className="text-right">
                   <Button
                     size="sm"

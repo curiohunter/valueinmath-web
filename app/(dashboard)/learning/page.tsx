@@ -492,70 +492,8 @@ export default function LearningPage() {
     // originalRows에서 id로 매칭 (id가 있는 경우)
     const originalRow = row.id ? originalRows.find(or => or.id === row.id) : null;
     
-    // 출석을 결석(1)으로 변경하는 경우 보강 자동 생성
-    if (key === "attendance" && value === 1 && row.id) {
-      // 이전 값이 결석(1)이 아니었고, 날짜가 2025-08-27 이후인 경우만 처리
-      const prevValue = originalRow?.attendance || row.attendance;
-      const cutoffDate = '2025-08-27';
-      
-      if (prevValue !== 1 && row.date >= cutoffDate) {
-        try {
-          // 이미 해당 날짜에 보강이 있는지 확인
-          const { data: existingMakeup } = await supabase
-            .from("makeup_classes")
-            .select("id")
-            .eq("student_id", row.studentId)
-            .eq("class_id", row.classId)
-            .eq("absence_date", row.date)
-            .single();
-          
-          // 보강이 없으면 생성
-          if (!existingMakeup) {
-            // 담당 선생님 정보 가져오기
-            const { data: classInfo } = await supabase
-              .from("classes")
-              .select("teacher_id, name")
-              .eq("id", row.classId)
-              .single();
-            
-            // 선생님 이름 가져오기
-            let teacherName = "";
-            if (classInfo?.teacher_id) {
-              const { data: teacher } = await supabase
-                .from("employees")
-                .select("name")
-                .eq("id", classInfo.teacher_id)
-                .single();
-              teacherName = teacher?.name || "";
-            }
-            
-            // 보강 레코드 생성
-            const { error: makeupError } = await supabase
-              .from("makeup_classes")
-              .insert({
-                student_id: row.studentId,
-                class_id: row.classId,
-                makeup_type: "absence",
-                absence_date: row.date,
-                absence_reason: "sick", // 기본값: 병결
-                status: "scheduled",
-                notes: teacherName ? `담당: ${teacherName}` : null,
-                created_by: classInfo?.teacher_id || null,
-                student_name_snapshot: row.name,
-                class_name_snapshot: classInfo?.name || null
-              });
-            
-            if (!makeupError) {
-              console.log(`보강 자동 생성: ${row.name} (${row.date})`);
-            } else {
-              console.error("보강 생성 실패:", makeupError);
-            }
-          }
-        } catch (error) {
-          console.error("보강 자동 생성 중 오류:", error);
-        }
-      }
-    }
+    // 프론트엔드 보강 자동 생성 로직 제거 - DB 트리거가 처리함
+    // DB의 auto_create_makeup_on_absence_trigger가 자동으로 처리
     
     // 행 데이터 업데이트
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
