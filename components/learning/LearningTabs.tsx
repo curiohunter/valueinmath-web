@@ -62,6 +62,17 @@ export default function LearningTabs() {
       >
         테스트 이력
       </Link>
+      <Link
+        href="/learning/reports"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname.startsWith("/learning/reports")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        월간 보고서
+      </Link>
     </div>
   );
 } 

@@ -3,7 +3,7 @@
 import { OperationStatsCharts } from "@/components/analytics/operation-stats-charts"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { FileText, TrendingUp } from "lucide-react"
+import { Activity, TrendingUp, Calendar } from "lucide-react"
 
 export function AnalyticsPageClient() {
   return (
@@ -17,10 +17,16 @@ export function AnalyticsPageClient() {
           <TrendingUp className="w-4 h-4 mr-2" />
           운영 통계
         </Button>
-        <Link href="/analytics/reports">
+        <Link href="/analytics/mathflat">
           <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-gray-300">
-            <FileText className="w-4 h-4 mr-2" />
-            월간 보고서
+            <Activity className="w-4 h-4 mr-2" />
+            매쓰플랫
+          </Button>
+        </Link>
+        <Link href="/analytics/student-timeline">
+          <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-gray-300">
+            <Calendar className="w-4 h-4 mr-2" />
+            학생 타임라인
           </Button>
         </Link>
       </div>

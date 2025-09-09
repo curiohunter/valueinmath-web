@@ -343,8 +343,11 @@ class AtRiskSnapshotService {
    */
   async getHistoricalSnapshots(year: number, month: number): Promise<AtRiskSnapshot[]> {
     try {
+      // Calculate the last day of the month correctly
+      const lastDay = new Date(year, month, 0).getDate(); // month is 1-based, so month=9 gives us Sept's last day
+      
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-      const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+      const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
       
       const { data, error } = await this.supabase
         .from('at_risk_students_snapshots')
@@ -355,14 +358,14 @@ class AtRiskSnapshotService {
         .order('total_score');
       
       if (error) {
-        console.error('Error fetching historical snapshots:', error);
-        throw error;
+        console.error('Error fetching historical snapshots:', error.message || error);
+        throw new Error(error.message || 'Failed to fetch historical snapshots');
       }
       
       return data || [];
     } catch (error) {
-      console.error('Error getting historical snapshots:', error);
-      throw error;
+      console.error('Error getting historical snapshots:', error instanceof Error ? error.message : error);
+      throw error instanceof Error ? error : new Error('Failed to get historical snapshots');
     }
   }
 

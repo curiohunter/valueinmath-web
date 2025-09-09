@@ -12,7 +12,7 @@ import { ReportsFilters } from "@/components/reports/reports-filters"
 import { ReportPreviewModal } from "@/components/reports/report-preview-modal"
 import { BulkGenerateDialog } from "@/components/reports/bulk-generate-dialog"
 import type { ReportTableRow, ReportFilters } from "@/types/reports"
-import Link from "next/link"
+import LearningTabs from "@/components/learning/LearningTabs"
 
 export function ReportsPageClient() {
   // 현재 날짜 기준으로 초기값 설정 - 전월로 설정
@@ -133,18 +133,7 @@ export function ReportsPageClient() {
   return (
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
-      <div className="flex items-center gap-2 border-b">
-        <Link href="/analytics">
-          <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-gray-300">
-            전체 현황
-          </Button>
-        </Link>
-        <Link href="/analytics/reports">
-          <Button variant="ghost" className="rounded-none border-b-2 border-primary">
-            월간 보고서
-          </Button>
-        </Link>
-      </div>
+      <LearningTabs />
 
       {/* 날짜 선택 영역 */}
       <Card>
