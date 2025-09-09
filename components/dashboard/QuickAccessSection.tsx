@@ -66,7 +66,7 @@ const quickAccessItems: QuickAccessItem[] = [
   },
   {
     title: "월간 보고서",
-    href: "/analytics/reports",
+    href: "/learning/reports",
     icon: FileText,
     description: "운영 통계 및 보고서",
     color: "bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400"

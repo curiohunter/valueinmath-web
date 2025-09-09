@@ -314,9 +314,17 @@ export default function ConsultationsPage() {
       const [year, month] = selectedMonth.split('-').map(Number);
       const snapshots = await atRiskSnapshotService.getHistoricalSnapshots(year, month);
       setHistoricalSnapshots(snapshots);
+      
+      // If no snapshots exist for this month, show info message
+      if (snapshots.length === 0) {
+        toast.info(`${year}년 ${month}월 스냅샷 데이터가 없습니다.`);
+      }
     } catch (error) {
-      console.error("Error loading historical snapshots:", error);
-      toast.error("과거 스냅샷 데이터를 불러오는데 실패했습니다.");
+      console.error("Error loading historical snapshots:", error instanceof Error ? error.message : error);
+      // Don't show error toast for empty results, it's handled above
+      if (error instanceof Error && !error.message.includes('No data')) {
+        toast.error("과거 스냅샷 데이터를 불러오는데 실패했습니다.");
+      }
     }
   };
   

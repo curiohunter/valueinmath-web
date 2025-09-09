@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot, MessageSquare } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot, MessageSquare, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
