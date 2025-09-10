@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ChevronLeft, ChevronRight, Calendar, BookOpen, TestTube, Users, Brain, AlertCircle, TrendingUp, Activity, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar, BookOpen, TestTube, Users, Brain, AlertCircle, TrendingUp, Activity, Search, ChevronDown, ChevronUp } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns"
 import { ko } from "date-fns/locale"
@@ -17,6 +17,7 @@ interface TimelineData {
   type: 'mathflat' | 'study_log' | 'test_log' | 'makeup' | 'consultation'
   title: string
   description?: string
+  fullDescription?: string  // 전체 내용 저장용
   value?: number
   color: string
   icon: any
@@ -36,6 +37,7 @@ export default function StudentTimelinePage() {
   const [timelineData, setTimelineData] = useState<TimelineData[]>([])
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'semester'>('month')
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())  // 확장된 아이템 관리
   
   // 필터 상태
   const [statusFilter, setStatusFilter] = useState<string>('재원')
@@ -336,11 +338,13 @@ export default function StudentTimelinePage() {
 
     // 상담 기록 추가
     consultations.data?.forEach(item => {
+      const fullContent = item.content || item.next_action || ''
       allData.push({
         date: format(new Date(item.date), 'yyyy-MM-dd'),
         type: 'consultation',
         title: `상담 (${item.type || '일반'})`,
-        description: item.content?.substring(0, 100) || item.next_action || '',
+        description: fullContent.length > 100 ? fullContent.substring(0, 100) + '...' : fullContent,
+        fullDescription: fullContent,  // 전체 내용 저장
         color: dataTypeConfig.consultation.color,
         icon: dataTypeConfig.consultation.icon
       })
@@ -557,6 +561,9 @@ export default function StudentTimelinePage() {
                       {items.map((item, idx) => {
                         const config = dataTypeConfig[item.type]
                         const Icon = config.icon
+                        const itemKey = `${date}-${idx}`
+                        const isExpanded = expandedItems.has(itemKey)
+                        const hasLongContent = item.type === 'consultation' && item.fullDescription && item.fullDescription.length > 100
                         
                         return (
                           <div
@@ -571,18 +578,49 @@ export default function StudentTimelinePage() {
                             
                             {/* 내용 */}
                             <div className="flex items-start justify-between">
-                              <div>
+                              <div className="flex-1">
                                 <h4 className="font-medium">{item.title}</h4>
                                 {item.description && (
-                                  <p className="text-sm text-muted-foreground mt-1">
-                                    {item.description}
-                                  </p>
+                                  <div className="mt-1">
+                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                      {isExpanded && item.fullDescription ? item.fullDescription : item.description}
+                                    </p>
+                                    {/* 더보기/접기 버튼 - 상담이고 내용이 긴 경우에만 표시 */}
+                                    {hasLongContent && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="mt-2 p-0 h-auto text-xs text-blue-600 hover:text-blue-800"
+                                        onClick={() => {
+                                          const newExpanded = new Set(expandedItems)
+                                          if (isExpanded) {
+                                            newExpanded.delete(itemKey)
+                                          } else {
+                                            newExpanded.add(itemKey)
+                                          }
+                                          setExpandedItems(newExpanded)
+                                        }}
+                                      >
+                                        {isExpanded ? (
+                                          <>
+                                            <ChevronUp className="h-3 w-3 mr-1" />
+                                            접기
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ChevronDown className="h-3 w-3 mr-1" />
+                                            더보기
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               
                               {/* 값 표시 (점수, 정답률, 평점 등) */}
                               {item.value !== undefined && (
-                                <div className="ml-4">
+                                <div className="ml-4 flex-shrink-0">
                                   <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                                     item.type === 'study_log' ? (
                                       // 학습일지는 1-5점 기준 (20점 단위)

@@ -45,23 +45,30 @@ export async function GET(request: NextRequest) {
     console.log('Latest sync date:', latestDate, 'Total synced students:', syncedCount);
     
     // 3. 한 번의 쿼리로 모든 최신 기록 가져오기 (성능 최적화)
-    const dateFilter = Array.from(latestRecordsByStudent.entries())
-      .map(([studentId, date]) => `(student_id.eq.${studentId},date.eq.${date})`)
-      .join(',');
-    
-    const { data: latestRecords } = dateFilter ? await supabase
+    // 각 학생의 최신 날짜 기록만 가져오기
+    const studentIds = Array.from(latestRecordsByStudent.keys());
+    const { data: latestRecords } = studentIds.length > 0 ? await supabase
       .from('mathflat_records')
       .select('student_id, problems_solved, accuracy_rate, category, date, students!inner(name)')
-      .or(dateFilter) : { data: [] };
+      .in('student_id', studentIds) : { data: [] };
+    
+    // 각 학생의 최신 날짜 기록만 필터링
+    const filteredRecords = latestRecords?.filter(record => {
+      const latestDate = latestRecordsByStudent.get(record.student_id);
+      return record.date === latestDate;
+    }) || [];
     
     // 학생별 데이터 그룹화
     const studentDataMap = new Map<string, any[]>();
-    latestRecords?.forEach(record => {
+    filteredRecords.forEach(record => {
       if (!studentDataMap.has(record.student_id)) {
         studentDataMap.set(record.student_id, []);
       }
       studentDataMap.get(record.student_id)?.push(record);
     });
+    
+    console.log('Filtered records count:', filteredRecords.length);
+    console.log('Student data map size:', studentDataMap.size);
     
     // 3. 저성과 학생 계산 (메모리에서 처리)
     const lowPerformersList: any[] = [];
