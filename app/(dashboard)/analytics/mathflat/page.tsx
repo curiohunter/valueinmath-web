@@ -29,6 +29,7 @@ export default function MathFlatPage() {
   const [syncStatus, setSyncStatus] = useState<any>(null)
   const [selectedTab, setSelectedTab] = useState("overview")
   const [stats, setStats] = useState<any>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
 
   // 동기화 상태 확인
   const checkSyncStatus = async () => {
@@ -45,6 +46,7 @@ export default function MathFlatPage() {
 
   // 통계 데이터 가져오기
   const fetchStats = async () => {
+    setIsLoadingStats(true)
     try {
       const response = await fetch('/api/mathflat/stats')
       if (response.ok) {
@@ -53,6 +55,8 @@ export default function MathFlatPage() {
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error)
+    } finally {
+      setIsLoadingStats(false)
     }
   }
 
@@ -168,12 +172,20 @@ export default function MathFlatPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.totalEnrolled || 0}명
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              등록된 전체 학생
-            </p>
+            {isLoadingStats ? (
+              <div className="h-12 flex items-center">
+                <div className="animate-pulse bg-gray-200 h-8 w-20 rounded" />
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {stats?.totalEnrolled || 0}명
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  등록된 전체 학생
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -185,16 +197,24 @@ export default function MathFlatPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.syncedCount || 0}/{stats?.totalEnrolled || 0}
-            </div>
-            {stats?.notSyncedStudents && stats.notSyncedStudents.length > 0 && (
-              <div className="mt-2">
-                <p className="text-xs text-muted-foreground">미동기화:</p>
-                <div className="text-xs text-red-600 max-h-20 overflow-y-auto">
-                  {stats.notSyncedStudents.join(', ')}
-                </div>
+            {isLoadingStats ? (
+              <div className="h-12 flex items-center">
+                <div className="animate-pulse bg-gray-200 h-8 w-24 rounded" />
               </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {stats?.syncedCount || 0}/{stats?.totalEnrolled || 0}
+                </div>
+                {stats?.notSyncedStudents && stats.notSyncedStudents.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-muted-foreground">미동기화:</p>
+                    <div className="text-xs text-red-600 max-h-20 overflow-y-auto">
+                      {stats.notSyncedStudents.join(', ')}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -207,7 +227,12 @@ export default function MathFlatPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {stats?.lowPerformers && stats.lowPerformers.length > 0 ? (
+            {isLoadingStats ? (
+              <div className="space-y-2">
+                <div className="animate-pulse bg-gray-200 h-4 w-full rounded" />
+                <div className="animate-pulse bg-gray-200 h-4 w-3/4 rounded" />
+              </div>
+            ) : stats?.lowPerformers && stats.lowPerformers.length > 0 ? (
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {stats.lowPerformers.map((student: any, idx: number) => (
                   <p key={idx} className="text-xs">
@@ -230,7 +255,13 @@ export default function MathFlatPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {stats?.challengeTop3 && stats.challengeTop3.length > 0 ? (
+            {isLoadingStats ? (
+              <div className="space-y-2">
+                <div className="animate-pulse bg-gray-200 h-4 w-full rounded" />
+                <div className="animate-pulse bg-gray-200 h-4 w-5/6 rounded" />
+                <div className="animate-pulse bg-gray-200 h-4 w-4/6 rounded" />
+              </div>
+            ) : stats?.challengeTop3 && stats.challengeTop3.length > 0 ? (
               <div className="space-y-1">
                 {stats.challengeTop3.map((student: any) => (
                   <div key={student.rank} className="flex items-center justify-between text-sm">
