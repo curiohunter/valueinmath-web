@@ -227,68 +227,40 @@ export function MakeupTable({
               .eq("auth_id", user.id)
               .single();
 
-            // 보강일에 이미 해당 학생의 기록이 있는지 확인
-            const { data: existingLog, error: selectError } = await supabase
+            // 중복 체크 없이 무조건 새로운 학습일지 추가
+            // 정규수업과 보강수업이 같은 날 있을 수 있음
+            const { error: insertError } = await supabase
               .from("study_logs")
-              .select("id")
-              .eq("student_id", makeup.student_id)
-              .eq("class_id", makeup.class_id)
-              .eq("date", makeup.makeup_date)
-              .maybeSingle();
+              .insert({
+                student_id: makeup.student_id,
+                class_id: makeup.class_id,
+                date: makeup.makeup_date,
+                attendance_status: 2, // 보강
+                homework: 5, // 정상
+                focus: 5, // 정상
+                note: makeup.makeup_type === 'absence' && makeup.absence_date 
+                  ? `${makeup.absence_date} 결석 보강` 
+                  : makeup.makeup_type === 'additional' 
+                  ? '추가 수업' 
+                  : '보강',
+                created_by: employee?.id || null,
+                student_name_snapshot: makeup.student_name_snapshot,
+                class_name_snapshot: makeup.class_name_snapshot
+              });
             
-            if (selectError) {
-              console.error("study_log 조회 오류:", selectError);
-            }
-            
-            if (!existingLog) {
-              // 보강일에 새로운 study_log 생성
-              const { error: insertError } = await supabase
-                .from("study_logs")
-                .insert({
-                  student_id: makeup.student_id,
-                  class_id: makeup.class_id,
-                  date: makeup.makeup_date,
-                  attendance_status: 2, // 보강
-                  homework: 5, // 정상
-                  focus: 5, // 정상
-                  note: makeup.makeup_type === 'absence' && makeup.absence_date 
-                    ? `${makeup.absence_date} 결석 보강` 
-                    : makeup.makeup_type === 'additional' 
-                    ? '추가 수업' 
-                    : '보강',
-                  created_by: employee?.id || null,
-                  student_name_snapshot: makeup.student_name_snapshot,
-                  class_name_snapshot: makeup.class_name_snapshot
-                });
-              
-              if (!insertError) {
-                console.log(`보강 study_log 생성 완료: ${makeup.makeup_date}`);
-                toast.success(`${makeup.makeup_date} 학습일지에 보강 기록이 생성되었습니다.`);
-              } else {
-                console.error("보강 study_log 생성 실패:", insertError);
-                toast.error("학습일지 생성 실패. 수동으로 추가해주세요.");
-              }
+            if (!insertError) {
+              console.log(`보강 study_log 생성 완료: ${makeup.makeup_date}`);
+              // 토스트는 아래에서 통합해서 표시
             } else {
-              // 이미 해당 날짜에 기록이 있으면 업데이트
-              const { error: updateError } = await supabase
-                .from("study_logs")
-                .update({
-                  attendance_status: 2, // 보강
-                  note: makeup.makeup_type === 'absence' && makeup.absence_date 
-                    ? `${makeup.absence_date} 결석 보강` 
-                    : makeup.makeup_type === 'additional' 
-                    ? '추가 수업' 
-                    : '보강',
-                  last_modified_by: employee?.id || null
-                })
-                .eq("id", existingLog.id);
-              
-              if (!updateError) {
-                console.log(`기존 study_log 업데이트 완료: ${makeup.makeup_date}`);
-                toast.info(`${makeup.makeup_date} 학습일지가 보강으로 업데이트되었습니다.`);
-              } else {
-                console.error("study_log 업데이트 실패:", updateError);
-              }
+              console.error("보강 study_log 생성 실패 - 에러 상세:", {
+                error: insertError,
+                code: insertError.code,
+                message: insertError.message,
+                details: insertError.details,
+                hint: insertError.hint
+              });
+              // 에러 토스트만 표시
+              toast.error(`학습일지 생성 실패: ${insertError.message || '수동으로 추가해주세요.'}`);
             }
           }
         } catch (error) {
@@ -297,7 +269,12 @@ export function MakeupTable({
         }
       }
       
-      toast.success("상태가 변경되었습니다.");
+      // 학습일지 생성 성공 여부에 따라 메시지 다르게 표시
+      if (newStatus === 'completed' && makeup?.makeup_date && makeup?.makeup_type === 'absence') {
+        toast.success(`상태가 변경되었습니다. ${makeup.makeup_date} 학습일지에 보강 기록이 추가되었습니다.`);
+      } else {
+        toast.success("상태가 변경되었습니다.");
+      }
       // 상태만 업데이트하고 탭은 유지
       const updatedMakeup = makeupClasses.find(m => m.id === makeupId);
       if (updatedMakeup) {
