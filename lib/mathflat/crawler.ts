@@ -404,11 +404,26 @@ async function processStudentsByGrade(
     
     // DB 학생과 매칭하고 처리
     for (const studentName of allStudentNames) {
-      const dbStudent = students.find(s => 
-        s.name === studentName || 
-        s.name.includes(studentName) || 
-        studentName.includes(s.name)
-      );
+      // 1단계: 정확히 일치하는 학생 우선 찾기
+      let dbStudent = students.find(s => s.name === studentName);
+      
+      // 2단계: 정확한 매칭이 없을 경우에만 부분 매칭 시도
+      if (!dbStudent) {
+        // 동명이인 구분자가 있는 경우 (예: 김민준a, 이하연b)
+        const hasDistinguisher = /[a-z]$/i.test(studentName);
+        
+        if (hasDistinguisher) {
+          // 구분자가 있으면 정확한 매칭만 허용 (이미 위에서 처리됨)
+          console.log(`  Not in DB (requires exact match): ${studentName}`);
+          continue;
+        } else {
+          // 구분자가 없는 경우에만 부분 매칭 허용
+          // 예: 매쓰플랫 "김민준" -> DB "김민준"만 매칭 (김민준a, 김민준b는 제외)
+          dbStudent = students.find(s => 
+            s.name === studentName && !/[a-z]$/i.test(s.name)
+          );
+        }
+      }
       
       if (dbStudent) {
         const studentInfo: StudentInfo = {
@@ -417,7 +432,7 @@ async function processStudentsByGrade(
           mathflatId: studentName,
         };
         
-        console.log(`  Processing: ${studentName} -> ${dbStudent.name}`);
+        console.log(`  Processing: ${studentName} -> ${dbStudent.name} (ID: ${dbStudent.id})`);
         
         // 학생 처리
         await processStudent(studentInfo);

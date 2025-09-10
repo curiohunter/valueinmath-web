@@ -51,61 +51,148 @@ export async function parseStudentData(
       return []; // 빈 배열 반환
     }
     
-    // 현재 표시된 날짜 가져오기 - 여러 가능한 형식 시도
+    // 현재 표시된 날짜 가져오기 - 달력 이모지 왼쪽의 날짜를 찾기
     let currentDate = new Date().toISOString().split('T')[0]; // 기본값: 오늘
     
-    // 가능한 날짜 선택자들
-    const dateSelectors = [
-      'text=/지난 수업.*\\d{2}\\.\\d{2}/',
-      'text=/\\d{2}\\.\\d{2}/',
-      'text=/\\d{4}-\\d{2}-\\d{2}/',
-      'text=/\\d{4}\\.\\d{2}\\.\\d{2}/'
-    ];
+    console.log(`    Looking for date near calendar icon...`);
     
-    for (const selector of dateSelectors) {
-      try {
-        const dateElement = await page.locator(selector).first();
-        if (await dateElement.isVisible({ timeout: 500 })) {
-          const dateText = await dateElement.textContent();
-          if (dateText) {
-            // MM.DD 형식
-            let match = dateText.match(/(\d{2})\.(\d{2})/);
-            if (match) {
-              const year = new Date().getFullYear();
-              const month = match[1];
-              const day = match[2];
-              currentDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-              break;
-            }
-            
-            // YYYY-MM-DD 형식
-            match = dateText.match(/(\d{4})-(\d{2})-(\d{2})/);
-            if (match) {
-              currentDate = `${match[1]}-${match[2]}-${match[3]}`;
-              break;
-            }
-            
-            // YYYY.MM.DD 형식
-            match = dateText.match(/(\d{4})\.(\d{2})\.(\d{2})/);
-            if (match) {
-              currentDate = `${match[1]}-${match[2]}-${match[3]}`;
-              break;
-            }
+    try {
+      // 방법 1: 달력 이모지 근처의 날짜 찾기
+      const pageText = await page.textContent('body') || '';
+      
+      // 달력 이모지 주변의 날짜 패턴 찾기 (📅 또는 캘린더 아이콘 근처)
+      // "오늘 09.10 📅" 또는 "지난 수업 09.09 📅" 패턴
+      const calendarDateMatch = pageText.match(/(\d{2}\.\d{2})\s*(?:📅|🗓|📆)/);
+      if (calendarDateMatch) {
+        const [month, day] = calendarDateMatch[1].split('.');
+        const year = new Date().getFullYear();
+        currentDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        console.log(`    Found date near calendar icon: ${currentDate}`);
+      } else {
+        // 방법 2: "오늘" 또는 "지난 수업" 다음에 오는 날짜 찾기
+        const todayMatch = pageText.match(/오늘\s+(\d{2}\.\d{2})/);
+        const lastClassMatch = pageText.match(/지난 수업\s+(\d{2}\.\d{2})/);
+        
+        const dateMatch = todayMatch || lastClassMatch;
+        if (dateMatch) {
+          const [month, day] = dateMatch[1].split('.');
+          const year = new Date().getFullYear();
+          currentDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          console.log(`    Found date after "${todayMatch ? '오늘' : '지난 수업'}": ${currentDate}`);
+        } else {
+          // 방법 3: 페이지에서 가장 최근 날짜 형식 찾기 (폴백)
+          const allDates = pageText.match(/\d{2}\.\d{2}/g);
+          if (allDates && allDates.length > 0) {
+            // 마지막에 나타나는 날짜가 보통 현재 선택된 날짜
+            const lastDate = allDates[allDates.length - 1];
+            const [month, day] = lastDate.split('.');
+            const year = new Date().getFullYear();
+            currentDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            console.log(`    Using last date found on page: ${currentDate}`);
           }
         }
-      } catch {
-        // 다음 선택자 시도
       }
+    } catch (error) {
+      console.log(`    Error finding date, using today: ${currentDate}`);
     }
 
     console.log(`    Current date: ${currentDate}`);
 
-    // 각 카테고리별로 데이터 추출
-    for (const category of MATHFLAT_CONFIG.CATEGORIES) {
-      const record = await parseCategoryData(page, category, studentId, currentDate);
-      if (record && record.problemsSolved > 0) {
-        records.push(record);
-        console.log(`    ✅ Found data for ${category}: ${record.problemsSolved} problems, ${record.accuracyRate}%`);
+    // 모든 카드를 한 번에 찾아서 처리
+    const allCards = await page.locator('label.card-label').all();
+    console.log(`    Found ${allCards.length} cards on page`);
+    
+    // 각 카드 처리
+    for (const card of allCards) {
+      try {
+        const cardText = await card.textContent();
+        if (!cardText) continue;
+        
+        // 카테고리 확인
+        let categoryFound: CategoryType | null = null;
+        for (const category of MATHFLAT_CONFIG.CATEGORIES) {
+          if (cardText.includes(category)) {
+            categoryFound = category;
+            break;
+          }
+        }
+        
+        if (!categoryFound) continue;
+        
+        console.log(`    Processing card for category: ${categoryFound}`);
+        
+        // 문제 수와 정답률 추출
+        let problemsSolved = 0;
+        let accuracyRate = 0;
+        
+        // 문제 수 찾기
+        const problemElement = await card.locator('.total-problem-count p, div:has(sub:text("총 문제 수")) p').first();
+        if (await problemElement.isVisible({ timeout: 200 })) {
+          const problemText = await problemElement.textContent();
+          const match = problemText?.match(/(\d+)/);
+          if (match) {
+            problemsSolved = parseInt(match[1], 10);
+          }
+        }
+        
+        // 텍스트에서도 찾기 (폴백)
+        if (problemsSolved === 0) {
+          const problemMatch = cardText.match(/(\d+)개/);
+          if (problemMatch) {
+            problemsSolved = parseInt(problemMatch[1], 10);
+          }
+        }
+        
+        // 정답률 찾기
+        const accuracyElement = await card.locator('.correct-rate p, div:has(sub:text("정답률")) p').first();
+        if (await accuracyElement.isVisible({ timeout: 200 })) {
+          const accuracyText = await accuracyElement.textContent();
+          const match = accuracyText?.match(/(\d+)/);
+          if (match) {
+            accuracyRate = parseInt(match[1], 10);
+          }
+        }
+        
+        // 텍스트에서도 찾기 (폴백)
+        if (accuracyRate === 0 && problemsSolved > 0) {
+          const accuracyMatch = cardText.match(/(\d+)%/);
+          if (accuracyMatch) {
+            accuracyRate = parseInt(accuracyMatch[1], 10);
+          }
+        }
+        
+        // 데이터가 있으면 레코드 추가
+        if (problemsSolved > 0) {
+          const record: MathflatRecord = {
+            studentId,
+            date: currentDate,
+            category: categoryFound,
+            problemsSolved,
+            accuracyRate,
+          };
+          records.push(record);
+          console.log(`    ✅ Found data for ${categoryFound}: ${problemsSolved} problems, ${accuracyRate}%`);
+        } else {
+          console.log(`    ❌ No data for ${categoryFound}`);
+        }
+      } catch (error) {
+        console.error('    Error processing card:', error);
+        continue;
+      }
+    }
+    
+    // 카드를 못 찾은 경우 기존 방식으로 폴백
+    if (allCards.length === 0) {
+      console.log('    No cards found, falling back to category-by-category search');
+      for (const category of MATHFLAT_CONFIG.CATEGORIES) {
+        console.log(`    Checking category: ${category}`);
+        const record = await parseCategoryData(page, category, studentId, currentDate);
+        if (record && record.problemsSolved > 0) {
+          records.push(record);
+          console.log(`    ✅ Found data for ${category}: ${record.problemsSolved} problems, ${record.accuracyRate}%`);
+        } else {
+          console.log(`    ❌ No data for ${category}`);
+        }
       }
     }
 
@@ -140,10 +227,15 @@ async function parseCategoryData(
       // 실제 구조: label.card-label
       `label.card-label:has(div.title:text("${category}"))`,
       `label:has(div:text("${category}"))`,
-      // 카드 형태
+      // 카드 형태 - nth-of-type 추가로 모든 카드 선택
       `.card-label:has-text("${category}")`,
       `[class*="card"]:has-text("${category}")`,
       `label:has-text("${category}")`,
+      // 각 카드를 개별적으로 찾기
+      `label.card-label:nth-of-type(1):has-text("${category}")`,
+      `label.card-label:nth-of-type(2):has-text("${category}")`,
+      `label.card-label:nth-of-type(3):has-text("${category}")`,
+      `label.card-label:nth-of-type(4):has-text("${category}")`,
       // 일반적인 컨테이너
       `div:has(> div:text("${category}"))`,
       `div:has(> span:text("${category}"))`,

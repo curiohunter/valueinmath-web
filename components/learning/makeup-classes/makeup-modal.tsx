@@ -238,70 +238,43 @@ export function MakeupModal({
 
         if (error) throw error;
 
+        // 학습일지 생성 성공 여부 추적
+        let studyLogCreated = false;
+        let studyLogError = false;
+        
         // 상태가 완료로 변경되고 보강일이 있는 경우, study_logs에 보강 기록 생성
         if (status === "completed" && makeupDate && makeupType === "absence" && absenceDates.length > 0) {
           const makeupDateStr = formatDateToKST(makeupDate);
           const absenceDate = formatDateToKST(absenceDates[0]);
           
           try {
-            // 보강일에 이미 해당 학생의 기록이 있는지 확인
-            const { data: existingLog, error: selectError } = await supabase
+            // 보강일에 새로운 study_log 생성 (중복 체크 없이 무조건 추가)
+            // 정규수업과 보강수업이 같은 날 있을 수 있음
+            const { error: insertError } = await supabase
               .from("study_logs")
-              .select("id")
-              .eq("student_id", studentInfo.studentId)
-              .eq("class_id", studentInfo.classId)
-              .eq("date", makeupDateStr)
-              .maybeSingle();
+              .insert({
+                student_id: studentInfo.studentId,
+                class_id: studentInfo.classId,
+                date: makeupDateStr,
+                attendance_status: 2, // 보강
+                homework: 5, // 정상
+                focus: 5, // 정상
+                note: `${absenceDate} 결석 보강`,
+                created_by: employee?.id || null,
+                student_name_snapshot: studentInfo.studentName,
+                class_name_snapshot: studentInfo.className
+              });
             
-            if (selectError) {
-              console.error("study_log 조회 오류:", selectError);
-            }
-            
-            if (!existingLog) {
-              // 보강일에 새로운 study_log 생성
-              const { error: insertError } = await supabase
-                .from("study_logs")
-                .insert({
-                  student_id: studentInfo.studentId,
-                  class_id: studentInfo.classId,
-                  date: makeupDateStr,
-                  attendance_status: 2, // 보강
-                  homework: 5, // 정상
-                  focus: 5, // 정상
-                  note: `${absenceDate} 결석 보강`,
-                  created_by: employee?.id || null,
-                  student_name_snapshot: studentInfo.studentName,
-                  class_name_snapshot: studentInfo.className
-                });
-              
-              if (!insertError) {
-                console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
-                toast.success(`${makeupDateStr} 학습일지에 보강 기록이 생성되었습니다.`);
-              } else {
-                console.error("보강 study_log 생성 실패:", insertError);
-                toast.error("학습일지 생성 실패. 수동으로 추가해주세요.");
-              }
+            if (!insertError) {
+              console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
+              studyLogCreated = true;
             } else {
-              // 이미 해당 날짜에 기록이 있으면 업데이트
-              const { error: updateError } = await supabase
-                .from("study_logs")
-                .update({
-                  attendance_status: 2, // 보강
-                  note: `${absenceDate} 결석 보강`,
-                  last_modified_by: employee?.id || null
-                })
-                .eq("id", existingLog.id);
-              
-              if (!updateError) {
-                console.log(`기존 study_log 업데이트 완료: ${makeupDateStr}`);
-                toast.info(`${makeupDateStr} 학습일지가 보강으로 업데이트되었습니다.`);
-              } else {
-                console.error("study_log 업데이트 실패:", updateError);
-              }
+              console.error("보강 study_log 생성 실패:", insertError);
+              studyLogError = true;
             }
           } catch (error) {
             console.error("study_logs 동기화 중 오류:", error);
-            toast.error("학습일지 동기화 실패");
+            studyLogError = true;
           }
         }
 
@@ -405,10 +378,21 @@ export function MakeupModal({
             .eq("id", editingMakeup.id);
         }
 
-        toast.success("보강이 수정되었습니다.");
+        // 메시지 표시 (학습일지 생성 결과 포함)
+        if (studyLogCreated) {
+          toast.success(`보강이 수정되었습니다. ${formatDateToKST(makeupDate)} 학습일지에 보강 기록이 추가되었습니다.`);
+        } else if (studyLogError) {
+          toast.warning("보강이 수정되었습니다. (학습일지는 수동으로 추가해주세요)");
+        } else {
+          toast.success("보강이 수정되었습니다.");
+        }
       } else {
         // 추가 모드 - 여러 날짜에 대해 각각 레코드 생성
         const datesToProcess = makeupType === "absence" ? absenceDates : [new Date()];
+        
+        // 학습일지 생성 성공 여부 추적
+        let studyLogCreated = false;
+        let studyLogError = false;
         
         for (const date of datesToProcess) {
           // 먼저 보강 레코드 생성
@@ -477,64 +461,33 @@ export function MakeupModal({
             const absenceDateStr = formatDateToKST(date);
             
             try {
-              // 보강일에 이미 해당 학생의 기록이 있는지 확인
-              const { data: existingLog, error: selectError } = await supabase
+              // 보강일에 새로운 study_log 생성 (중복 체크 없이 무조건 추가)
+              // 정규수업과 보강수업이 같은 날 있을 수 있음
+              const { error: insertError } = await supabase
                 .from("study_logs")
-                .select("id")
-                .eq("student_id", studentInfo.studentId)
-                .eq("class_id", studentInfo.classId)
-                .eq("date", makeupDateStr)
-                .maybeSingle();
+                .insert({
+                  student_id: studentInfo.studentId,
+                  class_id: studentInfo.classId,
+                  date: makeupDateStr,
+                  attendance_status: 2, // 보강
+                  homework: 5, // 정상
+                  focus: 5, // 정상
+                  note: `${absenceDateStr} 결석 보강`,
+                  created_by: employee?.id || null,
+                  student_name_snapshot: studentInfo.studentName,
+                  class_name_snapshot: studentInfo.className
+                });
               
-              if (selectError) {
-                console.error("study_log 조회 오류:", selectError);
-              }
-              
-              if (!existingLog) {
-                // 보강일에 새로운 study_log 생성
-                const { error: insertError } = await supabase
-                  .from("study_logs")
-                  .insert({
-                    student_id: studentInfo.studentId,
-                    class_id: studentInfo.classId,
-                    date: makeupDateStr,
-                    attendance_status: 2, // 보강
-                    homework: 5, // 정상
-                    focus: 5, // 정상
-                    note: `${absenceDateStr} 결석 보강`,
-                    created_by: employee?.id || null,
-                    student_name_snapshot: studentInfo.studentName,
-                    class_name_snapshot: studentInfo.className
-                  });
-                
-                if (!insertError) {
-                  console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
-                  toast.success(`${makeupDateStr} 학습일지에 보강 기록이 생성되었습니다.`);
-                } else {
-                  console.error("보강 study_log 생성 실패:", insertError);
-                  toast.error("학습일지 생성 실패. 수동으로 추가해주세요.");
-                }
+              if (!insertError) {
+                console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
+                studyLogCreated = true;
               } else {
-                // 이미 해당 날짜에 기록이 있으면 업데이트
-                const { error: updateError } = await supabase
-                  .from("study_logs")
-                  .update({
-                    attendance_status: 2, // 보강
-                    note: `${absenceDateStr} 결석 보강`,
-                    last_modified_by: employee?.id || null
-                  })
-                  .eq("id", existingLog.id);
-                
-                if (!updateError) {
-                  console.log(`기존 study_log 업데이트 완료: ${makeupDateStr}`);
-                  toast.info(`${makeupDateStr} 학습일지가 보강으로 업데이트되었습니다.`);
-                } else {
-                  console.error("study_log 업데이트 실패:", updateError);
-                }
+                console.error("보강 study_log 생성 실패:", insertError);
+                studyLogError = true;
               }
             } catch (error) {
               console.error("study_logs 동기화 중 오류:", error);
-              toast.error("학습일지 동기화 실패");
+              studyLogError = true;
             }
           }
 
@@ -597,7 +550,16 @@ export function MakeupModal({
           }
         }
         
-        toast.success(`보강 ${datesToProcess.length}건이 추가되었습니다.`);
+        // 메시지 표시 (학습일지 생성 결과 포함)
+        let successMessage = `보강 ${datesToProcess.length}건이 추가되었습니다.`;
+        if (studyLogCreated) {
+          successMessage += ` ${formatDateToKST(makeupDate)} 학습일지에 보강 기록이 추가되었습니다.`;
+          toast.success(successMessage);
+        } else if (studyLogError && status === "completed" && makeupDate) {
+          toast.warning(`보강 ${datesToProcess.length}건이 추가되었습니다. (학습일지는 수동으로 추가해주세요)`);
+        } else {
+          toast.success(successMessage);
+        }
       }
 
       onClose();
