@@ -20,9 +20,9 @@ import {
   TrendingUp
 } from "lucide-react"
 import { toast } from "sonner"
-import { SyncControl } from "./components/sync-control"
-import { StudentRecords } from "./components/student-records"
-import { SyncLogs } from "./components/sync-logs"
+import { SyncControl } from "@/components/analytics/mathflat/sync-control"
+import { StudentRecords } from "@/components/analytics/mathflat/student-records"
+import { SyncLogs } from "@/components/analytics/mathflat/sync-logs"
 
 export default function MathFlatPage() {
   const [isLoading, setIsLoading] = useState(false)
