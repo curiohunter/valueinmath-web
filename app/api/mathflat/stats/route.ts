@@ -44,48 +44,51 @@ export async function GET(request: NextRequest) {
     const latestDate = allSyncedRecords?.[0]?.date || new Date().toISOString().split('T')[0];
     console.log('Latest sync date:', latestDate, 'Total synced students:', syncedCount);
     
-    // 3. 저성과 학생 (20문제 이상, 60% 미만) - 각 학생의 최신 데이터 기준
-    const lowPerformersList: any[] = [];
-    for (const [studentId, date] of latestRecordsByStudent.entries()) {
-      const { data: records } = await supabase
-        .from('mathflat_records')
-        .select('student_id, problems_solved, accuracy_rate, category, students!inner(name)')
-        .eq('student_id', studentId)
-        .eq('date', date);
-      
-      // 모든 카테고리 합산
-      if (records && records.length > 0) {
-        const totalProblems = records.reduce((sum, r) => sum + r.problems_solved, 0);
-        const avgAccuracy = records.reduce((sum, r) => sum + r.accuracy_rate, 0) / records.length;
-        
-        if (totalProblems >= 20 && avgAccuracy < 60) {
-          lowPerformersList.push({
-            name: (records[0] as any).students.name,
-            problemsSolved: totalProblems,
-            accuracyRate: Math.round(avgAccuracy)
-          });
-        }
-      }
-    }
+    // 3. 한 번의 쿼리로 모든 최신 기록 가져오기 (성능 최적화)
+    const dateFilter = Array.from(latestRecordsByStudent.entries())
+      .map(([studentId, date]) => `(student_id.eq.${studentId},date.eq.${date})`)
+      .join(',');
     
-    // 4. 챌린지 랭킹 - 각 학생의 최신 챌린지 데이터
-    const challengeList: any[] = [];
-    for (const [studentId, date] of latestRecordsByStudent.entries()) {
-      const { data: challengeRecord } = await supabase
-        .from('mathflat_records')
-        .select('student_id, problems_solved, students!inner(name)')
-        .eq('student_id', studentId)
-        .eq('date', date)
-        .eq('category', '챌린지')
-        .single();
+    const { data: latestRecords } = dateFilter ? await supabase
+      .from('mathflat_records')
+      .select('student_id, problems_solved, accuracy_rate, category, date, students!inner(name)')
+      .or(dateFilter) : { data: [] };
+    
+    // 학생별 데이터 그룹화
+    const studentDataMap = new Map<string, any[]>();
+    latestRecords?.forEach(record => {
+      if (!studentDataMap.has(record.student_id)) {
+        studentDataMap.set(record.student_id, []);
+      }
+      studentDataMap.get(record.student_id)?.push(record);
+    });
+    
+    // 3. 저성과 학생 계산 (메모리에서 처리)
+    const lowPerformersList: any[] = [];
+    studentDataMap.forEach((records, studentId) => {
+      const totalProblems = records.reduce((sum, r) => sum + r.problems_solved, 0);
+      const avgAccuracy = records.reduce((sum, r) => sum + r.accuracy_rate, 0) / records.length;
       
+      if (totalProblems >= 20 && avgAccuracy < 60) {
+        lowPerformersList.push({
+          name: (records[0] as any).students.name,
+          problemsSolved: totalProblems,
+          accuracyRate: Math.round(avgAccuracy)
+        });
+      }
+    });
+    
+    // 4. 챌린지 랭킹 계산 (메모리에서 처리)
+    const challengeList: any[] = [];
+    studentDataMap.forEach((records, studentId) => {
+      const challengeRecord = records.find(r => r.category === '챌린지');
       if (challengeRecord && challengeRecord.problems_solved > 0) {
         challengeList.push({
           name: (challengeRecord as any).students.name,
           problemsSolved: challengeRecord.problems_solved
         });
       }
-    }
+    });
     
     // 챌린지 TOP 3 정렬
     challengeList.sort((a, b) => b.problemsSolved - a.problemsSolved);
