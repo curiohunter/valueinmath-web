@@ -44,64 +44,80 @@ export async function GET(request: NextRequest) {
     const latestDate = allSyncedRecords?.[0]?.date || new Date().toISOString().split('T')[0];
     console.log('Latest sync date:', latestDate, 'Total synced students:', syncedCount);
     
-    // 3. 한 번의 쿼리로 모든 최신 기록 가져오기 (성능 최적화)
-    // 각 학생의 최신 날짜 기록만 가져오기
-    const studentIds = Array.from(latestRecordsByStudent.keys());
-    const { data: latestRecords } = studentIds.length > 0 ? await supabase
+    // 3. 최근 1주일 데이터 가져오기 (저성과 학생 및 챌린지 계산용)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    
+    const { data: weekRecords } = await supabase
       .from('mathflat_records')
       .select('student_id, problems_solved, accuracy_rate, category, date, students!inner(name)')
-      .in('student_id', studentIds) : { data: [] };
+      .gte('date', weekAgoStr)
+      .order('date', { ascending: false });
     
-    // 각 학생의 최신 날짜 기록만 필터링
-    const filteredRecords = latestRecords?.filter(record => {
-      const latestDate = latestRecordsByStudent.get(record.student_id);
-      return record.date === latestDate;
-    }) || [];
-    
-    // 학생별 데이터 그룹화
-    const studentDataMap = new Map<string, any[]>();
-    filteredRecords.forEach(record => {
-      if (!studentDataMap.has(record.student_id)) {
-        studentDataMap.set(record.student_id, []);
+    // 학생별 최근 1주일 데이터 그룹화
+    const weekStudentDataMap = new Map<string, any[]>();
+    weekRecords?.forEach(record => {
+      if (!weekStudentDataMap.has(record.student_id)) {
+        weekStudentDataMap.set(record.student_id, []);
       }
-      studentDataMap.get(record.student_id)?.push(record);
+      weekStudentDataMap.get(record.student_id)?.push(record);
     });
     
-    console.log('Filtered records count:', filteredRecords.length);
-    console.log('Student data map size:', studentDataMap.size);
+    console.log('Week records count:', weekRecords?.length || 0);
+    console.log('Week student data map size:', weekStudentDataMap.size);
     
-    // 3. 저성과 학생 계산 (메모리에서 처리)
+    // 3. 저성과 학생 계산 (최근 1주일, 학습지/교재만)
     const lowPerformersList: any[] = [];
-    studentDataMap.forEach((records, studentId) => {
-      const totalProblems = records.reduce((sum, r) => sum + r.problems_solved, 0);
-      const avgAccuracy = records.reduce((sum, r) => sum + r.accuracy_rate, 0) / records.length;
+    weekStudentDataMap.forEach((records, studentId) => {
+      // 학습지와 교재 카테고리만 필터링
+      const studyRecords = records.filter(r => r.category === '학습지' || r.category === '교재');
       
-      if (totalProblems >= 20 && avgAccuracy < 60) {
-        lowPerformersList.push({
-          name: (records[0] as any).students.name,
-          problemsSolved: totalProblems,
-          accuracyRate: Math.round(avgAccuracy)
+      if (studyRecords.length > 0) {
+        const totalProblems = studyRecords.reduce((sum, r) => sum + r.problems_solved, 0);
+        const avgAccuracy = studyRecords.reduce((sum, r) => sum + r.accuracy_rate, 0) / studyRecords.length;
+        
+        // 문제를 20개 이상 풀었고 정답률이 60% 미만인 경우
+        if (totalProblems >= 20 && avgAccuracy < 60) {
+          lowPerformersList.push({
+            name: (records[0] as any).students.name,
+            problemsSolved: totalProblems,
+            accuracyRate: Math.round(avgAccuracy),
+            categories: '학습지/교재'
+          });
+        }
+      }
+    });
+    
+    // 정답률 낮은 순으로 정렬
+    lowPerformersList.sort((a, b) => a.accuracyRate - b.accuracyRate);
+    
+    // 4. 챌린지 랭킹 계산 (최근 1주일 챌린지 문제 합계)
+    const challengeMap = new Map<string, { name: string, totalProblems: number }>();
+    weekStudentDataMap.forEach((records, studentId) => {
+      // 챌린지 카테고리만 필터링
+      const challengeRecords = records.filter(r => r.category === '챌린지');
+      
+      if (challengeRecords.length > 0) {
+        const totalChallengeProblems = challengeRecords.reduce((sum, r) => sum + r.problems_solved, 0);
+        const studentName = (records[0] as any).students.name;
+        
+        challengeMap.set(studentId, {
+          name: studentName,
+          totalProblems: totalChallengeProblems
         });
       }
     });
     
-    // 4. 챌린지 랭킹 계산 (메모리에서 처리)
-    const challengeList: any[] = [];
-    studentDataMap.forEach((records, studentId) => {
-      const challengeRecord = records.find(r => r.category === '챌린지');
-      if (challengeRecord && challengeRecord.problems_solved > 0) {
-        challengeList.push({
-          name: (challengeRecord as any).students.name,
-          problemsSolved: challengeRecord.problems_solved
-        });
-      }
-    });
-    
-    // 챌린지 TOP 3 정렬
-    challengeList.sort((a, b) => b.problemsSolved - a.problemsSolved);
+    // 챌린지 TOP 3 정렬 (전체 문제 수 기준)
+    const challengeList = Array.from(challengeMap.values())
+      .filter(item => item.totalProblems > 0)
+      .sort((a, b) => b.totalProblems - a.totalProblems);
+      
     const challengeTop3 = challengeList.slice(0, 3).map((item, index) => ({
       rank: index + 1,
-      ...item
+      name: item.name,
+      problemsSolved: item.totalProblems
     }));
     
     return NextResponse.json({

@@ -3,21 +3,20 @@
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ChevronLeft, ChevronRight, Calendar, BookOpen, TestTube, Users, Brain, AlertCircle, TrendingUp, Activity, Search, ChevronDown, ChevronUp } from "lucide-react"
+import { Calendar, TrendingUp, Activity, Brain, BookOpen, TestTube, Users, AlertCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns"
-import { ko } from "date-fns/locale"
+import { format, subMonths } from "date-fns"
+import { TimelineFilters } from "@/components/analytics/student-timeline/timeline-filters"
+import { TimelineDisplay } from "@/components/analytics/student-timeline/timeline-display"
+import { TimelineLegend } from "@/components/analytics/student-timeline/timeline-legend"
 
 interface TimelineData {
   date: string
   type: 'mathflat' | 'study_log' | 'test_log' | 'makeup' | 'consultation'
   title: string
   description?: string
-  fullDescription?: string  // 전체 내용 저장용
+  fullDescription?: string
   value?: number
   color: string
   icon: any
@@ -37,7 +36,6 @@ export default function StudentTimelinePage() {
   const [timelineData, setTimelineData] = useState<TimelineData[]>([])
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'month' | 'quarter' | 'semester'>('month')
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())  // 확장된 아이템 관리
   
   // 필터 상태
   const [statusFilter, setStatusFilter] = useState<string>('재원')
@@ -64,6 +62,8 @@ export default function StudentTimelinePage() {
   useEffect(() => {
     if (selectedStudent) {
       loadTimelineData()
+    } else {
+      setTimelineData([])
     }
   }, [selectedStudent, viewMode])
 
@@ -150,13 +150,23 @@ export default function StudentTimelinePage() {
     return filtered
   }, [students, gradeFilter, searchQuery])
 
+  // 검색 결과가 1명일 때 자동 선택
+  useEffect(() => {
+    if (searchQuery && filteredStudents.length === 1) {
+      // 현재 선택된 학생과 다른 경우에만 자동 선택
+      if (selectedStudent !== filteredStudents[0].id) {
+        setSelectedStudent(filteredStudents[0].id)
+      }
+    }
+  }, [searchQuery, filteredStudents])
+
   const loadTimelineData = async () => {
     setLoading(true)
     
     // 날짜 범위 계산 (최근 기간)
     const today = new Date()
-    let startDate, endDate
-    endDate = today
+    let startDate
+    const endDate = today
     
     if (viewMode === 'month') {
       startDate = subMonths(today, 1) // 최근 1개월
@@ -357,16 +367,12 @@ export default function StudentTimelinePage() {
     setLoading(false)
   }
 
-
-  // 날짜별로 그룹화
-  const groupedData = timelineData.reduce((acc, item) => {
-    const date = item.date
-    if (!acc[date]) {
-      acc[date] = []
-    }
-    acc[date].push(item)
-    return acc
-  }, {} as Record<string, TimelineData[]>)
+  const handleReset = () => {
+    setStatusFilter('재원')
+    setGradeFilter('전체')
+    setSearchQuery('')
+    setSelectedStudent('')
+  }
 
   return (
     <div className="space-y-6">
@@ -398,270 +404,32 @@ export default function StudentTimelinePage() {
         <h1 className="text-3xl font-bold">학생 학습 타임라인</h1>
         
         {/* 필터 섹션 */}
-        <Card className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-            {/* 1. 상태 필터 */}
-            <div className="space-y-2">
-              <Label htmlFor="status-filter" className="text-sm font-medium">상태</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger id="status-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="재원">재원</SelectItem>
-                  <SelectItem value="퇴원">퇴원</SelectItem>
-                  <SelectItem value="전체">전체</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 2. 학년 필터 */}
-            <div className="space-y-2">
-              <Label htmlFor="grade-filter" className="text-sm font-medium">학년</Label>
-              <Select value={gradeFilter} onValueChange={setGradeFilter}>
-                <SelectTrigger id="grade-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {gradeOptions.map(grade => (
-                    <SelectItem key={grade} value={grade}>
-                      {grade}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 3. 학생 선택 드롭다운 */}
-            <div className="space-y-2">
-              <Label htmlFor="student-select" className="text-sm font-medium">
-                학생 ({filteredStudents.length}명)
-              </Label>
-              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                <SelectTrigger id="student-select">
-                  <SelectValue placeholder="학생 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredStudents.map(student => {
-                    const schoolTypeShort = student.school_type ? 
-                      student.school_type.replace('등학교', '').substring(0, 1) : ''
-                    return (
-                      <SelectItem key={student.id} value={student.id}>
-                        {student.name}
-                        {student.school_type && student.grade && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            ({schoolTypeShort}{student.grade})
-                          </span>
-                        )}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 4. 학생 검색 */}
-            <div className="space-y-2">
-              <Label htmlFor="student-search" className="text-sm font-medium">검색</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="student-search"
-                  type="text"
-                  placeholder="이름으로 검색"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            {/* 5. 기간 선택 */}
-            <div className="space-y-2">
-              <Label htmlFor="period-select" className="text-sm font-medium">기간</Label>
-              <Select value={viewMode} onValueChange={(v: any) => setViewMode(v)}>
-                <SelectTrigger id="period-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month">최근 1개월</SelectItem>
-                  <SelectItem value="quarter">최근 3개월</SelectItem>
-                  <SelectItem value="semester">최근 6개월</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 필터 초기화 버튼 */}
-            <div className="flex items-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStatusFilter('재원')
-                  setGradeFilter('전체')
-                  setSearchQuery('')
-                  setSelectedStudent('')
-                }}
-                className="w-full"
-              >
-                초기화
-              </Button>
-            </div>
-          </div>
-
-          {/* 검색 결과 안내 */}
-          {searchQuery && (
-            <div className="mt-3 text-sm text-muted-foreground">
-              "{searchQuery}" 검색 결과: {filteredStudents.length}명
-            </div>
-          )}
-        </Card>
+        <TimelineFilters
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          gradeFilter={gradeFilter}
+          setGradeFilter={setGradeFilter}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedStudent={selectedStudent}
+          setSelectedStudent={setSelectedStudent}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          gradeOptions={gradeOptions}
+          filteredStudents={filteredStudents}
+          onReset={handleReset}
+        />
       </div>
 
       {/* 범례 */}
-      <Card className="p-4">
-        <div className="flex items-center gap-6">
-          <span className="text-sm font-medium text-muted-foreground">데이터 유형:</span>
-          {Object.entries(dataTypeConfig).map(([key, config]) => (
-            <div key={key} className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${config.color}`} />
-              <span className="text-sm">{config.label}</span>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <TimelineLegend />
 
       {/* 타임라인 */}
       {selectedStudent ? (
-        <Card className="p-6">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-muted-foreground">데이터 로딩 중...</div>
-            </div>
-          ) : (
-            <div className="relative">
-              {/* 타임라인 라인 */}
-              <div className="absolute left-12 top-0 bottom-0 w-0.5 bg-gray-200" />
-              
-              {/* 타임라인 아이템 */}
-              <div className="space-y-8">
-                {Object.entries(groupedData).map(([date, items]) => (
-                  <div key={date} className="relative">
-                    {/* 날짜 마커 */}
-                    <div className="absolute left-0 w-24 text-right pr-4">
-                      <div className="text-sm font-medium">
-                        {format(new Date(date), 'MM/dd')}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {format(new Date(date), 'EEE', { locale: ko })}
-                      </div>
-                    </div>
-                    
-                    {/* 데이터 포인트 */}
-                    <div className="ml-32 space-y-3">
-                      {items.map((item, idx) => {
-                        const config = dataTypeConfig[item.type]
-                        const Icon = config.icon
-                        const itemKey = `${date}-${idx}`
-                        const isExpanded = expandedItems.has(itemKey)
-                        const hasLongContent = item.type === 'consultation' && item.fullDescription && item.fullDescription.length > 100
-                        
-                        return (
-                          <div
-                            key={idx}
-                            className={`relative p-4 rounded-lg border ${config.lightColor} border-l-4`}
-                            style={{ borderLeftColor: config.color.replace('bg-', '') }}
-                          >
-                            {/* 아이콘 */}
-                            <div className={`absolute -left-[52px] w-8 h-8 rounded-full ${config.color} flex items-center justify-center text-white`}>
-                              <Icon className="w-4 h-4" />
-                            </div>
-                            
-                            {/* 내용 */}
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <h4 className="font-medium">{item.title}</h4>
-                                {item.description && (
-                                  <div className="mt-1">
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                      {isExpanded && item.fullDescription ? item.fullDescription : item.description}
-                                    </p>
-                                    {/* 더보기/접기 버튼 - 상담이고 내용이 긴 경우에만 표시 */}
-                                    {hasLongContent && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="mt-2 p-0 h-auto text-xs text-blue-600 hover:text-blue-800"
-                                        onClick={() => {
-                                          const newExpanded = new Set(expandedItems)
-                                          if (isExpanded) {
-                                            newExpanded.delete(itemKey)
-                                          } else {
-                                            newExpanded.add(itemKey)
-                                          }
-                                          setExpandedItems(newExpanded)
-                                        }}
-                                      >
-                                        {isExpanded ? (
-                                          <>
-                                            <ChevronUp className="h-3 w-3 mr-1" />
-                                            접기
-                                          </>
-                                        ) : (
-                                          <>
-                                            <ChevronDown className="h-3 w-3 mr-1" />
-                                            더보기
-                                          </>
-                                        )}
-                                      </Button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              
-                              {/* 값 표시 (점수, 정답률, 평점 등) */}
-                              {item.value !== undefined && (
-                                <div className="ml-4 flex-shrink-0">
-                                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                    item.type === 'study_log' ? (
-                                      // 학습일지는 1-5점 기준 (20점 단위)
-                                      item.value >= 80 ? 'bg-green-100 text-green-700 border border-green-200' :
-                                      item.value >= 60 ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                                      item.value >= 40 ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
-                                      item.value >= 20 ? 'bg-orange-100 text-orange-700 border border-orange-200' :
-                                      'bg-red-100 text-red-700 border border-red-200'
-                                    ) : (
-                                      // 다른 항목들은 기존 로직 유지
-                                      item.value >= 80 ? 'bg-green-100 text-green-700' :
-                                      item.value >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                                      'bg-red-100 text-red-700'
-                                    )
-                                  }`}>
-                                    {item.type === 'study_log' ? 
-                                      `평균 ${Math.round(item.value / 20)}` : // 평균 점수
-                                      item.type === 'test_log' ?
-                                      `${item.value}점` :
-                                      `${Math.round(item.value)}%`
-                                    }
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-                
-                {Object.keys(groupedData).length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    선택한 기간에 데이터가 없습니다
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </Card>
+        <TimelineDisplay
+          timelineData={timelineData}
+          loading={loading}
+        />
       ) : (
         <Card className="p-12">
           <div className="text-center text-muted-foreground">
