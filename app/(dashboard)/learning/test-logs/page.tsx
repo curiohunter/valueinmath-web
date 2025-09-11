@@ -1,18 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, Fragment, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import LearningTabs from "@/components/learning/LearningTabs";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/providers/auth-provider";
-import type { Database } from "@/types/database";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { Calendar, Users, Search, RotateCcw, FileText, Plus, Trash2, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
-import { ClassAccordion } from "@/components/ui/class-accordion";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { DateSelector } from "@/components/learning/test-logs/DateSelector";
+import { ClassList } from "@/components/learning/test-logs/ClassList";
+import { TestLogsMainTable } from "@/components/learning/test-logs/TestLogsMainTable";
+import { NoteModal } from "@/components/learning/test-logs/NoteModal";
 
 // 한국 시간대(KST) 기준으로 오늘 날짜 가져오기
 const getKoreanDate = () => {
@@ -21,16 +17,6 @@ const getKoreanDate = () => {
   return koreanTime.toISOString().slice(0, 10);
 };
 
-// 점수 색상 스타일 함수 (노션 스타일)
-const scoreColor = (score: number) => {
-  switch (score) {
-    case 100: return "bg-green-100 text-green-700 border-green-200";
-    case 90: case 95: return "bg-blue-100 text-blue-600 border-blue-200";
-    case 80: case 85: return "bg-yellow-100 text-yellow-700 border-yellow-200";
-    case 70: case 75: return "bg-orange-100 text-orange-600 border-orange-200";
-    default: return "bg-red-100 text-red-600 border-red-200";
-  }
-};
 
 export default function TestLogsPage() {
   const supabase = getSupabaseBrowserClient();
@@ -66,25 +52,15 @@ export default function TestLogsPage() {
   const [originalRows, setOriginalRows] = useState<typeof rows>([]);
   const [deletedRowIds, setDeletedRowIds] = useState<string[]>([]); // 삭제된 행의 ID 추적
   
+  // 필드별 변경 추적을 위한 state (부분 업데이트용)
+  const [dirtyFields, setDirtyFields] = useState<Map<string, Set<string>>>(new Map());
+  
   // 모달 상태
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRowIdx, setModalRowIdx] = useState<number | null>(null);
   const [modalField, setModalField] = useState<"note" | null>(null);
   const [modalValue, setModalValue] = useState("");
-  const modalInputRef = useRef<HTMLInputElement>(null);
 
-  const TEST_TYPE_OPTIONS = [
-    { value: "과정총괄테스트", color: "bg-blue-100 text-blue-700" },
-    { value: "내용암기테스트", color: "bg-yellow-100 text-yellow-700" },
-    { value: "단원테스트", color: "bg-green-100 text-green-700" },
-    { value: "모의고사", color: "bg-purple-100 text-purple-700" },
-    { value: "서술형평가", color: "bg-pink-100 text-pink-700" },
-    { value: "수학경시대회", color: "bg-orange-100 text-orange-700" },
-    { value: "오답테스트", color: "bg-red-100 text-red-700" },
-    { value: "내신기출유사", color: "bg-gray-100 text-gray-700" },
-    { value: "내신기출", color: "bg-black text-white" },
-    { value: "학교시험점수", color: "bg-cyan-100 text-cyan-700" },
-  ];
 
   const fetchData = async () => {
     setLoading(true);
@@ -224,6 +200,155 @@ export default function TestLogsPage() {
     setHasUnsavedChanges(hasChanges);
   }, [rows, originalRows]);
 
+  // 실시간 동기화 구현
+  useEffect(() => {
+    if (!date) return;
+    
+    // Supabase Realtime 구독
+    const channel = supabase
+      .channel('test_logs_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'test_logs',
+          filter: "date=eq." + date
+        },
+        async (payload) => {
+          // 다른 사용자의 변경사항 처리
+          if (payload.eventType === 'UPDATE') {
+            const updatedRow = payload.new;
+            
+            // 현재 편집 중인 필드는 건드리지 않음
+            const rowKey = String(updatedRow.id);
+            const localDirtyFields = dirtyFields.get(rowKey);
+            
+            if (!localDirtyFields || localDirtyFields.size === 0) {
+              // 로컬 변경사항이 없으면 서버 데이터로 완전 업데이트
+              const updatedData = {
+                id: updatedRow.id,
+                classId: updatedRow.class_id,
+                studentId: updatedRow.student_id,
+                name: updatedRow.student_name || "",
+                date: updatedRow.date,
+                testType: updatedRow.test_type || "",
+                test: updatedRow.test || "",
+                testScore: updatedRow.test_score,
+                note: updatedRow.note || "",
+                lastModifiedBy: updatedRow.last_modified_by,
+                updatedAt: updatedRow.updated_at
+              };
+              
+              setRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  return { ...r, ...updatedData };
+                }
+                return r;
+              }));
+              
+              // originalRows도 업데이트하여 새로운 기준점으로 설정
+              setOriginalRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  return { ...r, ...updatedData };
+                }
+                return r;
+              }));
+            } else {
+              // 로컬 변경사항이 있으면 변경하지 않은 필드만 업데이트
+              setRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  const updatedFields: any = { ...r };
+                  
+                  // 변경하지 않은 필드만 서버 값으로 업데이트
+                  if (!localDirtyFields.has('test')) {
+                    updatedFields.test = updatedRow.test || "";
+                  }
+                  if (!localDirtyFields.has('testType')) {
+                    updatedFields.testType = updatedRow.test_type || "";
+                  }
+                  if (!localDirtyFields.has('testScore')) {
+                    updatedFields.testScore = updatedRow.test_score;
+                  }
+                  if (!localDirtyFields.has('note')) {
+                    updatedFields.note = updatedRow.note || "";
+                  }
+                  if (!localDirtyFields.has('date')) {
+                    updatedFields.date = updatedRow.date;
+                  }
+                  
+                  // 메타 정보는 항상 업데이트
+                  updatedFields.lastModifiedBy = updatedRow.last_modified_by;
+                  updatedFields.updatedAt = updatedRow.updated_at;
+                  
+                  return updatedFields;
+                }
+                return r;
+              }));
+              
+              // originalRows도 업데이트 (변경하지 않은 필드만)
+              setOriginalRows(prev => prev.map(r => {
+                if (r.id === updatedRow.id) {
+                  const updatedOriginal: any = { ...r };
+                  
+                  // 로컬에서 변경하지 않은 필드만 업데이트
+                  if (!localDirtyFields.has('test')) {
+                    updatedOriginal.test = updatedRow.test || "";
+                  }
+                  if (!localDirtyFields.has('testType')) {
+                    updatedOriginal.testType = updatedRow.test_type || "";
+                  }
+                  if (!localDirtyFields.has('testScore')) {
+                    updatedOriginal.testScore = updatedRow.test_score;
+                  }
+                  if (!localDirtyFields.has('note')) {
+                    updatedOriginal.note = updatedRow.note || "";
+                  }
+                  if (!localDirtyFields.has('date')) {
+                    updatedOriginal.date = updatedRow.date;
+                  }
+                  
+                  return updatedOriginal;
+                }
+                return r;
+              }));
+            }
+          } else if (payload.eventType === 'INSERT') {
+            // 새로운 행이 추가된 경우
+            const newRow = payload.new;
+            setRows(prev => {
+              // 이미 존재하는지 확인 (중복 방지)
+              if (prev.some(r => r.id === newRow.id)) {
+                return prev;
+              }
+              return [...prev, {
+                id: newRow.id,
+                classId: newRow.class_id,
+                studentId: newRow.student_id,
+                name: newRow.student_name || "",
+                date: newRow.date,
+                testType: newRow.test_type || "",
+                test: newRow.test || "",
+                testScore: newRow.test_score,
+                note: newRow.note || "",
+                createdBy: newRow.created_by,
+                lastModifiedBy: newRow.last_modified_by,
+                updatedAt: newRow.updated_at
+              }];
+            });
+          } else if (payload.eventType === 'DELETE') {
+            // 행이 삭제된 경우
+            setRows(prev => prev.filter(r => r.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [date, dirtyFields]);
+
   // 자정 감지 및 자동 저장
   useEffect(() => {
     const checkDateChange = () => {
@@ -290,7 +415,48 @@ export default function TestLogsPage() {
   };
 
   const handleChange = (idx: number, key: keyof (typeof rows)[number], value: any) => {
+    // 인덱스 유효성 검사
+    if (idx < 0 || idx >= rows.length) {
+      console.error(`Invalid index: ${idx}, rows length: ${rows.length}`);
+      return;
+    }
+    
+    const row = rows[idx];
+    
+    // originalRows에서 id로 매칭 (id가 있는 경우)
+    const originalRow = row.id ? originalRows.find(or => or.id === row.id) : null;
+    
+    // 행 데이터 업데이트
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+    
+    // 기존 데이터가 있는 경우만 변경 추적 (새로 추가된 행은 제외)
+    if (row.id && originalRow) {
+      const rowKey = String(row.id);
+      
+      // 원본과 비교하여 변경 여부 확인
+      if (originalRow[key] !== value) {
+        setDirtyFields(prev => {
+          const newMap = new Map(prev);
+          if (!newMap.has(rowKey)) {
+            newMap.set(rowKey, new Set());
+          }
+          newMap.get(rowKey)!.add(key);
+          return newMap;
+        });
+      } else {
+        // 원본과 같으면 dirty 제거
+        setDirtyFields(prev => {
+          const newMap = new Map(prev);
+          if (newMap.has(rowKey)) {
+            newMap.get(rowKey)!.delete(key);
+            if (newMap.get(rowKey)!.size === 0) {
+              newMap.delete(rowKey);
+            }
+          }
+          return newMap;
+        });
+      }
+    }
   };
 
   const handleBulkApply = (key: "test" | "testType" | "testScore") => {
@@ -391,26 +557,80 @@ export default function TestLogsPage() {
       
       let error = null;
       
-      // 기존 레코드 업데이트
+      // 기존 레코드 업데이트 - 부분 업데이트 적용
       if (existingRows.length > 0) {
-        const updateData = existingRows.map(r => ({
-          id: r.id,
-          class_id: r.classId || null,
-          student_id: r.studentId,
-          date: r.date,
-          test: r.test && r.test.trim() ? r.test : null,  // 빈 값은 null로 처리
-          test_type: r.testType || null,  // null로 처리
-          test_score: typeof r.testScore === 'string' && r.testScore !== '' ? Number(r.testScore) : r.testScore,
-          note: r.note || null,
-          last_modified_by: currentEmployee?.id || null
-        }));
-        
-        // @ts-ignore - complex type issue
-        const { error: updateError } = await supabase
+        // 저장 전에 최신 DB 데이터를 가져와서 다른 사용자의 변경사항과 병합
+        const { data: latestDbData } = await supabase
           .from("test_logs")
-          .upsert(updateData, { onConflict: "id" });
+          .select("*")
+          .in("id", existingRows.map(r => r.id));
         
-        if (updateError) error = updateError;
+        const latestDbMap = new Map(latestDbData?.map(d => [d.id, d]) || []);
+        
+        // 부분 업데이트: 변경된 필드만 업데이트
+        for (const row of existingRows) {
+          const rowKey = String(row.id);
+          const changedFields = dirtyFields.get(rowKey);
+          const latestData = latestDbMap.get(row.id);
+          
+          // 변경된 필드가 있는 경우만 업데이트
+          if (changedFields && changedFields.size > 0) {
+            const updateData: any = {
+              last_modified_by: currentEmployee?.id || null
+            };
+            
+            // 중요: DB의 최신 데이터로 시작하여 다른 사용자의 변경사항 보존
+            if (latestData) {
+              // 모든 필드를 DB 값으로 초기화
+              updateData.class_id = latestData.class_id;
+              updateData.student_id = latestData.student_id;
+              updateData.date = latestData.date;
+              updateData.test = latestData.test;
+              updateData.test_type = latestData.test_type;
+              updateData.test_score = latestData.test_score;
+              updateData.note = latestData.note;
+            }
+            
+            // 그 다음 현재 사용자가 변경한 필드만 덮어쓰기
+            changedFields.forEach(field => {
+              switch(field) {
+                case 'classId':
+                  updateData.class_id = row.classId || null;
+                  break;
+                case 'studentId':
+                  updateData.student_id = row.studentId;
+                  break;
+                case 'date':
+                  updateData.date = row.date;
+                  break;
+                case 'test':
+                  updateData.test = row.test && row.test.trim() ? row.test : null;
+                  break;
+                case 'testType':
+                  updateData.test_type = row.testType || null;
+                  break;
+                case 'testScore':
+                  updateData.test_score = typeof row.testScore === 'string' && row.testScore !== '' ? Number(row.testScore) : row.testScore;
+                  break;
+                case 'note':
+                  updateData.note = row.note || null;
+                  break;
+              }
+            });
+            
+            // 개별 행 업데이트
+            const { error: updateError } = await supabase
+              .from("test_logs")
+              .update(updateData)
+              .eq('id', row.id);
+            
+            if (updateError) {
+              console.error("Failed to update row", row.id, ":", updateError);
+              error = updateError;
+              break;
+            }
+          }
+        }
       }
       
       // 새 레코드 삽입
@@ -462,17 +682,13 @@ export default function TestLogsPage() {
       await fetchTestLogsByDate();
       setHasUnsavedChanges(false);
       setDeletedRowIds([]); // 삭제 목록 초기화
+      setDirtyFields(new Map()); // dirtyFields 초기화
     } catch (e: any) {
       console.error("저장 오류:", e);
       alert(`저장 중 오류가 발생했습니다: ${e.message || '알 수 없는 오류'}`);
     }
   };
 
-  const toggleClassAccordion = (classId: string) => {
-    setOpenClassIds(prev =>
-      prev.includes(classId) ? prev.filter(id => id !== classId) : [...prev, classId]
-    );
-  };
   
   // 모달 열기
   const openModal = (rowIdx: number, field: "note", value: string) => {
@@ -480,15 +696,23 @@ export default function TestLogsPage() {
     setModalField(field);
     setModalValue(value);
     setModalOpen(true);
-    setTimeout(() => modalInputRef.current?.focus(), 100);
   };
   
-  // 모달 저장
-  const handleModalSave = () => {
-    if (modalRowIdx !== null && modalField) {
-      handleChange(modalRowIdx, modalField, modalValue);
-    }
+  // 모달 닫기
+  const closeModal = () => {
     setModalOpen(false);
+    setModalRowIdx(null);
+    setModalField(null);
+    setModalValue("");
+  };
+  
+  const handleDeleteRow = (originalIdx: number) => {
+    const rowToDelete = rows[originalIdx];
+    if (rowToDelete.id) {
+      // 기존 DB에 있는 행이면 삭제 목록에 추가
+      setDeletedRowIds(prev => [...prev, rowToDelete.id!]);
+    }
+    setRows(rows => rows.filter((_, i) => i !== originalIdx));
   };
 
   if (authLoading || loading) return (
@@ -535,479 +759,56 @@ export default function TestLogsPage() {
           }`}>
             <div className="w-72 max-h-[800px] flex-shrink-0 space-y-4 overflow-y-auto">
               {/* 날짜 선택 카드 */}
-              <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50">
-                <div className="p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Calendar className="w-4 h-4 text-blue-600" />
-                    <span className="font-semibold text-gray-700">날짜 선택</span>
-                  </div>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                    value={date}
-                    onChange={e => setDate(e.target.value)}
-                  />
-                  <div className="mt-2 text-xs text-blue-600 font-medium">
-                    {new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </div>
-                </div>
-              </Card>
+              <DateSelector date={date} onDateChange={setDate} />
               
               {/* 반별 학생 목록 */}
-              <Card className="border-0 shadow-md">
-                <div className="p-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-600" />
-                    <span className="font-semibold text-gray-700">반별 추가</span>
-                    <Badge variant="secondary" className="ml-auto text-xs">
-                      {classes?.length || 0}개 반
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {/* 담당 선생님별로 반 그룹화 */}
-                    {(() => {
-                      // 담당 선생님별로 반 그룹화
-                      const groupedClasses = classes.reduce((acc: { [key: string]: any[] }, cls) => {
-                        const teacherId = cls.teacher_id || 'unassigned';
-                        if (!acc[teacherId]) acc[teacherId] = [];
-                        acc[teacherId].push(cls);
-                        return acc;
-                      }, {});
-                      
-                      // 각 그룹 내에서 반 이름으로 정렬
-                      Object.values(groupedClasses).forEach(group => {
-                        group.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-                      });
-                      
-                      // 선생님 ID 정렬 (미배정은 맨 아래)
-                      const sortedTeacherIds = Object.keys(groupedClasses).sort((a, b) => {
-                        if (a === 'unassigned') return 1;
-                        if (b === 'unassigned') return -1;
-                        const teacherA = teachers.find(t => t.id === a)?.name || a;
-                        const teacherB = teachers.find(t => t.id === b)?.name || b;
-                        return teacherA.localeCompare(teacherB, 'ko');
-                      });
-                      
-                      return sortedTeacherIds.map(teacherId => {
-                        const teacher = teachers.find(t => t.id === teacherId);
-                        const teacherName = teacher?.name || (teacherId === 'unassigned' ? '미배정' : teacherId);
-                        const teacherClasses = groupedClasses[teacherId];
-                        
-                        return (
-                          <div key={teacherId} className="space-y-2">
-                            {/* 담당 선생님 헤더 */}
-                            <div className="px-2 py-1 bg-gray-100 rounded-md">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span className="text-sm font-semibold text-gray-700">
-                                  {teacherName} 담당
-                                </span>
-                                <Badge variant="secondary" className="ml-auto text-xs">
-                                  {teacherClasses.length}개 반
-                                </Badge>
-                              </div>
-                            </div>
-                            
-                            {/* 해당 선생님의 반 목록 */}
-                            <div className="space-y-2 ml-2">
-                              {teacherClasses.map(cls => {
-                                const classStudentList = getClassStudents(cls.id);
-                                const addedStudentIds = rows.filter(r => r.classId === cls.id).map(r => r.studentId);
-                                const isOpen = openClassIds.includes(cls.id);
-                                return (
-                  <div key={cls.id}>
-                    {/* 반 헤더 - 카드형 디자인 */}
-                    <Card className="border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer hover:shadow-md">
-                      <div className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleClassAccordion(cls.id);
-                              }}
-                              className="p-1 rounded-md hover:bg-white/50 transition-colors flex-shrink-0 mt-0.5"
-                            >
-                              {isOpen ? (
-                                <ChevronDown className="w-4 h-4 text-gray-500" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-gray-500" />
-                              )}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm text-gray-800 truncate">
-                                {cls.name}
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                                <span>{classStudentList.length}명</span>
-                                {teacherId !== 'unassigned' && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="text-blue-600">{teacherName}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddAll(cls.id);
-                            }}
-                            size="sm"
-                            variant="ghost"
-                            className="w-8 h-8 p-0 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 shadow-sm transition-all duration-200 hover:shadow-md flex-shrink-0"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                    
-                    {/* 학생 목록 - 아코디언 */}
-                    {isOpen && (
-                      <div className="mt-2 ml-4 space-y-2">
-                        {classStudentList
-                          .map(s => (
-                            <Card 
-                              key={s.id}
-                              className="border border-gray-100 hover:border-gray-200 transition-colors"
-                            >
-                              <div className="p-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-green-400 rounded-full" />
-                                    <span className="text-sm font-medium text-gray-700">
-                                      {s.name}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    onClick={() => handleAddStudent(cls.id, s)}
-                                    size="sm"
-                                    variant="ghost"
-                                    className="w-6 h-6 p-0 rounded-full hover:bg-blue-100 text-blue-600"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </Card>
-                          ))}
-                          
-                        {classStudentList.length === 0 && (
-                          <div className="text-center py-4 text-gray-400 text-sm">
-                            학생이 없습니다
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                  
-                  {(!classes || classes.length === 0) && (
-                    <div className="text-center py-8 text-gray-400">
-                      <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <div className="text-sm">등록된 반이 없습니다</div>
-                    </div>
-                  )}
-                </div>
-              </Card>
+              <ClassList
+                classes={classes}
+                students={students}
+                teachers={teachers}
+                classStudents={classStudents}
+                onAddAll={handleAddAll}
+                onAddStudent={handleAddStudent}
+              />
             </div>
           </div>
           
           {/* 오른쪽 테이블 */}
           <div className="flex-1">
-            <Card className="bg-white rounded-xl shadow border overflow-hidden">
-              {/* 헤더 섹션 */}
-              <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-gray-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    {/* 사이드바 토글 버튼 */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      className="h-8 w-8 p-0 bg-white border shadow-sm hover:bg-gray-50"
-                    >
-                      {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </Button>
-                    
-                    <h2 className="text-lg font-semibold text-gray-800">테스트 관리</h2>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-600">반 필터:</span>
-                      <select
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={filterClassId}
-                        onChange={(e) => setFilterClassId(e.target.value)}
-                      >
-                        <option value="all">전체</option>
-                        {classes.map(cls => (
-                          <option key={cls.id} value={cls.id}>{cls.name}</option>
-                        ))}
-                      </select>
-                      {filterClassId !== "all" && (
-                        <Badge variant="secondary">
-                          {filteredAndSortedRows.length}명
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {hasUnsavedChanges && (
-                      <span className="text-sm text-orange-600 font-medium animate-pulse">
-                        저장하지 않은 변경사항이 있습니다
-                      </span>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setRows([])}
-                      className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      일괄 삭제
-                    </Button>
-                    <Button 
-                      size="sm"
-                      onClick={handleSave}
-                      className={`${
-                        hasUnsavedChanges 
-                          ? "bg-red-600 hover:bg-red-700 animate-pulse shadow-lg" 
-                          : "bg-blue-600 hover:bg-blue-700"
-                      } text-white font-medium`}
-                    >
-                      {hasUnsavedChanges ? "저장 필요!" : "저장"}
-                    </Button>
-                    <Badge variant="outline" className="text-sm font-medium">
-                      {date}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              
-              {/* 테이블 섹션 */}
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-8"></th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">학생</th>
-                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-36">날짜</th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
-                        <div className="flex items-center gap-2">
-                          <span>테스트</span>
-                          <button
-                            onClick={() => handleBulkApply("test")}
-                            className="text-gray-400 hover:text-gray-600"
-                            title="첫 번째 값으로 일괄 적용"
-                          >
-                            <ChevronDown className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
-                        <div className="flex items-center gap-2">
-                          <span>유형</span>
-                          <button
-                            onClick={() => handleBulkApply("testType")}
-                            className="text-gray-400 hover:text-gray-600"
-                            title="첫 번째 값으로 일괄 적용"
-                          >
-                            <ChevronDown className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </th>
-                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700">
-                        <div className="flex items-center justify-center gap-2">
-                          <span>점수</span>
-                          <button
-                            onClick={() => handleBulkApply("testScore")}
-                            className="text-gray-400 hover:text-gray-600"
-                            title="첫 번째 값으로 일괄 적용"
-                          >
-                            <ChevronDown className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-32">특이사항</th>
-                      <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-20">삭제</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* 반별로 그룹화 */}
-                    {Object.entries(
-                      filteredAndSortedRows.reduce((groups: { [className: string]: typeof filteredAndSortedRows }, row) => {
-                        const className = classes.find(c => c.id === row.classId)?.name || row.classId;
-                        if (!groups[className]) {
-                          groups[className] = [];
-                        }
-                        groups[className].push(row);
-                        return groups;
-                      }, {})
-                    )
-                    .sort(([a], [b]) => a.localeCompare(b, "ko"))
-                    .map(([className, classRows]) => (
-                      <React.Fragment key={className}>
-                        {/* 반별 그룹 헤더 */}
-                        <tr className="bg-gradient-to-r from-green-50 to-emerald-50 border-t-2 border-green-200">
-                          <td colSpan={8} className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-sm font-semibold text-green-800">
-                                {className}
-                              </span>
-                              <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
-                                {classRows.length}명
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                        {/* 그룹 내 학생들 */}
-                        {classRows.map((row, idx) => {
-                          const originalIdx = rows.indexOf(row);
-                          return (
-                          <tr key={originalIdx} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-700">
-                              {row.name || students.find(s => s.id === row.studentId)?.name || row.studentId}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <input
-                                type="date"
-                                className="w-full max-w-[135px] px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                value={row.date}
-                                onChange={e => handleChange(originalIdx, "date", e.target.value)}
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <input
-                                type="text"
-                                className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                value={row.test}
-                                onChange={e => handleChange(originalIdx, "test", e.target.value)}
-                                placeholder="테스트명"
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <select
-                                className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                value={row.testType}
-                                onChange={e => handleChange(originalIdx, "testType", e.target.value)}
-                              >
-                                <option value="">유형 선택</option>
-                                {TEST_TYPE_OPTIONS.map(opt => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.value}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <input
-                                type="number"
-                                className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                value={row.testScore ?? ""}
-                                onChange={e => handleChange(originalIdx, "testScore", e.target.value ? Number(e.target.value) : null)}
-                                placeholder="점수"
-                                min="0"
-                                max="100"
-                              />
-                            </td>
-                            <td className="px-4 py-3">
-                              <div 
-                                className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
-                                onClick={() => openModal(originalIdx, "note", row.note)}
-                                title={row.note}
-                              >
-                                {row.note || <span className="text-gray-400">클릭하여 입력</span>}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1"
-                                onClick={() => {
-                                  const rowToDelete = rows[originalIdx];
-                                  if (rowToDelete.id) {
-                                    // 기존 DB에 있는 행이면 삭제 목록에 추가
-                                    setDeletedRowIds(prev => [...prev, rowToDelete.id!]);
-                                  }
-                                  setRows(rows => rows.filter((_, i) => i !== originalIdx));
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                        })}
-                      </React.Fragment>
-                    ))}
-                    {filteredAndSortedRows.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="text-center text-gray-400 py-12">
-                          <div className="text-4xl mb-4">📝</div>
-                          <div className="text-lg mb-2">테스트 기록이 없습니다</div>
-                          <div className="text-sm">왼쪽 사이드바에서 반과 학생을 추가해 주세요</div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* 하단 요약 바 */}
-              <div className="p-4 border-t bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-600">
-                      총 <span className="font-semibold text-gray-900">{rows.length}</span>개의 테스트 기록
-                    </span>
-                    {filteredAndSortedRows.length !== rows.length && (
-                      <Badge variant="secondary" className="text-xs">
-                        필터됨: {filteredAndSortedRows.length}개
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
+            <TestLogsMainTable
+              rows={rows}
+              classes={classes}
+              students={students}
+              date={date}
+              filterClassId={filterClassId}
+              isSidebarOpen={isSidebarOpen}
+              hasUnsavedChanges={hasUnsavedChanges}
+              deletedRowIds={deletedRowIds}
+              onSidebarToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+              onFilterChange={setFilterClassId}
+              onRowChange={handleChange}
+              onBulkApply={handleBulkApply}
+              onDeleteRow={handleDeleteRow}
+              onClearAll={() => setRows([])}
+              onSave={handleSave}
+              onOpenModal={openModal}
+            />
           </div>
         </div>
         
-        {/* 모달: 특이사항 입력 */}
-        {modalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
-            <div className="bg-white rounded-xl shadow-lg p-6 w-[400px] max-w-full">
-              <div className="mb-4 font-semibold text-lg">특이사항 입력</div>
-              <input
-                ref={modalInputRef}
-                className="w-full px-4 py-3 text-lg border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={modalValue}
-                onChange={e => setModalValue(e.target.value)}
-                placeholder="특이사항을 입력하세요"
-                autoFocus
-              />
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setModalOpen(false)}>취소</Button>
-                <Button variant="default" onClick={handleModalSave}>저장</Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 모달: 특이사항 입력 - NoteModal 컴포넌트 사용 */}
+        <NoteModal
+          isOpen={modalOpen}
+          value={modalValue}
+          onValueChange={setModalValue}
+          onSave={() => {
+            if (modalRowIdx !== null && modalField !== null) {
+              handleChange(modalRowIdx, modalField, modalValue);
+            }
+            closeModal();
+          }}
+          onClose={closeModal}
+        />
       </div>
     </TooltipProvider>
   );
