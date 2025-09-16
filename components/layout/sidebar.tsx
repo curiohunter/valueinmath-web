@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot, MessageSquare, Activity } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot, MessageSquare, Activity, FolderOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -128,6 +128,11 @@ export function Sidebar() {
       title: "수업 일정",
       href: "/schedule",
       icon: Calendar,
+    },
+    {
+      title: "자료실",
+      href: "/resources",
+      icon: FolderOpen,
     },
     {
       title: "통계 분석",
