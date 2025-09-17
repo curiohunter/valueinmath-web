@@ -169,31 +169,6 @@ export default function TestLogsPage() {
     }
   }, [date]);
 
-  useEffect(() => {
-    // 모든 날짜의 test_logs 변경사항 구독 (여러 날짜를 동시에 편집할 수 있으므로)
-    const channel = supabase
-      .channel('all-test-logs')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'test_logs'
-        }, 
-        (payload: any) => {
-          // 현재 편집 중인 날짜들의 데이터만 다시 불러오기
-          const uniqueDates = [...new Set(rows.map(r => r.date))];
-          if (uniqueDates.includes((payload.new as any)?.date || (payload.old as any)?.date)) {
-            fetchTestLogsByDate();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [rows]);
-
   // 데이터 변경 감지
   useEffect(() => {
     const hasChanges = JSON.stringify(rows) !== JSON.stringify(originalRows);
@@ -349,24 +324,24 @@ export default function TestLogsPage() {
     };
   }, [date, dirtyFields]);
 
-  // 자정 감지 및 자동 저장
-  useEffect(() => {
-    const checkDateChange = () => {
-      const currentDate = getKoreanDate();
-      
-      if (currentDate !== date && rows.length > 0) {
-        
-        handleSave().then(() => {
-          setDate(currentDate);
-          setRows([]);
-          fetchData();
-        });
-      }
-    };
+  // 자정 감지 및 자동 저장 - 비활성화 (사용자 요청)
+  // useEffect(() => {
+  //   const checkDateChange = () => {
+  //     const currentDate = getKoreanDate();
+  //     
+  //     if (currentDate !== date && rows.length > 0) {
+  //       
+  //       handleSave().then(() => {
+  //         setDate(currentDate);
+  //         setRows([]);
+  //         fetchData();
+  //       });
+  //     }
+  //   };
 
-    const interval = setInterval(checkDateChange, 60000);
-    return () => clearInterval(interval);
-  }, [date, rows.length]);
+  //   const interval = setInterval(checkDateChange, 60000);
+  //   return () => clearInterval(interval);
+  // }, [date, rows.length]);
 
   const getClassStudents = (classId: string) => {
     const studentIds = classStudents.filter(cs => cs.class_id === classId).map(cs => cs.student_id);

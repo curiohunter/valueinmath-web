@@ -332,6 +332,16 @@ export function TestLogsMainTable({
               </Badge>
             )}
           </div>
+          {/* 하단 저장 버튼 추가 */}
+          {hasUnsavedChanges && (
+            <Button 
+              size="sm"
+              onClick={onSave}
+              className="bg-red-600 hover:bg-red-700 animate-pulse shadow-lg text-white font-medium"
+            >
+              전체 저장
+            </Button>
+          )}
         </div>
       </div>
     </Card>
