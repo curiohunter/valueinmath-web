@@ -550,6 +550,9 @@ export function StudentFormModal({
                               <SelectItem value="1">1학년</SelectItem>
                               <SelectItem value="2">2학년</SelectItem>
                               <SelectItem value="3">3학년</SelectItem>
+                              <SelectItem value="4">4학년</SelectItem>
+                              <SelectItem value="5">5학년</SelectItem>
+                              <SelectItem value="6">6학년</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
