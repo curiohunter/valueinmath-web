@@ -33,7 +33,8 @@ export interface TuitionFee {
   amount: number
   note: string | null
   payment_status: PaymentStatus
-  payment_date: string | null
+  period_start_date: string | null
+  period_end_date: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -52,7 +53,8 @@ export interface TuitionRow {
   amount: number
   note: string
   paymentStatus: PaymentStatus
-  paymentDate?: string
+  periodStartDate?: string
+  periodEndDate?: string
 }
 
 // 학원비 생성/수정을 위한 입력 인터페이스
@@ -66,7 +68,8 @@ export interface TuitionFeeInput {
   amount: number
   note?: string
   payment_status?: PaymentStatus
-  payment_date?: string
+  period_start_date?: string
+  period_end_date?: string
 }
 
 // 반별 학생 정보

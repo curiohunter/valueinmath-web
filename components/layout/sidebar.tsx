@@ -20,7 +20,6 @@ export function Sidebar() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSigningOut, setIsSigningOut] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
   const supabase = getSupabaseBrowserClient()
   const { toast } = useToast()
 
@@ -60,46 +59,6 @@ export function Sidebar() {
     }
 
     checkAdminStatus()
-  }, [])
-
-  // 읽지 않은 메시지 수 가져오기
-  useEffect(() => {
-    async function fetchUnreadCount() {
-      try {
-        const { data, error } = await supabase
-          .rpc('get_unread_message_count')
-        
-        if (error) throw error
-        setUnreadCount(data || 0)
-      } catch (error) {
-        console.error("Error fetching unread count:", error)
-      }
-    }
-
-    fetchUnreadCount()
-
-    // 10초마다 업데이트
-    const interval = setInterval(fetchUnreadCount, 60000) // 10초 -> 60초로 증가
-    
-    // 실시간 구독
-    const channel = supabase
-      .channel('global-messages-sidebar')
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'global_messages' 
-        }, 
-        () => {
-          fetchUnreadCount()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      clearInterval(interval)
-      supabase.removeChannel(channel)
-    }
   }, [])
 
   // 기본 사이드바 항목

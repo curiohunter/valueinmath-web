@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import type { MathflatType } from "@/lib/mathflat/types"
 
 interface AddRecordModalProps {
   open: boolean
@@ -19,10 +20,13 @@ interface AddRecordModalProps {
 export function AddRecordModal({ open, onOpenChange, studentOptions, onSuccess }: AddRecordModalProps) {
   const [formData, setFormData] = useState({
     studentId: "",
+    studentName: "",
     date: new Date().toISOString().split('T')[0],
-    category: "학습지",
-    problemsSolved: 0,
-    accuracyRate: 100
+    mathflatType: "학습지" as MathflatType,
+    bookTitle: "",
+    problemSolved: 0,
+    correctCount: 0,
+    wrongCount: 0
   })
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
@@ -35,14 +39,27 @@ export function AddRecordModal({ open, onOpenChange, studentOptions, onSuccess }
       }
 
       setLoading(true)
+
+      // 학생 이름 가져오기
+      const selectedStudent = studentOptions.find(s => s.id === formData.studentId)
+      const studentName = selectedStudent?.name || ''
+
+      // 정답률 계산
+      const totalProblems = formData.correctCount + formData.wrongCount
+      const correctRate = totalProblems > 0 ? Math.round((formData.correctCount / totalProblems) * 100) : 0
+
       const { data, error } = await supabase
         .from('mathflat_records')
         .insert({
           student_id: formData.studentId,
-          date: formData.date,
-          category: formData.category,
-          problems_solved: formData.problemsSolved,
-          accuracy_rate: formData.accuracyRate
+          student_name: studentName,
+          event_date: formData.date,
+          mathflat_type: formData.mathflatType,
+          book_title: formData.bookTitle,
+          problem_solved: totalProblems,
+          correct_count: formData.correctCount,
+          wrong_count: formData.wrongCount,
+          correct_rate: correctRate
         })
 
       if (error) {
@@ -54,10 +71,13 @@ export function AddRecordModal({ open, onOpenChange, studentOptions, onSuccess }
         // 폼 초기화
         setFormData({
           studentId: "",
+          studentName: "",
           date: new Date().toISOString().split('T')[0],
-          category: "학습지",
-          problemsSolved: 0,
-          accuracyRate: 100
+          mathflatType: "학습지" as MathflatType,
+          bookTitle: "",
+          problemSolved: 0,
+          correctCount: 0,
+          wrongCount: 0
         })
         onSuccess() // 부모 컴포넌트의 데이터 새로고침
       }
@@ -114,52 +134,76 @@ export function AddRecordModal({ open, onOpenChange, studentOptions, onSuccess }
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="category" className="text-right">
-              카테고리
+            <Label htmlFor="mathflatType" className="text-right">
+              유형
             </Label>
             <Select
-              value={formData.category}
-              onValueChange={(value) => setFormData({...formData, category: value})}
+              value={formData.mathflatType}
+              onValueChange={(value) => setFormData({...formData, mathflatType: value as MathflatType})}
             >
               <SelectTrigger className="col-span-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="학습지">학습지</SelectItem>
                 <SelectItem value="교재">교재</SelectItem>
-                <SelectItem value="오답/심화">오답/심화</SelectItem>
+                <SelectItem value="학습지">학습지</SelectItem>
                 <SelectItem value="챌린지">챌린지</SelectItem>
+                <SelectItem value="챌린지오답">챌린지오답</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="problems" className="text-right">
-              문제 수
+            <Label htmlFor="bookTitle" className="text-right">
+              교재명
             </Label>
             <Input
-              id="problems"
+              id="bookTitle"
+              type="text"
+              value={formData.bookTitle}
+              onChange={(e) => setFormData({...formData, bookTitle: e.target.value})}
+              className="col-span-3"
+              placeholder="교재명 입력"
+            />
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="correct" className="text-right">
+              정답 수
+            </Label>
+            <Input
+              id="correct"
               type="number"
-              value={formData.problemsSolved}
-              onChange={(e) => setFormData({...formData, problemsSolved: parseInt(e.target.value) || 0})}
+              value={formData.correctCount}
+              onChange={(e) => setFormData({...formData, correctCount: parseInt(e.target.value) || 0})}
               className="col-span-3"
               min="0"
             />
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="accuracy" className="text-right">
-              정답률 (%)
+            <Label htmlFor="wrong" className="text-right">
+              오답 수
             </Label>
             <Input
-              id="accuracy"
+              id="wrong"
               type="number"
-              value={formData.accuracyRate}
-              onChange={(e) => setFormData({...formData, accuracyRate: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))})}
+              value={formData.wrongCount}
+              onChange={(e) => setFormData({...formData, wrongCount: parseInt(e.target.value) || 0})}
               className="col-span-3"
               min="0"
-              max="100"
             />
+          </div>
+
+          {/* 정답률 자동 계산 표시 */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">정답률</Label>
+            <div className="col-span-3 text-sm font-medium">
+              {formData.correctCount + formData.wrongCount > 0
+                ? `${Math.round((formData.correctCount / (formData.correctCount + formData.wrongCount)) * 100)}%`
+                : '0%'
+              }
+            </div>
           </div>
         </div>
         <div className="flex justify-end gap-3">

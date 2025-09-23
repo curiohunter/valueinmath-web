@@ -1,139 +1,200 @@
-// MathFlat 통계 API
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/auth/server';
+import type { MathflatType } from '@/lib/mathflat/types';
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerClient();
-    
-    // 1. 총 재원 학생 수
-    const { data: enrolledStudents, error: studentsError } = await supabase
-      .from('students')
-      .select('id, name')
-      .eq('status', '재원');
-    
-    if (studentsError) {
-      console.error('Error fetching students:', studentsError);
+
+    // 인증 확인
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      );
     }
-    
-    const totalEnrolled = enrolledStudents?.length || 0;
-    
-    // 2. 모든 학생의 가장 최근 동기화 상태 확인 (날짜 무관)
-    const { data: allSyncedRecords, error: recordsError } = await supabase
-      .from('mathflat_records')
-      .select('student_id, date')
-      .order('date', { ascending: false });
-    
-    if (recordsError) {
-      console.error('Error fetching records:', recordsError);
-    }
-    
-    // 각 학생의 가장 최근 기록만 유지
-    const latestRecordsByStudent = new Map<string, string>();
-    allSyncedRecords?.forEach(record => {
-      if (!latestRecordsByStudent.has(record.student_id)) {
-        latestRecordsByStudent.set(record.student_id, record.date);
-      }
-    });
-    
-    const syncedStudentIds = new Set(latestRecordsByStudent.keys());
-    const syncedCount = syncedStudentIds.size;
-    const notSyncedStudents = enrolledStudents?.filter(s => !syncedStudentIds.has(s.id)) || [];
-    
-    // 가장 최근 날짜 (통계 표시용)
-    const latestDate = allSyncedRecords?.[0]?.date || new Date().toISOString().split('T')[0];
-    console.log('Latest sync date:', latestDate, 'Total synced students:', syncedCount);
-    
-    // 3. 최근 1주일 데이터 가져오기 (저성과 학생 및 챌린지 계산용)
-    const weekAgo = new Date();
+
+    // 오늘 날짜와 일주일 전 날짜
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekAgoStr = weekAgo.toISOString().split('T')[0];
-    
-    const { data: weekRecords } = await supabase
+
+    // 1. 교재/학습지 정답률 차이 10% 이상 학생 (최근 7일)
+    const { data: weeklyRecords } = await supabase
       .from('mathflat_records')
-      .select('student_id, problems_solved, accuracy_rate, category, date, students!inner(name)')
-      .gte('date', weekAgoStr)
-      .order('date', { ascending: false });
-    
-    // 학생별 최근 1주일 데이터 그룹화
-    const weekStudentDataMap = new Map<string, any[]>();
-    weekRecords?.forEach(record => {
-      if (!weekStudentDataMap.has(record.student_id)) {
-        weekStudentDataMap.set(record.student_id, []);
-      }
-      weekStudentDataMap.get(record.student_id)?.push(record);
-    });
-    
-    console.log('Week records count:', weekRecords?.length || 0);
-    console.log('Week student data map size:', weekStudentDataMap.size);
-    
-    // 3. 저성과 학생 계산 (최근 1주일, 학습지/교재만)
-    const lowPerformersList: any[] = [];
-    weekStudentDataMap.forEach((records, studentId) => {
-      // 학습지와 교재 카테고리만 필터링
-      const studyRecords = records.filter(r => r.category === '학습지' || r.category === '교재');
-      
-      if (studyRecords.length > 0) {
-        const totalProblems = studyRecords.reduce((sum, r) => sum + r.problems_solved, 0);
-        const avgAccuracy = studyRecords.reduce((sum, r) => sum + r.accuracy_rate, 0) / studyRecords.length;
-        
-        // 문제를 20개 이상 풀었고 정답률이 60% 미만인 경우
-        if (totalProblems >= 20 && avgAccuracy < 60) {
-          lowPerformersList.push({
-            name: (records[0] as any).students.name,
-            problemsSolved: totalProblems,
-            accuracyRate: Math.round(avgAccuracy),
-            categories: '학습지/교재'
+      .select('student_id, student_name, mathflat_type, correct_rate')
+      .gte('event_date', weekAgoStr);
+
+    // 학생별 교재/학습지 평균 정답률 계산
+    const studentRatesByType = new Map<string, {
+      student_name: string;
+      교재: { sum: number; count: number };
+      학습지: { sum: number; count: number };
+    }>();
+
+    if (weeklyRecords) {
+      weeklyRecords.forEach(record => {
+        const key = record.student_id;
+        if (!studentRatesByType.has(key)) {
+          studentRatesByType.set(key, {
+            student_name: record.student_name,
+            교재: { sum: 0, count: 0 },
+            학습지: { sum: 0, count: 0 }
+          });
+        }
+        const stats = studentRatesByType.get(key)!;
+        if (record.mathflat_type === '교재') {
+          stats.교재.sum += record.correct_rate;
+          stats.교재.count++;
+        } else if (record.mathflat_type === '학습지') {
+          stats.학습지.sum += record.correct_rate;
+          stats.학습지.count++;
+        }
+      });
+    }
+
+    // 10% 이상 차이나는 학생 찾기
+    const rateDifferenceStudents: Array<{
+      student_name: string;
+      교재_rate: number;
+      학습지_rate: number;
+      difference: number;
+    }> = [];
+
+    studentRatesByType.forEach((stats) => {
+      if (stats.교재.count > 0 && stats.학습지.count > 0) {
+        const 교재_rate = Math.round(stats.교재.sum / stats.교재.count);
+        const 학습지_rate = Math.round(stats.학습지.sum / stats.학습지.count);
+        const difference = Math.abs(교재_rate - 학습지_rate);
+
+        if (difference >= 10) {
+          rateDifferenceStudents.push({
+            student_name: stats.student_name,
+            교재_rate,
+            학습지_rate,
+            difference
           });
         }
       }
     });
-    
-    // 정답률 낮은 순으로 정렬
-    lowPerformersList.sort((a, b) => a.accuracyRate - b.accuracyRate);
-    
-    // 4. 챌린지 랭킹 계산 (최근 1주일 챌린지 문제 합계)
-    const challengeMap = new Map<string, { name: string, totalProblems: number }>();
-    weekStudentDataMap.forEach((records, studentId) => {
-      // 챌린지 카테고리만 필터링
-      const challengeRecords = records.filter(r => r.category === '챌린지');
-      
-      if (challengeRecords.length > 0) {
-        const totalChallengeProblems = challengeRecords.reduce((sum, r) => sum + r.problems_solved, 0);
-        const studentName = (records[0] as any).students.name;
-        
-        challengeMap.set(studentId, {
-          name: studentName,
-          totalProblems: totalChallengeProblems
-        });
+
+    // 차이가 큰 순서대로 정렬
+    rateDifferenceStudents.sort((a, b) => b.difference - a.difference);
+
+    // 2. 교재 정답률 60% 이하 학생 (최근 7일)
+    const lowTextbookStudents: Array<{
+      student_name: string;
+      average_rate: number;
+      problem_count: number;
+    }> = [];
+
+    studentRatesByType.forEach((stats) => {
+      if (stats.교재.count > 0) {
+        const average_rate = Math.round(stats.교재.sum / stats.교재.count);
+        if (average_rate <= 60) {
+          lowTextbookStudents.push({
+            student_name: stats.student_name,
+            average_rate,
+            problem_count: stats.교재.count
+          });
+        }
       }
     });
-    
-    // 챌린지 TOP 3 정렬 (전체 문제 수 기준)
-    const challengeList = Array.from(challengeMap.values())
-      .filter(item => item.totalProblems > 0)
-      .sort((a, b) => b.totalProblems - a.totalProblems);
-      
-    const challengeTop3 = challengeList.slice(0, 3).map((item, index) => ({
-      rank: index + 1,
-      name: item.name,
-      problemsSolved: item.totalProblems
-    }));
-    
+
+    // 정답률이 낮은 순서대로 정렬
+    lowTextbookStudents.sort((a, b) => a.average_rate - b.average_rate);
+
+    // 3. 챌린지/챌린지오답 가장 많이 한 학생 상위 3명 (최근 7일)
+    const { data: challengeData } = await supabase
+      .from('mathflat_records')
+      .select('student_id, student_name, mathflat_type, problem_solved')
+      .in('mathflat_type', ['챌린지', '챌린지오답'])
+      .gte('event_date', weekAgoStr);
+
+    const challengeStats = new Map<string, {
+      student_name: string;
+      total_problems: number;
+    }>();
+
+    if (challengeData) {
+      challengeData.forEach(record => {
+        const key = record.student_id;
+        if (!challengeStats.has(key)) {
+          challengeStats.set(key, {
+            student_name: record.student_name,
+            total_problems: 0
+          });
+        }
+        const stats = challengeStats.get(key)!;
+        stats.total_problems += record.problem_solved;
+      });
+    }
+
+    const topChallengeStudents = Array.from(challengeStats.values())
+      .sort((a, b) => b.total_problems - a.total_problems)
+      .slice(0, 5)
+      .map(s => ({
+        student_name: s.student_name,
+        total_problems: s.total_problems
+      }));
+
+    // 4. 주간 랭킹 (최근 7일 전체 문제 수 기준 상위 3명)
+    const { data: allWeeklyData } = await supabase
+      .from('mathflat_records')
+      .select('student_id, student_name, problem_solved')
+      .gte('event_date', weekAgoStr);
+
+    const weeklyRankingStats = new Map<string, {
+      student_name: string;
+      total_problems: number;
+    }>();
+
+    if (allWeeklyData) {
+      allWeeklyData.forEach(record => {
+        const key = record.student_id;
+        if (!weeklyRankingStats.has(key)) {
+          weeklyRankingStats.set(key, {
+            student_name: record.student_name,
+            total_problems: 0
+          });
+        }
+        const stats = weeklyRankingStats.get(key)!;
+        stats.total_problems += record.problem_solved;
+      });
+    }
+
+    const weeklyTopPerformers = Array.from(weeklyRankingStats.values())
+      .sort((a, b) => b.total_problems - a.total_problems)
+      .slice(0, 5)
+      .map(s => ({
+        student_id: '', // API에서 필요 없지만 타입 유지
+        student_name: s.student_name,
+        total_problems: s.total_problems,
+        average_rate: 0 // 사용하지 않음
+      }));
+
+    const statsData = {
+      rateDifferenceStudents: rateDifferenceStudents.slice(0, 5), // 최대 5명
+      lowTextbookStudents: lowTextbookStudents.slice(0, 5), // 최대 5명
+      topChallengeStudents,
+      weeklyTopPerformers
+    };
+
     return NextResponse.json({
-      currentDate: latestDate, // 현재 표시중인 날짜
-      totalEnrolled,
-      syncedCount,
-      notSyncedCount: totalEnrolled - syncedCount,
-      notSyncedStudents: notSyncedStudents.map(s => s.name), // 모든 미동기화 학생 이름
-      lowPerformers: lowPerformersList, // 모든 저성과자 이름
-      challengeTop3
+      success: true,
+      data: statsData
     });
-    
+
   } catch (error) {
     console.error('Stats API error:', error);
     return NextResponse.json(
-      { error: '통계 조회 중 오류가 발생했습니다.' },
+      {
+        error: '통계 조회 중 오류가 발생했습니다.',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

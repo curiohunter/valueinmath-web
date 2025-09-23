@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown } from "lucide-react"
+import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown, FileSpreadsheet } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TuitionRow as TuitionTableRow } from "./tuition-row"
 import type { TuitionRow } from "@/types/tuition"
@@ -56,6 +56,8 @@ interface TuitionTableProps {
   teachers?: Array<{ id: string; name: string }>
   // 검색 실행 핸들러
   onSearch?: () => void
+  // 엑셀 내보내기 핸들러
+  onExport?: () => void
 }
 
 export function TuitionTable({
@@ -95,7 +97,8 @@ export function TuitionTable({
   selectedStudents = [],
   onStudentSelectionChange,
   teachers = [],
-  onSearch
+  onSearch,
+  onExport
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -382,6 +385,17 @@ export function TuitionTable({
                     검색
                   </Button>
                 )}
+                {onExport && (
+                  <Button
+                    onClick={onExport}
+                    variant="outline"
+                    className="h-10 px-4 bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                    title="엑셀 내보내기"
+                  >
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    엑셀
+                  </Button>
+                )}
                 <Button
                   onClick={onResetFilters}
                   variant="outline"
@@ -472,6 +486,27 @@ export function TuitionTable({
                         >
                           <ArrowDown className="w-3 h-3" />
                         </Button>
+                      )}
+                    </div>
+                  </th>
+                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
+                    <div className="flex items-center gap-2">
+                      수업 기간
+                      {!isReadOnly && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-6 h-6 p-0 hover:bg-blue-100 text-blue-600"
+                            onClick={() => {
+                              onBulkApply?.('periodStartDate');
+                              onBulkApply?.('periodEndDate');
+                            }}
+                            title="첫 번째 행의 날짜를 모든 행에 적용"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </th>

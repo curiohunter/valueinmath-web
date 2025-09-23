@@ -3,101 +3,66 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Download, Plus, Search, Filter } from "lucide-react"
 import { toast } from "sonner"
 import { RecordFilters } from "./record-filters"
 import { RecordTable } from "./record-table"
 import { AddRecordModal } from "./add-record-modal"
 import { EditRecordModal } from "./edit-record-modal"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-
-interface MathflatRecord {
-  id: string
-  student_id: string
-  date: string
-  category: string
-  problems_solved: number
-  accuracy_rate: number
-  student?: {
-    name: string
-    school: string
-    grade: number
-    class_students?: Array<{
-      classes?: {
-        name: string
-      }
-    }>
-  }
-}
+import type { MathflatRecord } from "@/lib/mathflat/types"
 
 export function StudentRecords() {
   const [records, setRecords] = useState<MathflatRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [mathflatTypeFilter, setMathflatTypeFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("week") // week, month, all
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([])
   const [studentOptions, setStudentOptions] = useState<Array<{id: string, name: string}>>([])
-  const [classOptions, setClassOptions] = useState<Array<{id: string, name: string}>>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [recordToEdit, setRecordToEdit] = useState<MathflatRecord | null>(null)
-  
-  
-  const supabase = createClient()
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(20)
 
   useEffect(() => {
     loadRecords()
     loadOptions()
-  }, [dateFilter, categoryFilter, selectedStudents, selectedClasses])
-  
-  // 학생과 반 옵션 로드
+  }, [dateFilter, mathflatTypeFilter, selectedStudents, searchTerm, currentPage])
+
+  // 학생 옵션 로드
   const loadOptions = async () => {
     try {
-      // 학생 목록 가져오기
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, name')
-        .eq('status', '재원')
-        .order('name')
-      
-      if (students) {
-        setStudentOptions(students)
-      }
-      
-      // 반 목록 가져오기
-      const { data: classes } = await supabase
-        .from('classes')
-        .select('id, name')
-        .order('name')
-      
-      if (classes) {
-        setClassOptions(classes)
+      // pageSize를 충분히 크게 설정하여 모든 재원 학생을 가져옴
+      const response = await fetch('/api/students?status=재원&pageSize=100')
+      if (response.ok) {
+        const result = await response.json()
+        setStudentOptions((result.data || []).map((s: any) => ({ id: s.id, name: s.name })))
       }
     } catch (error) {
-      console.error('Error loading options:', error)
+      console.error('Error loading student options:', error)
     }
   }
 
   const handleDelete = async () => {
     if (!recordToDelete) return
-    
+
     try {
-      const { error } = await supabase
-        .from('mathflat_records')
-        .delete()
-        .eq('id', recordToDelete)
-      
-      if (error) {
-        console.error('Error deleting record:', error)
-        toast.error('기록 삭제에 실패했습니다')
-      } else {
+      const response = await fetch(`/api/mathflat/records?id=${recordToDelete}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
         toast.success('기록이 삭제되었습니다')
         loadRecords()
+      } else {
+        toast.error('기록 삭제에 실패했습니다')
       }
     } catch (error) {
       console.error('Error:', error)
@@ -115,26 +80,24 @@ export function StudentRecords() {
 
   const handleEditSave = async (updatedRecord: Partial<MathflatRecord>) => {
     if (!recordToEdit) return
-    
+
     try {
-      const { error } = await supabase
-        .from('mathflat_records')
-        .update({
-          date: updatedRecord.date,
-          category: updatedRecord.category,
-          problems_solved: updatedRecord.problems_solved,
-          accuracy_rate: updatedRecord.accuracy_rate
+      const response = await fetch('/api/mathflat/records', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: recordToEdit.id,
+          ...updatedRecord
         })
-        .eq('id', recordToEdit.id)
-      
-      if (error) {
-        console.error('Error updating record:', error)
-        toast.error('기록 수정에 실패했습니다')
-      } else {
+      })
+
+      if (response.ok) {
         toast.success('기록이 수정되었습니다')
         setEditModalOpen(false)
         setRecordToEdit(null)
         loadRecords()
+      } else {
+        toast.error('기록 수정에 실패했습니다')
       }
     } catch (error) {
       console.error('Error:', error)
@@ -145,48 +108,38 @@ export function StudentRecords() {
   const loadRecords = async () => {
     setLoading(true)
     try {
-      // 먼저 기본 데이터 가져오기
-      let query = supabase
-        .from('mathflat_records')
-        .select(`
-          *,
-          student:student_id(
-            name, 
-            school, 
-            grade,
-            class_students(
-              classes(
-                name
-              )
-            )
-          )
-        `)
-        .order('date', { ascending: false })
-        .order('student_id')
+      // 날짜 범위 계산
+      let startDate, endDate;
+      const today = new Date()
+      endDate = today.toISOString().split('T')[0]
 
-      // 날짜 필터
       if (dateFilter === 'week') {
-        const weekAgo = new Date()
+        const weekAgo = new Date(today)
         weekAgo.setDate(weekAgo.getDate() - 7)
-        query = query.gte('date', weekAgo.toISOString().split('T')[0])
+        startDate = weekAgo.toISOString().split('T')[0]
       } else if (dateFilter === 'month') {
-        const monthAgo = new Date()
+        const monthAgo = new Date(today)
         monthAgo.setMonth(monthAgo.getMonth() - 1)
-        query = query.gte('date', monthAgo.toISOString().split('T')[0])
+        startDate = monthAgo.toISOString().split('T')[0]
       }
 
-      // 카테고리 필터
-      if (categoryFilter !== 'all') {
-        query = query.eq('category', categoryFilter)
-      }
+      // API 파라미터 구성
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        pageSize: pageSize.toString()
+      })
 
-      const { data, error } = await query
+      if (startDate) params.append('startDate', startDate)
+      if (endDate) params.append('endDate', endDate)
+      if (mathflatTypeFilter !== 'all') params.append('mathflatTypes', mathflatTypeFilter)
+      if (selectedStudents.length > 0) params.append('studentIds', selectedStudents.join(','))
+      if (searchTerm) params.append('search', searchTerm)
 
-      if (error) {
-        console.error('Error loading records:', error)
-        toast.error('데이터 로딩 실패')
-      } else {
-        setRecords(data || [])
+      const response = await fetch(`/api/mathflat/records?${params}`)
+      if (response.ok) {
+        const result = await response.json()
+        setRecords(result.data || [])
+        setTotalCount(result.pagination?.totalCount || 0)
       }
     } catch (error) {
       console.error('Unexpected error:', error)
@@ -196,58 +149,18 @@ export function StudentRecords() {
     }
   }
 
-  const filteredRecords = records.filter(record => {
-    const studentName = record.student?.name || ''
-    const matchesSearch = searchTerm === '' || studentName.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    // 검색어가 있으면 학생/반 필터를 무시하고 검색 결과만 표시
-    if (searchTerm !== '') {
-      return matchesSearch
-    }
-    
-    // 학생 필터
-    const matchesStudent = selectedStudents.length === 0 || selectedStudents.includes(record.student_id)
-    
-    // 반 필터 (학생이 속한 반 이름 확인)
-    const studentClassNames = record.student?.class_students
-      ?.map(cs => cs.classes?.name)
-      .filter(Boolean) || []
-    
-    const matchesClass = selectedClasses.length === 0 || 
-      selectedClasses.some(classId => {
-        const className = classOptions.find(c => c.id === classId)?.name
-        return className && studentClassNames.includes(className)
-      })
-    
-    return matchesSearch && matchesStudent && matchesClass
-  })
-
-
-
-
   const exportToCSV = () => {
-    const headers = ['날짜', '학생', '학교', '담당반', '카테고리', '문제수', '정답률']
-    // CSV 내보내기는 전체 필터된 데이터 사용
-    const rows = filteredRecords.map(r => {
-      const schoolGrade = r.student?.school && r.student?.grade 
-        ? `${r.student.school}${r.student.grade <= 6 ? r.student.grade : r.student.grade <= 9 ? r.student.grade - 6 : r.student.grade - 9}`
-        : '';
-      
-      const classNames = r.student?.class_students
-        ?.map(cs => cs.classes?.name)
-        .filter(Boolean)
-        .join(', ') || '';
-      
-      return [
-        r.date,
-        r.student?.name || '',
-        schoolGrade,
-        classNames,
-        r.category,
-        r.problems_solved,
-        `${r.accuracy_rate}%`
-      ];
-    })
+    const headers = ['날짜', '학생', '유형', '교재명', '푼 문제수', '정답 수', '오답 수', '정답률']
+    const rows = records.map(r => [
+      r.event_date,
+      r.student_name || '',
+      r.mathflat_type || '',
+      r.book_title || '',
+      r.problem_solved || 0,
+      r.correct_count || 0,
+      r.wrong_count || 0,
+      `${r.correct_rate || 0}%`
+    ])
 
     const csvContent = [
       headers.join(','),
@@ -261,6 +174,16 @@ export function StudentRecords() {
     link.click()
   }
 
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case '교재': return 'bg-blue-100 text-blue-700'
+      case '학습지': return 'bg-green-100 text-green-700'
+      case '챌린지': return 'bg-purple-100 text-purple-700'
+      case '챌린지오답': return 'bg-orange-100 text-orange-700'
+      default: return 'bg-gray-100 text-gray-700'
+    }
+  }
+
   return (
     <>
       <Card>
@@ -268,48 +191,56 @@ export function StudentRecords() {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>학습 기록</CardTitle>
-              <CardDescription>학생별 매쓰플랫 학습 데이터</CardDescription>
+              <CardDescription>
+                매쓰플랫 학습 데이터 (총 {totalCount}건)
+              </CardDescription>
             </div>
-            <Button onClick={exportToCSV} variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              CSV 내보내기
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setModalOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                기록 추가
+              </Button>
+              <Button onClick={exportToCSV} variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                CSV 내보내기
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-        {/* 필터 컴포넌트 */}
-        <RecordFilters
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          dateFilter={dateFilter}
-          setDateFilter={setDateFilter}
-          categoryFilter={categoryFilter}
-          setCategoryFilter={setCategoryFilter}
-          selectedStudents={selectedStudents}
-          setSelectedStudents={setSelectedStudents}
-          selectedClasses={selectedClasses}
-          setSelectedClasses={setSelectedClasses}
-          studentOptions={studentOptions}
-          classOptions={classOptions}
-          onAddRecord={() => setModalOpen(true)}
-        />
+          {/* 필터 컴포넌트 */}
+          <RecordFilters
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
+            mathflatTypeFilter={mathflatTypeFilter}
+            setMathflatTypeFilter={setMathflatTypeFilter}
+            selectedStudents={selectedStudents}
+            setSelectedStudents={setSelectedStudents}
+            studentOptions={studentOptions}
+          />
 
-        {/* 테이블 컴포넌트 */}
-        <RecordTable
-          records={filteredRecords}
-          loading={loading}
-          onEdit={handleEdit}
-          onDelete={(recordId) => {
-            setRecordToDelete(recordId)
-            setDeleteDialogOpen(true)
-          }}
-        />
+          {/* 테이블 컴포넌트 */}
+          <RecordTable
+            records={records}
+            loading={loading}
+            onEdit={handleEdit}
+            onDelete={(recordId) => {
+              setRecordToDelete(recordId)
+              setDeleteDialogOpen(true)
+            }}
+            currentPage={currentPage}
+            totalPages={Math.ceil(totalCount / pageSize)}
+            onPageChange={setCurrentPage}
+            getTypeColor={getTypeColor}
+          />
         </CardContent>
       </Card>
 
       {/* 학습기록 추가 모달 */}
-      <AddRecordModal 
-        open={modalOpen} 
+      <AddRecordModal
+        open={modalOpen}
         onOpenChange={setModalOpen}
         studentOptions={studentOptions}
         onSuccess={loadRecords}

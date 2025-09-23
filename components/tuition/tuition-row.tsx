@@ -230,7 +230,28 @@ export function TuitionRow({
           </span>
         </div>
       </td>
-      
+
+      {/* 수업 기간 */}
+      <td className="min-w-[240px] px-2 py-3">
+        <div className="flex gap-1 items-center">
+          <Input
+            type="date"
+            value={row.periodStartDate || ''}
+            onChange={(e) => onChange?.(index, 'periodStartDate', e.target.value)}
+            className="h-8 text-xs w-28 border-slate-200 focus:border-blue-400"
+            disabled={isReadOnly}
+          />
+          <span className="text-xs text-slate-500">~</span>
+          <Input
+            type="date"
+            value={row.periodEndDate || ''}
+            onChange={(e) => onChange?.(index, 'periodEndDate', e.target.value)}
+            className="h-8 text-xs w-28 border-slate-200 focus:border-blue-400"
+            disabled={isReadOnly}
+          />
+        </div>
+      </td>
+
       {/* 납부상태 */}
       <td className="min-w-[100px] w-[12%] px-3 py-3">
         <Select
