@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, ChevronRight, Info, MessageSquare } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
   DialogContent,
@@ -23,10 +25,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { getKoreanDateString } from "@/lib/utils"
 import type { Student, StudentStatus, Department, SchoolType, LeadSource } from "@/types/student"
-import { createStudent, updateStudent } from "@/services/student-service"
+import { createClient } from "@/lib/supabase/client"
+
+// 상담 모달 import - 나중에 실제 파일로 교체
+import { ConsultationModal } from "@/components/consultations/ConsultationModal"
 
 // 기본 폼 타입 정의
 interface FormValues {
@@ -46,21 +51,37 @@ interface FormValues {
   notes: string | null
 }
 
-// 타입 정의 추가
-type CreateStudentData = Omit<Student, "id" | "created_at" | "updated_at">
-type UpdateStudentData = Partial<Student>
 
 interface StudentFormModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   student?: Student | null
   onSuccess?: () => void
+  isConsultationMode?: boolean // For dashboard consultation flow
 }
 
-export function StudentFormModal({ open, onOpenChange, student, onSuccess }: StudentFormModalProps) {
+export function StudentFormModal({
+  open,
+  onOpenChange,
+  student,
+  onSuccess,
+  isConsultationMode
+}: StudentFormModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [endDateError, setEndDateError] = useState<string | null>(null)
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1)
+  const [savedStudentId, setSavedStudentId] = useState<string | null>(null)
+  const [savedStudentName, setSavedStudentName] = useState<string>("")
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false)
   const router = useRouter()
+  const supabase = createClient()
+
+  // 한국 시간 기준 오늘 날짜 가져오기
+  const getKoreanToday = () => {
+    const koreaTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" })
+    const date = new Date(koreaTime)
+    return date
+  }
 
   // 폼 초기화
   const form = useForm<FormValues>({
@@ -68,7 +89,7 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
       name: "",
       student_phone: "",
       parent_phone: "",
-      status: "미등록",
+      status: isConsultationMode ? "신규상담" : "미등록",
       department: null,
       school: "",
       school_type: null,
@@ -77,7 +98,7 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
       lead_source: null,
       start_date: null,
       end_date: null,
-      first_contact_date: null,
+      first_contact_date: getKoreanToday(), // 오늘 날짜를 기본값으로
       notes: "",
     },
   })
@@ -109,21 +130,19 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
           notes: student.notes,
         })
         setEndDateError(null)
+        setSavedStudentId(student.id)
+        setSavedStudentName(student.name)
       } catch (error) {
         console.error("Error setting form values:", error)
-        toast({
-          title: "오류 발생",
-          description: "학생 정보를 불러오는 중 오류가 발생했습니다.",
-          variant: "destructive",
-        })
+        toast.error("학생 정보를 불러오는 중 오류가 발생했습니다.")
       }
     } else {
-      // 학생 정보가 없으면 폼 초기화
+      // 학생 정보가 없으면 폼 초기화 (최초상담일은 오늘로 유지)
       form.reset({
         name: "",
         student_phone: "",
         parent_phone: "",
-        status: "미등록",
+        status: isConsultationMode ? "신규상담" : "미등록",
         department: null,
         school: "",
         school_type: null,
@@ -132,18 +151,21 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
         lead_source: null,
         start_date: null,
         end_date: null,
-        first_contact_date: null,
+        first_contact_date: getKoreanToday(),
         notes: "",
       })
       setEndDateError(null)
     }
-  }, [student, form])
+  }, [student, form, isConsultationMode])
 
-  // 모달이 닫힐 때 폼 초기화
+  // 모달이 닫힐 때 폼 및 상태 초기화
   useEffect(() => {
     if (!open) {
       form.reset()
       setEndDateError(null)
+      setCurrentStep(1)
+      setSavedStudentId(null)
+      setSavedStudentName("")
     }
   }, [open, form])
 
@@ -155,25 +177,54 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
     }
   }, [status])
 
-  // 폼 제출 처리
-  const onSubmit = async (values: FormValues) => {
+  // Step 인디케이터 컴포넌트
+  const StepIndicator = () => (
+    <div className="flex items-center justify-center space-x-4 mb-6">
+      <div className={cn(
+        "flex items-center space-x-2",
+        currentStep === 1 ? "text-primary" : "text-muted-foreground"
+      )}>
+        <div className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center border-2",
+          currentStep === 1 ? "border-primary bg-primary text-white" : "border-muted-foreground"
+        )}>
+          1
+        </div>
+        <span className="font-medium">학생 정보</span>
+      </div>
+      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+      <div className={cn(
+        "flex items-center space-x-2",
+        currentStep === 2 ? "text-primary" : "text-muted-foreground"
+      )}>
+        <div className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center border-2",
+          currentStep === 2 ? "border-primary bg-primary text-white" : "border-muted-foreground"
+        )}>
+          2
+        </div>
+        <span className="font-medium">상담 기록 (선택)</span>
+      </div>
+    </div>
+  )
+
+  // Step 1 제출 (학생 정보 저장 후 Step 2로)
+  const handleStep1Submit = async () => {
+    // 폼 유효성 검사
+    const isValid = await form.trigger()
+    if (!isValid) return
+
+    const values = form.getValues()
+
     // 최초 상담일 필수 검증
     if (!values.first_contact_date) {
-      toast({
-        title: "입력 오류",
-        description: "최초 상담일은 필수로 입력해야 합니다.",
-        variant: "destructive",
-      })
+      toast.error("최초 상담일은 필수로 입력해야 합니다.")
       return
     }
 
     // 재원 상태일 때 시작일 필수 검증
     if (values.status === "재원" && !values.start_date) {
-      toast({
-        title: "입력 오류", 
-        description: "재원 상태인 경우 시작일을 입력해야 합니다.",
-        variant: "destructive",
-      })
+      toast.error("재원 상태인 경우 시작일을 입력해야 합니다.")
       return
     }
 
@@ -185,71 +236,78 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
 
     setIsSubmitting(true)
     try {
-      // 날짜를 ISO 문자열로 변환하고 타입을 명시적으로 정의
-      // 날짜 변환 로깅 (디버깅용)
-      if (values.end_date && values.status === "퇴원") {
-        console.log('퇴원일 처리:', {
-          originalDate: values.end_date,
-          koreanDateString: getKoreanDateString(values.end_date),
-          oldMethod: values.end_date.toISOString().split("T")[0],
-          studentName: values.name
-        })
-      }
-
       const baseFormattedValues = {
         name: values.name,
-        student_phone: values.student_phone,
-        parent_phone: values.parent_phone,
+        student_phone: values.student_phone || null,
+        parent_phone: values.parent_phone || null,
         status: values.status as StudentStatus,
-        department: values.department as Department | null,
-        school: values.school,
-        school_type: values.school_type as SchoolType | null,
-        grade: values.grade,
-        has_sibling: values.has_sibling,
-        lead_source: values.lead_source as LeadSource | null,
+        department: values.department || null,
+        school: values.school || null,
+        school_type: values.school_type || null,  // 빈 문자열을 null로 변환
+        grade: values.grade || null,
+        has_sibling: values.has_sibling || false,
+        lead_source: values.lead_source || null,
         start_date: values.start_date ? getKoreanDateString(values.start_date) : null,
         end_date: values.end_date ? getKoreanDateString(values.end_date) : null,
         first_contact_date: values.first_contact_date ? getKoreanDateString(values.first_contact_date) : null,
-        notes: values.notes,
+        notes: values.notes || null,
       }
 
-      let result
       if (student) {
-        // 기존 학생 정보 수정 - UpdateStudentData 타입으로 캐스팅
-        const updateData: UpdateStudentData = baseFormattedValues
-        result = await updateStudent(student.id, updateData)
+        // 기존 학생 정보 수정
+        const { error } = await supabase
+          .from("students")
+          .update(baseFormattedValues)
+          .eq("id", student.id)
+
+        if (error) throw error
+        setSavedStudentId(student.id)
       } else {
-        // 새 학생 등록 - CreateStudentData 타입으로 캐스팅
-        const createData: CreateStudentData = baseFormattedValues
-        result = await createStudent(createData)
+        // 새 학생 등록
+        const { data, error } = await supabase
+          .from("students")
+          .insert(baseFormattedValues)
+          .select()
+          .single()
+
+        if (error) throw error
+        if (data) {
+          setSavedStudentId(data.id)
+        }
       }
 
-      if (result.error) {
-        throw result.error
-      }
+      setSavedStudentName(values.name)
+      toast.success("학생 정보가 저장되었습니다.")
 
-      // 성공 메시지 표시
-      toast({
-        title: student ? "학생 정보 수정 완료" : "학생 등록 완료",
-        description: student ? "학생 정보가 성공적으로 수정되었습니다." : "새로운 학생이 등록되었습니다.",
-      })
-
-      // 라우터 리프레시
-      router.refresh()
-
-      // 모달 닫기 및 데이터 새로고침
-      onOpenChange(false)
-      if (onSuccess) onSuccess()
-    } catch (error) {
-      console.error("Error submitting form:", error)
-      toast({
-        title: "오류 발생",
-        description: "학생 정보 저장 중 오류가 발생했습니다. 다시 시도해주세요.",
-        variant: "destructive",
-      })
+      // Step 2로 이동
+      setCurrentStep(2)
+    } catch (error: any) {
+      const errorMessage = error?.message || error?.error || "알 수 없는 오류가 발생했습니다"
+      toast.error(`학생 정보 저장 실패: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // 상담 기록 건너뛰기
+  const handleSkipConsultation = () => {
+    router.refresh()
+    onSuccess?.()
+    onOpenChange(false)
+    toast.info("학생 정보가 저장되었습니다. 상담 기록은 나중에 추가할 수 있습니다.")
+  }
+
+  // 상담 기록 저장 완료
+  const handleConsultationSaved = () => {
+    setIsConsultationModalOpen(false)
+    toast.success("상담 정보가 성공적으로 입력되었습니다.")
+
+    // 잠시 후 모달 닫기
+    setTimeout(() => {
+      router.refresh()
+      onSuccess?.()
+      onOpenChange(false)
+    }, 1000)
   }
 
   // 날짜 선택 컴포넌트 렌더링 함수
@@ -257,6 +315,7 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
     label: string,
     name: "start_date" | "end_date" | "first_contact_date",
     isRequired = false,
+    disabled = false
   ) => {
     return (
       <FormField
@@ -264,74 +323,39 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
         name={name}
         render={({ field }) => (
           <FormItem className="flex flex-col">
-            <FormLabel className={isRequired ? "font-bold" : ""}>
-              {label} {isRequired && <span className="text-destructive">*</span>}
+            <FormLabel>
+              {label} {isRequired && "*"}
             </FormLabel>
             <Popover>
               <PopoverTrigger asChild>
                 <FormControl>
                   <Button
-                    variant={"outline"}
-                    className={`w-full pl-3 text-left font-normal ${
-                      !field.value ? "text-muted-foreground" : ""
-                    } ${name === "end_date" && endDateError ? "border-destructive" : ""}`}
+                    variant="outline"
+                    className={cn(
+                      "w-full pl-3 text-left font-normal",
+                      !field.value && "text-muted-foreground"
+                    )}
+                    disabled={disabled}
                   >
-                    {field.value ? <span>{format(field.value, "PPP", { locale: ko })}</span> : <span>날짜 선택</span>}
+                    {field.value ? format(field.value, "PPP", { locale: ko }) : <span>날짜 선택</span>}
                     <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                   </Button>
                 </FormControl>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <div className="flex flex-col">
-                  <Calendar
-                    mode="single"
-                    selected={field.value || undefined}
-                    onSelect={(date) => {
-                      // 같은 날짜를 다시 클릭하면 선택 해제
-                      if (field.value && date && format(field.value, "yyyy-MM-dd") === format(date, "yyyy-MM-dd")) {
-                        field.onChange(null)
-                      } else {
-                        field.onChange(date)
-                      }
-                      if (name === "end_date" && status === "퇴원") {
-                        setEndDateError(null)
-                      }
-                    }}
-                    disabled={(date) => {
-                      // 최초 상담일만 미래 날짜 제한
-                      if (name === "first_contact_date" && date > new Date()) {
-                        return true
-                      }
-                      // 과거 날짜 제한 (모든 날짜)
-                      return date < new Date("1900-01-01")
-                    }}
-                    initialFocus
-                    locale={ko}
-                  />
-                  {field.value && (
-                    <div className="p-2 border-t">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          field.onChange(null)
-                          if (name === "end_date") {
-                            setEndDateError(null)
-                          }
-                        }}
-                      >
-                        날짜 선택 취소
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <Calendar
+                  mode="single"
+                  selected={field.value || undefined}
+                  onSelect={field.onChange}
+                  disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                  initialFocus
+                />
               </PopoverContent>
             </Popover>
             {name === "end_date" && endDateError && (
               <p className="text-sm font-medium text-destructive">{endDateError}</p>
             )}
+            <FormMessage />
           </FormItem>
         )}
       />
@@ -339,278 +363,343 @@ export function StudentFormModal({ open, onOpenChange, student, onSuccess }: Stu
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{student ? "학생 정보 수정" : "신규 학생 등록"}</DialogTitle>
-          <DialogDescription>
-            {student ? "학생의 정보를 수정하세요." : "새로운 학생을 등록하세요. 모든 필수 정보를 입력해주세요."}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{student ? "학생 정보 수정" : "새 학생 등록"}</DialogTitle>
+            <DialogDescription>학생의 정보를 {student ? "수정" : "입력"}해주세요.</DialogDescription>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 기본 정보 */}
+          {/* Step 인디케이터 */}
+          <StepIndicator />
+
+          <Form {...form}>
+            {currentStep === 1 ? (
+              // Step 1: 학생 정보
+              <form onSubmit={(e) => { e.preventDefault(); handleStep1Submit(); }} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* 기본 정보 */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">기본 정보</h3>
+
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>이름 *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="홍길동" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="student_phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>학생 연락처</FormLabel>
+                          <FormControl>
+                            <Input placeholder="01012345678" {...field} value={field.value || ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="parent_phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>학부모 연락처</FormLabel>
+                          <FormControl>
+                            <Input placeholder="01012345678" {...field} value={field.value || ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>상태 *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="상태 선택" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="재원">재원</SelectItem>
+                              <SelectItem value="퇴원">퇴원</SelectItem>
+                              <SelectItem value="휴원">휴원</SelectItem>
+                              <SelectItem value="미등록">미등록</SelectItem>
+                              <SelectItem value="신규상담">신규상담</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="department"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>담당관</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="담당관 선택" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="고등관">고등관</SelectItem>
+                              <SelectItem value="중등관">중등관</SelectItem>
+                              <SelectItem value="영재관">영재관</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="has_sibling"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>형제 할인 대상</FormLabel>
+                            <FormDescription>형제가 함께 수강중인 경우 체크해주세요.</FormDescription>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* 학교 및 추가 정보 */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">학교 정보</h3>
+
+                    <FormField
+                      control={form.control}
+                      name="school"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>학교</FormLabel>
+                          <FormControl>
+                            <Input placeholder="OO고등학교" {...field} value={field.value || ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="school_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>학교 구분</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="학교 구분 선택" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="초등학교">초등학교</SelectItem>
+                              <SelectItem value="중학교">중학교</SelectItem>
+                              <SelectItem value="고등학교">고등학교</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="grade"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>학년</FormLabel>
+                          <Select
+                            onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                            value={field.value?.toString() || ""}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="학년 선택" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="1">1학년</SelectItem>
+                              <SelectItem value="2">2학년</SelectItem>
+                              <SelectItem value="3">3학년</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="lead_source"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>유입 경로</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="유입 경로 선택" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="블로그">블로그</SelectItem>
+                              <SelectItem value="입소문">입소문</SelectItem>
+                              <SelectItem value="전화상담">전화상담</SelectItem>
+                              <SelectItem value="원외학부모추천">원외학부모추천</SelectItem>
+                              <SelectItem value="원내학부모추천">원내학부모추천</SelectItem>
+                              <SelectItem value="원내친구추천">원내친구추천</SelectItem>
+                              <SelectItem value="원외친구추천">원외친구추천</SelectItem>
+                              <SelectItem value="오프라인">오프라인</SelectItem>
+                              <SelectItem value="형제">형제</SelectItem>
+                              <SelectItem value="문자메세지">문자메세지</SelectItem>
+                              <SelectItem value="부원장">부원장</SelectItem>
+                              <SelectItem value="맘까페">맘까페</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* 날짜 정보 */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">날짜 정보</h3>
+                    {renderDatePicker("시작일", "start_date", status === "재원")}
+                    {renderDatePicker("종료일", "end_date", status === "퇴원")}
+                    {renderDatePicker("최초 상담일", "first_contact_date", true)}
+                  </div>
+
+                  {/* 메모 */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">추가 정보</h3>
+
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>메모</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="학생에 대한 추가 정보를 입력하세요."
+                              className="min-h-[120px]"
+                              {...field}
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    취소
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "처리 중..." : student ? "다음" : "저장 후 다음"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            ) : (
+              // Step 2: 상담 기록
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">기본 정보</h3>
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    상담 기록은 선택사항입니다. 나중에 학생 상세 페이지에서도 추가할 수 있습니다.
+                  </AlertDescription>
+                </Alert>
 
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>이름 *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="홍길동" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="flex items-center justify-center py-12 border-2 border-dashed rounded-lg">
+                  <div className="text-center space-y-4">
+                    <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground" />
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-medium">상담 기록 추가</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {savedStudentName} 학생의 상담 내용을 기록하시겠습니까?
+                      </p>
+                    </div>
+                    <Button onClick={() => setIsConsultationModalOpen(true)}>
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      상담 기록 작성
+                    </Button>
+                  </div>
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name="student_phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>학생 연락처</FormLabel>
-                      <FormControl>
-                        <Input placeholder="01012345678" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="parent_phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>학부모 연락처</FormLabel>
-                      <FormControl>
-                        <Input placeholder="01012345678" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>상태 *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="상태 선택" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="재원">재원</SelectItem>
-                          <SelectItem value="퇴원">퇴원</SelectItem>
-                          <SelectItem value="휴원">휴원</SelectItem>
-                          <SelectItem value="미등록">미등록</SelectItem>
-                          <SelectItem value="신규상담">신규상담</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="department"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>담당관</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="담당관 선택" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="고등관">고등관</SelectItem>
-                          <SelectItem value="중등관">중등관</SelectItem>
-                          <SelectItem value="영재관">영재관</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="has_sibling"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                      <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>형제자매 여부</FormLabel>
-                        <FormDescription>형제자매가 있는 경우 체크해주세요.</FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+                <DialogFooter className="flex justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCurrentStep(1)}
+                  >
+                    이전
+                  </Button>
+                  <div className="space-x-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={handleSkipConsultation}
+                    >
+                      건너뛰기
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={handleSkipConsultation}
+                    >
+                      완료
+                    </Button>
+                  </div>
+                </DialogFooter>
               </div>
+            )}
+          </Form>
+        </DialogContent>
+      </Dialog>
 
-              {/* 학교 정보 */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">학교 정보</h3>
-
-                <FormField
-                  control={form.control}
-                  name="school"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>학교</FormLabel>
-                      <FormControl>
-                        <Input placeholder="OO중" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="school_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>학교 유형</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="학교 유형 선택" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="초등학교">초등학교</SelectItem>
-                          <SelectItem value="중학교">중학교</SelectItem>
-                          <SelectItem value="고등학교">고등학교</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="grade"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>학년</FormLabel>
-                      <Select
-                        onValueChange={(value) => field.onChange(value ? Number(value) : null)}
-                        value={field.value?.toString() || ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="학년 선택" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="1">1학년</SelectItem>
-                          <SelectItem value="2">2학년</SelectItem>
-                          <SelectItem value="3">3학년</SelectItem>
-                          <SelectItem value="4">4학년</SelectItem>
-                          <SelectItem value="5">5학년</SelectItem>
-                          <SelectItem value="6">6학년</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="lead_source"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>유입 경로</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="유입 경로 선택" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="블로그">블로그</SelectItem>
-                          <SelectItem value="입소문">입소문</SelectItem>
-                          <SelectItem value="전화상담">전화상담</SelectItem>
-                          <SelectItem value="원외학부모추천">원외학부모추천</SelectItem>
-                          <SelectItem value="원내학부모추천">원내학부모추천</SelectItem>
-                          <SelectItem value="원내친구추천">원내친구추천</SelectItem>
-                          <SelectItem value="원외친구추천">원외친구추천</SelectItem>
-                          <SelectItem value="오프라인">오프라인</SelectItem>
-                          <SelectItem value="형제">형제</SelectItem>
-                          <SelectItem value="문자메세지">문자메세지</SelectItem>
-                          <SelectItem value="부원장">부원장</SelectItem>
-                          <SelectItem value="맘까페">맘까페</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* 날짜 정보 */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">날짜 정보</h3>
-
-                {/* 날짜 선택 컴포넌트 사용 */}
-                {renderDatePicker("시작일", "start_date", status === "재원")}
-                {renderDatePicker("종료일", "end_date", status === "퇴원")}
-                {renderDatePicker("최초 상담일", "first_contact_date", true)}
-              </div>
-
-              {/* 메모 */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">추가 정보</h3>
-
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>메모</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="학생에 대한 추가 정보를 입력하세요."
-                          className="min-h-[120px]"
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                취소
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "처리 중..." : student ? "수정" : "등록"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+      {/* 상담 기록 모달 */}
+      {isConsultationModalOpen && savedStudentId && (
+        <ConsultationModal
+          isOpen={isConsultationModalOpen}
+          onClose={() => setIsConsultationModalOpen(false)}
+          studentInfo={{
+            studentId: savedStudentId,
+            studentName: savedStudentName
+          }}
+          onSuccess={handleConsultationSaved}
+        />
+      )}
+    </>
   )
 }

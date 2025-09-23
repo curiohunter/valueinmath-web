@@ -13,6 +13,7 @@ import { TuitionTable } from "@/components/tuition/tuition-table";
 import { Save, Trash2, Download, Filter, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput } from "@/types/tuition";
+import { exportTuitionToExcelWithPhone } from "@/lib/excel-export";
 
 // 금액 포맷팅 함수
 const formatAmount = (amount: number) => {
@@ -187,7 +188,8 @@ export default function TuitionHistoryPage() {
           amount,
           note,
           payment_status,
-          payment_date,
+          period_start_date,
+          period_end_date,
           classes!left(name),
           students!left(name, status)
         `);
@@ -262,7 +264,7 @@ export default function TuitionHistoryPage() {
           classId: item.class_id,
           className: className,
           studentId: item.student_id,
-          studentName: isEntranceTest ? studentName : 
+          studentName: isEntranceTest ? studentName :
                        (isRetired ? `${studentName} (퇴원)` : studentName),
           year: item.year,
           month: item.month,
@@ -271,7 +273,8 @@ export default function TuitionHistoryPage() {
           amount: item.amount,
           note: item.note || '',
           paymentStatus: item.payment_status,
-          paymentDate: item.payment_date || undefined
+          periodStartDate: item.period_start_date || undefined,
+          periodEndDate: item.period_end_date || undefined
         };
       });
 
@@ -402,7 +405,9 @@ export default function TuitionHistoryPage() {
         payment_status: row.paymentStatus,
         amount: row.amount,
         is_sibling: row.isSibling,
-        note: row.note || undefined
+        note: row.note || undefined,
+        period_start_date: row.periodStartDate || undefined,
+        period_end_date: row.periodEndDate || undefined
       };
 
       const { error } = await supabase
@@ -524,6 +529,42 @@ export default function TuitionHistoryPage() {
     }
   };
 
+  // 엑셀 내보내기 핸들러
+  const handleExport = async () => {
+    try {
+      // filteredData를 사용하여 현재 필터된 데이터만 내보내기
+      const getParentPhone = async (studentId: string): Promise<string | null> => {
+        const { data, error } = await supabase
+          .from("students")
+          .select("parent_phone")
+          .eq("id", studentId)
+          .single();
+
+        if (error || !data) return null;
+        return data.parent_phone;
+      };
+
+      // 파일명 생성 (날짜 범위 포함)
+      let filename = "학원비_청구";
+      if (dateRange?.from || dateRange?.to) {
+        if (dateRange.from) {
+          const [year, month] = dateRange.from.split('-');
+          filename += `_${year}년${parseInt(month)}월`;
+        }
+        if (dateRange.to && dateRange.to !== dateRange.from) {
+          const [year, month] = dateRange.to.split('-');
+          filename += `-${year}년${parseInt(month)}월`;
+        }
+      }
+
+      await exportTuitionToExcelWithPhone(filteredData, getParentPhone, filename);
+      toast.success("엑셀 파일이 다운로드되었습니다.");
+    } catch (error) {
+      console.error("엑셀 내보내기 에러:", error);
+      toast.error("엑셀 내보내기 중 오류가 발생했습니다.");
+    }
+  };
+
   // 전체 저장 핸들러 (모든 변경된 데이터 저장)
   const handleSave = async () => {
     // 변경된 데이터만 찾기
@@ -548,7 +589,9 @@ export default function TuitionHistoryPage() {
           payment_status: row.paymentStatus,
           amount: row.amount,
           is_sibling: row.isSibling,
-          note: row.note || undefined
+          note: row.note || undefined,
+          period_start_date: row.periodStartDate || undefined,
+          period_end_date: row.periodEndDate || undefined
         };
 
         const { error } = await supabase
@@ -717,6 +760,7 @@ export default function TuitionHistoryPage() {
             onStudentSelectionChange={setSelectedStudents}
             teachers={teachers}
             onSearch={handleSearch}
+            onExport={handleExport}
           />
           
         </div>

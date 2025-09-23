@@ -16,7 +16,12 @@ import { EntranceTestTable, type EntranceTestData as EntranceTestTableData } fro
 import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
-import { ConsultationModal, type ConsultationData } from "@/components/dashboard/ConsultationModal"
+// ConsultationModal removed - using StudentFormModal instead
+import type { Database } from "@/types/database"
+
+export type ConsultationData = Database['public']['Tables']['students']['Row'] & {
+  entrance_tests?: any[]
+}
 import { StatsCards } from "@/components/dashboard/StatsCards"
 import { StudentFormModal } from "@/components/students/student-form-modal"
 import { ClassFormModal } from "@/components/students/classes/class-form-modal"
@@ -1205,8 +1210,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* 신규상담 편집 모달 */}
-      <ConsultationModal
+      {/* 신규상담 편집 모달 - StudentFormModal 사용 */}
+      <StudentFormModal
         open={isConsultationModalOpen}
         onOpenChange={(open) => {
           setIsConsultationModalOpen(open)
@@ -1215,8 +1220,14 @@ export default function DashboardPage() {
             setEditingConsultation(null)
           }
         }}
-        consultation={editingConsultation}
-        onSave={handleConsultationSave}
+        student={editingConsultation}
+        onSuccess={async () => {
+          await loadConsultations()
+          await loadStats()
+          setIsConsultationModalOpen(false)
+          setEditingConsultation(null)
+        }}
+        isConsultationMode={true}
       />
 
       {/* 입학테스트 편집 모달 */}

@@ -16,6 +16,25 @@ import StudentClassTabs from "@/components/students/StudentClassTabs"
 import { Download, ChevronLeft, ChevronRight } from "lucide-react"
 import type { TuitionRow, TuitionFeeInput } from "@/types/tuition"
 
+// 해당 월의 첫날과 마지막 날 계산
+function getMonthDateRange(year: number, month: number) {
+  // JavaScript Date는 0-based month를 사용 (0=1월, 1=2월, ...)
+  // month 파라미터는 1-based (1=1월, 2=2월, ...)
+  const firstDay = new Date(year, month - 1, 1); // 해당 월의 첫 날
+  // 마지막 날: 다음 달의 0일을 구하면 이번 달의 마지막 날이 됨
+  // month는 이미 1-based이므로, 그대로 사용하면 다음 달의 0일
+  const lastDayDate = new Date(year, month, 0);
+
+  // 날짜를 제대로 설정하기 위해 UTC 시간대 보정
+  const adjustedFirstDay = new Date(firstDay.getTime() - firstDay.getTimezoneOffset() * 60000);
+  const adjustedLastDay = new Date(lastDayDate.getTime() - lastDayDate.getTimezoneOffset() * 60000);
+
+  return {
+    start: adjustedFirstDay.toISOString().split('T')[0],
+    end: adjustedLastDay.toISOString().split('T')[0]
+  };
+}
+
 export default function TuitionPage() {
   // 현재 연월 (기본값: 이번 달)
   const [yearMonth, setYearMonth] = useState(() => {
@@ -144,6 +163,9 @@ export default function TuitionPage() {
     const month = parseInt(yearMonth.split('-')[1])
     const newRows: TuitionRow[] = []
 
+    // 날짜 범위 계산
+    const dateRange = getMonthDateRange(year, month);
+
     // 해당 반의 모든 학생에 대해 학원비 생성
     for (const student of targetClass.students) {
       // 중복 체크 제거 - 정규 수업도 중복 추가 가능
@@ -163,7 +185,9 @@ export default function TuitionPage() {
           classType: '정규',
           amount: discountedAmount,
           note: '',
-          paymentStatus: '미납'
+          paymentStatus: '미납',
+          periodStartDate: dateRange.start,
+          periodEndDate: dateRange.end
         })
       }
     }
@@ -202,6 +226,9 @@ export default function TuitionPage() {
     const year = parseInt(yearMonth.split('-')[0])
     const month = parseInt(yearMonth.split('-')[1])
 
+    // 날짜 범위 계산
+    const dateRange = getMonthDateRange(year, month);
+
     // 중복 체크 제거 - 같은 학생을 여러 번 추가 가능
     // 반이 다르면 같은 학생이라도 추가 가능 (다른 반 수업)
     // 같은 반에서도 중복 추가 가능 (정규/특강 구분은 테이블에서)
@@ -221,7 +248,9 @@ export default function TuitionPage() {
         classType,
         amount: discountedAmount,
         note: classType === '특강' ? '특강' : '',
-        paymentStatus: '미납'
+        paymentStatus: '미납',
+        periodStartDate: dateRange.start,
+        periodEndDate: dateRange.end
       }
 
       setLocalRows(prev => [...prev, newRow])
@@ -247,10 +276,13 @@ export default function TuitionPage() {
     const year = parseInt(yearMonth.split('-')[0])
     const month = parseInt(yearMonth.split('-')[1])
 
+    // 날짜 범위 계산
+    const dateRange = getMonthDateRange(year, month);
+
     // 이미 존재하는지 확인 (신규상담 학생은 class_id가 null)
-    const exists = localRows.some(row => 
-      row.studentId === studentId && 
-      row.year === year && 
+    const exists = localRows.some(row =>
+      row.studentId === studentId &&
+      row.year === year &&
       row.month === month &&
       !row.classId // class_id가 null인 경우
     )
@@ -268,7 +300,9 @@ export default function TuitionPage() {
         classType: '입학테스트비', // 입학테스트비로 분류
         amount: 10000, // 기본 입학테스트비 (수정 가능)
         note: '', // 현금/카드 결제 방법 입력용
-        paymentStatus: '미납'
+        paymentStatus: '미납',
+        periodStartDate: dateRange.start,
+        periodEndDate: dateRange.end
       }
 
       setLocalRows(prev => [...prev, newRow])
@@ -310,7 +344,10 @@ export default function TuitionPage() {
       let totalCount = 0
       let successCount = 0
       const newRows: TuitionRow[] = []
-      
+
+      // 날짜 범위 계산
+      const dateRange = getMonthDateRange(year, month);
+
       // 각 반별로 학원비 생성
       for (const classData of classesWithStudents) {
         if (!classData.monthly_fee || classData.monthly_fee <= 0) {
@@ -349,7 +386,9 @@ export default function TuitionPage() {
               classType: '정규',
               amount,
               note: '',
-              paymentStatus: '미납'
+              paymentStatus: '미납',
+              periodStartDate: dateRange.start,
+              periodEndDate: dateRange.end
             })
             
             successCount++
@@ -453,7 +492,9 @@ export default function TuitionPage() {
         class_type: row.classType,
         amount: row.amount,
         note: row.note || undefined,
-        payment_status: row.paymentStatus
+        payment_status: row.paymentStatus,
+        period_start_date: row.periodStartDate,
+        period_end_date: row.periodEndDate
       }))
 
       const result = await saveBulk(dataToSave)

@@ -1,67 +1,39 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Edit2, Trash2 } from "lucide-react"
 
-interface MathflatRecord {
-  id: string
-  student_id: string
-  date: string
-  category: string
-  problems_solved: number
-  accuracy_rate: number
-  student?: {
-    name: string
-    school: string
-    grade: number
-    class_students?: Array<{
-      classes?: {
-        name: string
-      }
-    }>
-  }
-}
+import type { MathflatRecord } from "@/lib/mathflat/types"
 
 interface RecordTableProps {
   records: MathflatRecord[]
   loading: boolean
   onEdit: (record: MathflatRecord) => void
   onDelete: (recordId: string) => void
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  getTypeColor: (type: string) => string
 }
 
-export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableProps) {
-  const [currentPage, setCurrentPage] = useState(1)
+export function RecordTable({
+  records,
+  loading,
+  onEdit,
+  onDelete,
+  currentPage,
+  totalPages,
+  onPageChange,
+  getTypeColor
+}: RecordTableProps) {
   const [itemsPerPage, setItemsPerPage] = useState(20)
   
-  // 페이지네이션 계산
-  const totalPages = Math.ceil(records.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedRecords = records.slice(startIndex, endIndex)
-  
-  // 레코드가 변경되면 페이지를 1로 리셋
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [records])
+  // 페이지네이션 계산 - records는 이미 페이지네이션된 데이터
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case '학습지':
-        return 'bg-blue-100 text-blue-800'
-      case '교재':
-        return 'bg-green-100 text-green-800'
-      case '오답/심화':
-        return 'bg-purple-100 text-purple-800'
-      case '챌린지':
-        return 'bg-orange-100 text-orange-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
 
   const getAccuracyColor = (rate: number) => {
     if (rate >= 90) return 'text-green-600 font-semibold'
@@ -82,58 +54,51 @@ export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableP
             <TableRow>
               <TableHead>날짜</TableHead>
               <TableHead>학생</TableHead>
-              <TableHead>학교</TableHead>
-              <TableHead>담당반</TableHead>
-              <TableHead>카테고리</TableHead>
-              <TableHead className="text-right">문제 수</TableHead>
+              <TableHead>유형</TableHead>
+              <TableHead>교재명</TableHead>
+              <TableHead className="text-right">푼 문제수</TableHead>
+              <TableHead className="text-right">정답</TableHead>
+              <TableHead className="text-right">오답</TableHead>
               <TableHead className="text-right">정답률</TableHead>
               <TableHead className="text-center">작업</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedRecords.length === 0 ? (
+            {records.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8">
+                <TableCell colSpan={9} className="text-center py-8">
                   데이터가 없습니다.
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedRecords.map((record) => {
-                // 학교와 학년 조합
-                const schoolGrade = record.student?.school && record.student?.grade 
-                  ? `${record.student.school}${record.student.grade <= 6 ? record.student.grade : record.student.grade <= 9 ? record.student.grade - 6 : record.student.grade - 9}`
-                  : '-';
-                
-                // 담당반 정보 추출
-                const classNames = record.student?.class_students
-                  ?.map(cs => cs.classes?.name)
-                  .filter(Boolean)
-                  .join(', ') || '-';
-                
+              records.map((record) => {
                 return (
                   <TableRow key={record.id}>
                     <TableCell>
-                      {new Date(record.date).toLocaleDateString('ko-KR')}
+                      {new Date(record.event_date).toLocaleDateString('ko-KR')}
                     </TableCell>
                     <TableCell className="font-medium">
-                      {record.student?.name || '-'}
+                      {record.student_name || '-'}
                     </TableCell>
                     <TableCell>
-                      {schoolGrade}
-                    </TableCell>
-                    <TableCell>
-                      {classNames}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getCategoryColor(record.category)}>
-                        {record.category}
+                      <Badge className={getTypeColor(record.mathflat_type || '')}>
+                        {record.mathflat_type || '-'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      {record.problems_solved}문제
+                    <TableCell className="text-sm">
+                      {record.book_title || '-'}
                     </TableCell>
-                    <TableCell className={`text-right ${getAccuracyColor(record.accuracy_rate)}`}>
-                      {record.accuracy_rate}%
+                    <TableCell className="text-right">
+                      {record.problem_solved || 0}문제
+                    </TableCell>
+                    <TableCell className="text-right text-green-600">
+                      {record.correct_count || 0}
+                    </TableCell>
+                    <TableCell className="text-right text-red-600">
+                      {record.wrong_count || 0}
+                    </TableCell>
+                    <TableCell className={`text-right ${getAccuracyColor(record.correct_rate || 0)}`}>
+                      {record.correct_rate || 0}%
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -186,16 +151,16 @@ export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableP
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="text-sm text-gray-600">
-            총 {records.length}개 중 {startIndex + 1}-{Math.min(endIndex, records.length)}
+            {currentPage} / {totalPages} 페이지
           </div>
           
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(1)}
+              onClick={() => onPageChange(1)}
               disabled={currentPage === 1}
             >
               처음
@@ -203,7 +168,7 @@ export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableP
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
             >
               이전
@@ -228,7 +193,7 @@ export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableP
                     key={pageNum}
                     variant={currentPage === pageNum ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setCurrentPage(pageNum)}
+                    onClick={() => onPageChange(pageNum)}
                     className="min-w-[32px]"
                   >
                     {pageNum}
@@ -240,7 +205,7 @@ export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableP
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
             >
               다음
@@ -248,7 +213,7 @@ export function RecordTable({ records, loading, onEdit, onDelete }: RecordTableP
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(totalPages)}
+              onClick={() => onPageChange(totalPages)}
               disabled={currentPage === totalPages}
             >
               마지막
