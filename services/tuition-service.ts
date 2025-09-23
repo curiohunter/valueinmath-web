@@ -130,7 +130,8 @@ export async function getTuitionFees(
       amount: row.amount,
       note: row.note || '',
       paymentStatus: row.payment_status || '미납',
-      paymentDate: row.payment_date,
+      periodStartDate: row.period_start_date,
+      periodEndDate: row.period_end_date,
     }))
     
     return { success: true, data: tuitionRows }
@@ -211,7 +212,8 @@ export async function getTuitionFeesByRange(
       amount: row.amount,
       note: row.note || '',
       paymentStatus: row.payment_status || '미납',
-      paymentDate: row.payment_date,
+      periodStartDate: row.period_start_date,
+      periodEndDate: row.period_end_date,
     }))
     
     return { success: true, data: tuitionRows }
@@ -257,7 +259,8 @@ export async function saveTuitionFee(
         amount: data.amount,
         note: data.note || null,
         payment_status: data.payment_status || '미납',
-        payment_date: data.payment_date || null,
+        period_start_date: data.period_start_date || null,
+        period_end_date: data.period_end_date || null,
         student_name_snapshot: studentData?.name || null,
         class_name_snapshot: classData?.name || null,
       }, {
@@ -320,7 +323,8 @@ export async function saveTuitionFees(
       amount: data.amount,
       note: data.note || null,
       payment_status: data.payment_status || '미납',
-      payment_date: data.payment_date || null,
+      period_start_date: data.period_start_date || null,
+      period_end_date: data.period_end_date || null,
       student_name_snapshot: studentNameMap.get(data.student_id) || null,
       class_name_snapshot: data.class_id ? classNameMap.get(data.class_id) || null : null,
     }))
