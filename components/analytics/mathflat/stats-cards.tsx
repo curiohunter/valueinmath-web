@@ -37,12 +37,12 @@ export function StatsCards() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* 카드 1: 교재/학습지 정답률 차이 10% 이상 */}
+      {/* 카드 1: 교재 대비 학습지 정답률 낮은 학생 */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center">
             <AlertTriangle className="w-4 h-4 mr-2 text-yellow-500" />
-            정답률 격차 주의
+            학습지 부진 학생
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -54,7 +54,7 @@ export function StatsCards() {
           ) : stats?.rateDifferenceStudents && stats.rateDifferenceStudents.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                교재/학습지 정답률 10%↑ 차이
+                교재 대비 학습지 정답률 낮은 TOP 5
               </p>
               {stats.rateDifferenceStudents.slice(0, 5).map((student, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
@@ -70,7 +70,7 @@ export function StatsCards() {
             </div>
           ) : (
             <div className="text-sm text-muted-foreground">
-              정답률 격차가 큰 학생이 없습니다
+              학습지 정답률이 낮은 학생이 없습니다
             </div>
           )}
         </CardContent>
