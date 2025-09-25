@@ -22,17 +22,17 @@ export async function GET(request: NextRequest) {
     weekAgo.setDate(weekAgo.getDate() - 7);
     const weekAgoStr = weekAgo.toISOString().split('T')[0];
 
-    // 1. 교재/학습지 정답률 차이 10% 이상 학생 (최근 7일)
+    // 1. 교재/학습지 정답률 차이 계산 (최근 7일, 정답 문제수 합 / 푼 문제수 합)
     const { data: weeklyRecords } = await supabase
       .from('mathflat_records')
-      .select('student_id, student_name, mathflat_type, correct_rate')
+      .select('student_id, student_name, mathflat_type, correct_count, problem_solved')
       .gte('event_date', weekAgoStr);
 
-    // 학생별 교재/학습지 평균 정답률 계산
+    // 학생별 교재/학습지 정답 문제수와 푼 문제수 합산
     const studentRatesByType = new Map<string, {
       student_name: string;
-      교재: { sum: number; count: number };
-      학습지: { sum: number; count: number };
+      교재: { correct_sum: number; total_sum: number };
+      학습지: { correct_sum: number; total_sum: number };
     }>();
 
     if (weeklyRecords) {
@@ -41,22 +41,22 @@ export async function GET(request: NextRequest) {
         if (!studentRatesByType.has(key)) {
           studentRatesByType.set(key, {
             student_name: record.student_name,
-            교재: { sum: 0, count: 0 },
-            학습지: { sum: 0, count: 0 }
+            교재: { correct_sum: 0, total_sum: 0 },
+            학습지: { correct_sum: 0, total_sum: 0 }
           });
         }
         const stats = studentRatesByType.get(key)!;
         if (record.mathflat_type === '교재') {
-          stats.교재.sum += record.correct_rate;
-          stats.교재.count++;
+          stats.교재.correct_sum += record.correct_count;
+          stats.교재.total_sum += record.problem_solved;
         } else if (record.mathflat_type === '학습지') {
-          stats.학습지.sum += record.correct_rate;
-          stats.학습지.count++;
+          stats.학습지.correct_sum += record.correct_count;
+          stats.학습지.total_sum += record.problem_solved;
         }
       });
     }
 
-    // 10% 이상 차이나는 학생 찾기
+    // 교재 대비 학습지 정답률이 낮은 학생 찾기
     const rateDifferenceStudents: Array<{
       student_name: string;
       교재_rate: number;
@@ -65,12 +65,14 @@ export async function GET(request: NextRequest) {
     }> = [];
 
     studentRatesByType.forEach((stats) => {
-      if (stats.교재.count > 0 && stats.학습지.count > 0) {
-        const 교재_rate = Math.round(stats.교재.sum / stats.교재.count);
-        const 학습지_rate = Math.round(stats.학습지.sum / stats.학습지.count);
-        const difference = Math.abs(교재_rate - 학습지_rate);
+      if (stats.교재.total_sum > 0 && stats.학습지.total_sum > 0) {
+        // 정답 문제수 합 / 푼 문제수 합 * 100
+        const 교재_rate = Math.round((stats.교재.correct_sum / stats.교재.total_sum) * 100);
+        const 학습지_rate = Math.round((stats.학습지.correct_sum / stats.학습지.total_sum) * 100);
+        const difference = 교재_rate - 학습지_rate; // 교재 - 학습지 (양수면 학습지가 더 낮음)
 
-        if (difference >= 10) {
+        // 학습지 정답률이 교재보다 낮은 경우만 포함
+        if (difference > 0) {
           rateDifferenceStudents.push({
             student_name: stats.student_name,
             교재_rate,
@@ -81,10 +83,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // 차이가 큰 순서대로 정렬
+    // 차이가 큰 순서대로 정렬 (교재 대비 학습지가 가장 낮은 순)
     rateDifferenceStudents.sort((a, b) => b.difference - a.difference);
 
-    // 2. 교재 정답률 60% 이하 학생 (최근 7일)
+    // 2. 교재 정답률 60% 이하 학생 (최근 7일, 정답 문제수 합 / 푼 문제수 합)
     const lowTextbookStudents: Array<{
       student_name: string;
       average_rate: number;
@@ -92,13 +94,14 @@ export async function GET(request: NextRequest) {
     }> = [];
 
     studentRatesByType.forEach((stats) => {
-      if (stats.교재.count > 0) {
-        const average_rate = Math.round(stats.교재.sum / stats.교재.count);
+      if (stats.교재.total_sum > 0) {
+        // 정답 문제수 합 / 푼 문제수 합 * 100
+        const average_rate = Math.round((stats.교재.correct_sum / stats.교재.total_sum) * 100);
         if (average_rate <= 60) {
           lowTextbookStudents.push({
             student_name: stats.student_name,
             average_rate,
-            problem_count: stats.교재.count
+            problem_count: stats.교재.total_sum
           });
         }
       }
