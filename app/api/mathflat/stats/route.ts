@@ -15,18 +15,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 오늘 날짜와 일주일 전 날짜
+    // 오늘 날짜와 2주 전 날짜
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const twoWeeksAgoStr = twoWeeksAgo.toISOString().split('T')[0];
 
-    // 1. 교재/학습지 정답률 차이 계산 (최근 7일, 정답 문제수 합 / 푼 문제수 합)
+    // 1. 교재/학습지 정답률 차이 계산 (최근 2주, 정답 문제수 합 / 푼 문제수 합)
     const { data: weeklyRecords } = await supabase
       .from('mathflat_records')
       .select('student_id, student_name, mathflat_type, correct_count, problem_solved')
-      .gte('event_date', weekAgoStr);
+      .gte('event_date', twoWeeksAgoStr);
 
     // 학생별 교재/학습지 정답 문제수와 푼 문제수 합산
     const studentRatesByType = new Map<string, {
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     // 차이가 큰 순서대로 정렬 (교재 대비 학습지가 가장 낮은 순)
     rateDifferenceStudents.sort((a, b) => b.difference - a.difference);
 
-    // 2. 교재 정답률 60% 이하 학생 (최근 7일, 정답 문제수 합 / 푼 문제수 합)
+    // 2. 교재 정답률 60% 이하 학생 (최근 2주, 정답 문제수 합 / 푼 문제수 합)
     const lowTextbookStudents: Array<{
       student_name: string;
       average_rate: number;
@@ -110,12 +110,12 @@ export async function GET(request: NextRequest) {
     // 정답률이 낮은 순서대로 정렬
     lowTextbookStudents.sort((a, b) => a.average_rate - b.average_rate);
 
-    // 3. 챌린지/챌린지오답 가장 많이 한 학생 상위 3명 (최근 7일)
+    // 3. 챌린지/챌린지오답 가장 많이 한 학생 상위 3명 (최근 2주)
     const { data: challengeData } = await supabase
       .from('mathflat_records')
       .select('student_id, student_name, mathflat_type, problem_solved')
       .in('mathflat_type', ['챌린지', '챌린지오답'])
-      .gte('event_date', weekAgoStr);
+      .gte('event_date', twoWeeksAgoStr);
 
     const challengeStats = new Map<string, {
       student_name: string;
@@ -144,11 +144,11 @@ export async function GET(request: NextRequest) {
         total_problems: s.total_problems
       }));
 
-    // 4. 주간 랭킹 (최근 7일 전체 문제 수 기준 상위 3명)
+    // 4. 주간 랭킹 (최근 2주 전체 문제 수 기준 상위 3명)
     const { data: allWeeklyData } = await supabase
       .from('mathflat_records')
       .select('student_id, student_name, problem_solved')
-      .gte('event_date', weekAgoStr);
+      .gte('event_date', twoWeeksAgoStr);
 
     const weeklyRankingStats = new Map<string, {
       student_name: string;

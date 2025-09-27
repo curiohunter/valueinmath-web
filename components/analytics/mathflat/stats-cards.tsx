@@ -54,7 +54,7 @@ export function StatsCards() {
           ) : stats?.rateDifferenceStudents && stats.rateDifferenceStudents.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                교재 대비 학습지 정답률 낮은 TOP 5
+                교재 대비 학습지 정답률 낮은 TOP 5 (2주간)
               </p>
               {stats.rateDifferenceStudents.slice(0, 5).map((student, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
@@ -93,7 +93,7 @@ export function StatsCards() {
           ) : stats?.lowTextbookStudents && stats.lowTextbookStudents.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                교재 정답률 60% 이하
+                교재 정답률 60% 이하 (2주간 평균)
               </p>
               {stats.lowTextbookStudents.slice(0, 5).map((student, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
@@ -129,7 +129,7 @@ export function StatsCards() {
           ) : stats?.topChallengeStudents && stats.topChallengeStudents.length > 0 ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                챌린지 문제 풀이 TOP 5
+                챌린지 문제 풀이 TOP 5 (2주간)
               </p>
               {stats.topChallengeStudents.slice(0, 5).map((student, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
@@ -158,7 +158,7 @@ export function StatsCards() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center">
             <Trophy className="w-4 h-4 mr-2 text-yellow-500" />
-            주간 랭킹
+            2주간 랭킹
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -173,7 +173,7 @@ export function StatsCards() {
               {stats?.weeklyTopPerformers && stats.weeklyTopPerformers.length > 0 ? (
                 <>
                   <p className="text-xs text-muted-foreground mb-2">
-                    전체 문제 풀이 TOP 5
+                    전체 문제 풀이 TOP 5 (2주간)
                   </p>
                   {stats.weeklyTopPerformers.slice(0, 5).map((student, idx) => (
                     <div key={idx} className="flex items-center justify-between text-sm">
