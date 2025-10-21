@@ -69,8 +69,13 @@ export async function GET(request: NextRequest) {
     if (maxCorrectRate) {
       query = query.lte('correct_rate', parseInt(maxCorrectRate));
     }
+    // 검색어 필터링: 정확한 이름 매칭
+    // '김도영' 검색 시 '김도영'만 매칭, '김도은' 제외
     if (searchTerm) {
-      query = query.or(`student_name.ilike.%${searchTerm}%,book_title.ilike.%${searchTerm}%`);
+      const trimmedSearch = searchTerm.trim();
+
+      // 학생 이름: 정확히 일치 (eq) 또는 교재명: 부분 일치 (ilike)
+      query = query.or(`student_name.eq.${trimmedSearch},book_title.ilike.%${trimmedSearch}%`);
     }
 
     // 정렬 및 페이지네이션
