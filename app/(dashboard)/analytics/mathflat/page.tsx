@@ -1,9 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { 
+import {
   Calendar,
   Activity,
   TrendingUp
@@ -41,17 +40,7 @@ export default function MathFlatPage() {
       <StatsCards />
 
       {/* 학습 기록 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>매쓰플랫 학습 기록</CardTitle>
-          <CardDescription>
-            n8n을 통해 자동 수집된 학습 데이터를 관리합니다
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <StudentRecords />
-        </CardContent>
-      </Card>
+      <StudentRecords />
     </div>
   )
 }
