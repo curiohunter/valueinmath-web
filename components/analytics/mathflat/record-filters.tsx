@@ -12,8 +12,8 @@ interface RecordFiltersProps {
   setSearchTerm: (value: string) => void
   dateFilter: string
   setDateFilter: (value: string) => void
-  mathflatTypeFilter: string
-  setMathflatTypeFilter: (value: string) => void
+  mathflatTypeFilter: string[]
+  setMathflatTypeFilter: (value: string[]) => void
   selectedStudents: string[]
   setSelectedStudents: (value: string[]) => void
   studentOptions: Array<{id: string, name: string}>
@@ -58,19 +58,70 @@ export function RecordFilters({
           </SelectContent>
         </Select>
 
-        {/* 유형 선택 */}
-        <Select value={mathflatTypeFilter} onValueChange={setMathflatTypeFilter}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="유형" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">전체</SelectItem>
-            <SelectItem value="교재">교재</SelectItem>
-            <SelectItem value="학습지">학습지</SelectItem>
-            <SelectItem value="챌린지">챌린지</SelectItem>
-            <SelectItem value="챌린지오답">챌린지오답</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* 유형 선택 (다중선택) */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-[130px] justify-between text-sm font-normal"
+            >
+              {mathflatTypeFilter.length === 0
+                ? "유형 선택"
+                : mathflatTypeFilter.length === 1
+                ? mathflatTypeFilter[0]
+                : `${mathflatTypeFilter.length}개 선택`
+              }
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-0">
+            <div className="max-h-64 overflow-y-auto">
+              <div className="p-2 border-b">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                  onClick={() => {
+                    const allTypes = ["교재", "학습지", "챌린지", "챌린지오답"];
+                    if (mathflatTypeFilter.length === allTypes.length) {
+                      setMathflatTypeFilter([]);
+                    } else {
+                      setMathflatTypeFilter(allTypes);
+                    }
+                  }}
+                >
+                  {mathflatTypeFilter.length === 4 ? "전체 해제" : "전체 선택"}
+                </Button>
+              </div>
+              <div className="p-2 space-y-1">
+                {["교재", "학습지", "챌린지", "챌린지오답"].map((type) => (
+                  <div
+                    key={type}
+                    className="flex items-center space-x-2 py-1.5 px-2 rounded hover:bg-gray-100"
+                  >
+                    <Checkbox
+                      id={`type-${type}`}
+                      checked={mathflatTypeFilter.includes(type)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setMathflatTypeFilter([...mathflatTypeFilter, type]);
+                        } else {
+                          setMathflatTypeFilter(mathflatTypeFilter.filter(t => t !== type));
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor={`type-${type}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                    >
+                      {type}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         
         {/* 학생 선택 필터 */}
         <Popover>
