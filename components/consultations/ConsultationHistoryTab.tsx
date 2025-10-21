@@ -31,11 +31,11 @@ interface ConsultationHistoryTabProps {
   onDelete: (consultation: Consultation) => void;
 }
 
-export function ConsultationHistoryTab({ 
-  consultations, 
-  employees, 
-  onEdit, 
-  onDelete 
+export function ConsultationHistoryTab({
+  consultations,
+  employees,
+  onEdit,
+  onDelete
 }: ConsultationHistoryTabProps) {
   const [filteredConsultations, setFilteredConsultations] = useState<Consultation[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -44,6 +44,8 @@ export function ConsultationHistoryTab({
   const [counselorFilter, setCounselorFilter] = useState("all");
   const [dateOrder, setDateOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedContent, setExpandedContent] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   
   // Filter consultations when search or filters change
   useEffect(() => {
@@ -79,7 +81,15 @@ export function ConsultationHistoryTab({
     });
     
     setFilteredConsultations(filtered);
+    // 필터 변경 시 첫 페이지로
+    setCurrentPage(1);
   }, [consultations, searchTerm, typeFilter, statusFilter, counselorFilter, dateOrder]);
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredConsultations.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedConsultations = filteredConsultations.slice(startIndex, endIndex);
   
   const toggleContentExpansion = (consultationId: string) => {
     const newExpanded = new Set(expandedContent);
@@ -195,22 +205,23 @@ export function ConsultationHistoryTab({
         </div>
         
         {/* Consultations Table */}
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-24">날짜</TableHead>
-              <TableHead className="w-16">시간</TableHead>
-              <TableHead className="w-20">학생</TableHead>
-              <TableHead className="w-24">유형</TableHead>
-              <TableHead className="w-20">담당자</TableHead>
-              <TableHead className="w-20">방법</TableHead>
-              <TableHead className="w-32">내용</TableHead>
-              <TableHead className="w-16">상태</TableHead>
-              <TableHead className="w-24 text-right">액션</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredConsultations.map((consultation) => {
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-24">날짜</TableHead>
+                <TableHead className="w-16">시간</TableHead>
+                <TableHead className="w-20">학생</TableHead>
+                <TableHead className="w-24">유형</TableHead>
+                <TableHead className="w-20">담당자</TableHead>
+                <TableHead className="w-20">방법</TableHead>
+                <TableHead className="w-32">내용</TableHead>
+                <TableHead className="w-16">상태</TableHead>
+                <TableHead className="w-24 text-right">액션</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedConsultations.map((consultation) => {
               const date = new Date(consultation.date);
               const dateStr = date.toLocaleDateString('ko-KR');
               const timeStr = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -283,9 +294,104 @@ export function ConsultationHistoryTab({
                   </TableCell>
                 </TableRow>
               );
-            })}
-          </TableBody>
-        </Table>
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* 페이지네이션 */}
+        {filteredConsultations.length > 0 && (
+          <div className="flex items-center justify-between mt-4 px-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">페이지당</span>
+              <Select
+                value={itemsPerPage.toString()}
+                onValueChange={(value) => {
+                  setItemsPerPage(Number(value));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10개</SelectItem>
+                  <SelectItem value="20">20개</SelectItem>
+                  <SelectItem value="50">50개</SelectItem>
+                  <SelectItem value="100">100개</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              {currentPage} / {totalPages} 페이지
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+              >
+                처음
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                이전
+              </Button>
+
+              {/* 페이지 번호 표시 */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className="min-w-[32px]"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                다음
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                마지막
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

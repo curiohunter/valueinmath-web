@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -71,6 +71,8 @@ export function EntranceTestsTable({
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingData, setEditingData] = useState<Partial<EntranceTest>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // 학생 이름 찾기
   const getStudentName = (consultationId: string | null) => {
@@ -83,7 +85,7 @@ export function EntranceTestsTable({
   const sortedTests = useMemo(() => {
     const sorted = [...entranceTests].sort((a, b) => {
       let aValue, bValue;
-      
+
       if (sortField === "test_date") {
         aValue = a.test_date || "";
         bValue = b.test_date || "";
@@ -98,9 +100,20 @@ export function EntranceTestsTable({
         return aValue < bValue ? 1 : -1;
       }
     });
-    
+
     return sorted;
   }, [entranceTests, sortField, sortOrder]);
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(sortedTests.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTests = sortedTests.slice(startIndex, endIndex);
+
+  // 페이지 변경 시 처음으로 스크롤
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentPage]);
 
   // 정렬 토글
   const handleSort = (field: "test_date" | "consultation_id") => {
@@ -233,7 +246,7 @@ export function EntranceTestsTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedTests.map((test) => (
+              {paginatedTests.map((test) => (
                 <TableRow key={test.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1">
@@ -486,6 +499,100 @@ export function EntranceTestsTable({
             </TableBody>
           </Table>
         </div>
+
+        {/* 페이지네이션 */}
+        {sortedTests.length > 0 && (
+          <div className="flex items-center justify-between mt-4 px-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">페이지당</span>
+              <Select
+                value={itemsPerPage.toString()}
+                onValueChange={(value) => {
+                  setItemsPerPage(Number(value));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10개</SelectItem>
+                  <SelectItem value="20">20개</SelectItem>
+                  <SelectItem value="50">50개</SelectItem>
+                  <SelectItem value="100">100개</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              {currentPage} / {totalPages} 페이지
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+              >
+                처음
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                이전
+              </Button>
+
+              {/* 페이지 번호 표시 */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className="min-w-[32px]"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                다음
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                마지막
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 삭제 확인 다이얼로그 */}
