@@ -18,7 +18,7 @@ export function StudentRecords() {
   const [records, setRecords] = useState<MathflatRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [mathflatTypeFilter, setMathflatTypeFilter] = useState("all")
+  const [mathflatTypeFilter, setMathflatTypeFilter] = useState<string[]>([])
   const [dateFilter, setDateFilter] = useState("week") // week, month, all
   const [selectedStudents, setSelectedStudents] = useState<string[]>([])
   const [studentOptions, setStudentOptions] = useState<Array<{id: string, name: string}>>([])
@@ -131,7 +131,7 @@ export function StudentRecords() {
 
       if (startDate) params.append('startDate', startDate)
       if (endDate) params.append('endDate', endDate)
-      if (mathflatTypeFilter !== 'all') params.append('mathflatTypes', mathflatTypeFilter)
+      if (mathflatTypeFilter.length > 0) params.append('mathflatTypes', mathflatTypeFilter.join(','))
       if (selectedStudents.length > 0) params.append('studentIds', selectedStudents.join(','))
       if (searchTerm) params.append('search', searchTerm)
 
