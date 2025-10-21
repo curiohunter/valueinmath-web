@@ -533,15 +533,18 @@ export default function TuitionHistoryPage() {
   const handleExport = async () => {
     try {
       // filteredData를 사용하여 현재 필터된 데이터만 내보내기
-      const getParentPhone = async (studentId: string): Promise<string | null> => {
+      const getPaymentPhone = async (studentId: string): Promise<{payment: string | null, parent: string | null}> => {
         const { data, error } = await supabase
           .from("students")
-          .select("parent_phone")
+          .select("payment_phone, parent_phone")
           .eq("id", studentId)
           .single();
 
-        if (error || !data) return null;
-        return data.parent_phone;
+        if (error || !data) return { payment: null, parent: null };
+        return {
+          payment: data.payment_phone,
+          parent: data.parent_phone
+        };
       };
 
       // 파일명 생성 (날짜 범위 포함)
@@ -557,7 +560,7 @@ export default function TuitionHistoryPage() {
         }
       }
 
-      await exportTuitionToExcelWithPhone(filteredData, getParentPhone, filename);
+      await exportTuitionToExcelWithPhone(filteredData, getPaymentPhone, filename);
       toast.success("엑셀 파일이 다운로드되었습니다.");
     } catch (error) {
       console.error("엑셀 내보내기 에러:", error);

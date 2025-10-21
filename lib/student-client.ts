@@ -13,6 +13,7 @@ function mapStudentRowToStudent(row: StudentRow): Student {
     name: row.name,
     student_phone: row.student_phone,
     parent_phone: row.parent_phone,
+    payment_phone: row.payment_phone,
     status: row.status as Student["status"],
     department: row.department as Student["department"],
     notes: row.notes,
@@ -47,7 +48,7 @@ export async function getStudents(
     // 검색어 필터 적용
     if (filters.search) {
       query = query.or(
-        `name.ilike.%${filters.search}%,school.ilike.%${filters.search}%,student_phone.ilike.%${filters.search}%,parent_phone.ilike.%${filters.search}%`,
+        `name.ilike.%${filters.search}%,school.ilike.%${filters.search}%,student_phone.ilike.%${filters.search}%,parent_phone.ilike.%${filters.search}%,payment_phone.ilike.%${filters.search}%`,
       )
     }
 

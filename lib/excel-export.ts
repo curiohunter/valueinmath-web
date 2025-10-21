@@ -56,17 +56,19 @@ export function exportTuitionToExcel(
   XLSX.writeFile(wb, fullFilename)
 }
 
-// Enhanced version that includes parent phone numbers
+// Enhanced version that includes payment phone numbers (with fallback to parent phone)
 export async function exportTuitionToExcelWithPhone(
   data: TuitionRow[],
-  getParentPhone: (studentId: string) => Promise<string | null>,
+  getPaymentPhone: (studentId: string) => Promise<{payment: string | null, parent: string | null}>,
   filename: string = 'tuition_export'
 ) {
-  // Fetch parent phone numbers for all students
+  // Fetch payment & parent phone numbers for all students
   const dataWithPhones = await Promise.all(
     data.map(async (row) => {
-      const parentPhone = await getParentPhone(row.studentId)
-      return { ...row, parentPhone: parentPhone || '' }
+      const phones = await getPaymentPhone(row.studentId)
+      // payment_phone 우선, 없으면 parent_phone 사용
+      const finalPhone = phones.payment || phones.parent || ''
+      return { ...row, paymentPhone: finalPhone }
     })
   )
 
@@ -80,7 +82,7 @@ export async function exportTuitionToExcelWithPhone(
 
     return {
       수취인: row.studentName,
-      전화번호: row.parentPhone,
+      전화번호: row.paymentPhone,
       청구금액: row.amount,
       청구사유: 청구사유,
       안내메세지: row.note || ''

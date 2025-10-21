@@ -40,6 +40,7 @@ export function useStudentsByStatus(status?: string) {
         name: row.name,
         student_phone: row.student_phone,
         parent_phone: row.parent_phone,
+        payment_phone: row.payment_phone,
         status: row.status as StudentStatus,
         department: row.department as Department | null,
         school: row.school,
