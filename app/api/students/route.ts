@@ -12,6 +12,7 @@ function mapStudentRowToStudent(row: Database["public"]["Tables"]["students"]["R
     name: row.name,
     student_phone: row.student_phone,
     parent_phone: row.parent_phone,
+    payment_phone: row.payment_phone,
     status: row.status as Student["status"],
     department: row.department as Student["department"],
     school: row.school,

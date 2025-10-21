@@ -38,6 +38,7 @@ interface FormValues {
   name: string
   student_phone: string | null
   parent_phone: string | null
+  payment_phone: string | null
   status: string
   department: string | null
   school: string | null
@@ -89,6 +90,7 @@ export function StudentFormModal({
       name: "",
       student_phone: "",
       parent_phone: "",
+      payment_phone: "",
       status: isConsultationMode ? "신규상담" : "미등록",
       department: null,
       school: "",
@@ -117,6 +119,7 @@ export function StudentFormModal({
           name: student.name,
           student_phone: student.student_phone,
           parent_phone: student.parent_phone,
+          payment_phone: student.payment_phone,
           status: student.status,
           department: student.department,
           school: student.school,
@@ -142,6 +145,7 @@ export function StudentFormModal({
         name: "",
         student_phone: "",
         parent_phone: "",
+        payment_phone: "",
         status: isConsultationMode ? "신규상담" : "미등록",
         department: null,
         school: "",
@@ -240,6 +244,7 @@ export function StudentFormModal({
         name: values.name,
         student_phone: values.student_phone || null,
         parent_phone: values.parent_phone || null,
+        payment_phone: values.payment_phone || null,
         status: values.status as StudentStatus,
         department: values.department || null,
         school: values.school || null,
@@ -420,6 +425,23 @@ export function StudentFormModal({
                           <FormControl>
                             <Input placeholder="01012345678" {...field} value={field.value || ""} />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="payment_phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>결제번호</FormLabel>
+                          <FormControl>
+                            <Input placeholder="01012345678" {...field} value={field.value || ""} />
+                          </FormControl>
+                          <FormDescription className="text-xs">
+                            결제선생 청구용 번호 (없으면 학부모 연락처 사용)
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

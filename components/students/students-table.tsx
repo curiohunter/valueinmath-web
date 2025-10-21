@@ -274,7 +274,14 @@ export function StudentsTable() {
                     <Badge className={statusColorMap[student.status] || ""}>{student.status}</Badge>
                   </TableCell>
                   <TableCell>{student.student_phone || "-"}</TableCell>
-                  <TableCell>{student.parent_phone || "-"}</TableCell>
+                  <TableCell>
+                    <div className="space-y-0.5">
+                      <div>{student.parent_phone || "-"}</div>
+                      {student.payment_phone && student.payment_phone !== student.parent_phone && (
+                        <div className="text-xs text-muted-foreground">({student.payment_phone})</div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {student.start_date ? new Date(student.start_date).toLocaleDateString("ko-KR") : "-"}
                   </TableCell>
