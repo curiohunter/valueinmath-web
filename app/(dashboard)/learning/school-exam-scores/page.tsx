@@ -25,6 +25,7 @@ export default function SchoolExamScoresPage() {
   const [examYears, setExamYears] = useState<number[]>([])
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingScore, setEditingScore] = useState<SchoolExamScore | null>(null)
 
   const [filters, setFilters] = useState<SchoolExamScoreFilters>({
     search: "",
@@ -69,11 +70,18 @@ export default function SchoolExamScoresPage() {
   }, [loadExamYears])
 
   const handleCreate = () => {
+    setEditingScore(null)
+    setModalOpen(true)
+  }
+
+  const handleEdit = (score: SchoolExamScore) => {
+    setEditingScore(score)
     setModalOpen(true)
   }
 
   const handleModalClose = () => {
     setModalOpen(false)
+    setEditingScore(null)
   }
 
   const handleSuccess = () => {
@@ -129,14 +137,19 @@ export default function SchoolExamScoresPage() {
           <p className="text-muted-foreground">로딩 중...</p>
         </div>
       ) : (
-        <SchoolExamScoreTable scores={scores} onDelete={loadData} />
+        <SchoolExamScoreTable scores={scores} onDelete={loadData} onEdit={handleEdit} />
       )}
 
       {/* Pagination */}
       {totalPages > 1 && <Pagination totalPages={totalPages} currentPage={currentPage} />}
 
       {/* Modal */}
-      <SchoolExamScoreModal isOpen={modalOpen} onClose={handleModalClose} onSuccess={handleSuccess} />
+      <SchoolExamScoreModal
+        isOpen={modalOpen}
+        onClose={handleModalClose}
+        onSuccess={handleSuccess}
+        editingScore={editingScore}
+      />
     </div>
   )
 }
