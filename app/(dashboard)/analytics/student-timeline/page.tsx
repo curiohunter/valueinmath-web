@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, TrendingUp, Activity, Brain, BookOpen, TestTube, Users, AlertCircle } from "lucide-react"
+import { Calendar, TrendingUp, Brain, BookOpen, TestTube, Users, AlertCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { format, subMonths } from "date-fns"
 import { TimelineFilters } from "@/components/analytics/student-timeline/timeline-filters"
@@ -384,14 +384,8 @@ export default function StudentTimelinePage() {
             운영 통계
           </Button>
         </Link>
-        <Link href="/analytics/mathflat">
-          <Button variant="ghost" className="rounded-none border-b-2 border-transparent hover:border-gray-300">
-            <Activity className="w-4 h-4 mr-2" />
-            매쓰플랫
-          </Button>
-        </Link>
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="rounded-none border-b-2 border-primary"
         >
           <Calendar className="w-4 h-4 mr-2" />
