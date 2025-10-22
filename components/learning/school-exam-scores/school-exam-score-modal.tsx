@@ -43,7 +43,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
   const [schoolName, setSchoolName] = useState("")
   const [examYear, setExamYear] = useState(new Date().getFullYear().toString())
   const [examType, setExamType] = useState<"중간고사" | "기말고사">("중간고사")
-  const [schoolExamId, setSchoolExamId] = useState<string>("")
+  const [schoolExamId, setSchoolExamId] = useState<string>("none")
   const [scores, setScores] = useState<ScoreItem[]>([{ subject: "", score: "" }])
   const [notes, setNotes] = useState("")
 
@@ -130,7 +130,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
         school_name: schoolName,
         exam_year: parseInt(examYear),
         exam_type: examType,
-        school_exam_id: schoolExamId || null,
+        school_exam_id: schoolExamId === "none" ? null : schoolExamId,
         scores: scores.map((s) => ({
           subject: s.subject,
           score: s.score ? parseFloat(s.score) : null,
@@ -160,7 +160,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
     setSchoolName("")
     setExamYear(new Date().getFullYear().toString())
     setExamType("중간고사")
-    setSchoolExamId("")
+    setSchoolExamId("none")
     setScores([{ subject: "", score: "" }])
     setNotes("")
     onClose()
@@ -321,7 +321,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                   <SelectValue placeholder="시험지 선택..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">연결 안 함</SelectItem>
+                  <SelectItem value="none">연결 안 함</SelectItem>
                   {availableExams.map((exam) => (
                     <SelectItem key={exam.id} value={exam.id}>
                       {exam.school_name} - {exam.exam_year}년 {exam.semester}학기 {exam.exam_type}
