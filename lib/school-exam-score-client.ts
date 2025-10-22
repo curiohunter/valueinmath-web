@@ -260,13 +260,13 @@ export async function getSubjects(): Promise<string[]> {
 
 // 재원/퇴원 학생 목록 조회 (등록 모달용)
 export async function getActiveStudents(): Promise<
-  Array<{ id: string; name: string; grade: number; status: string }>
+  Array<{ id: string; name: string; grade: number; status: string; school: string }>
 > {
   try {
     const supabase = getSupabaseBrowserClient()
     const { data, error } = await supabase
       .from("students")
-      .select("id, name, grade, status")
+      .select("id, name, grade, status, school")
       .in("status", ["재원", "퇴원"])
       .order("status", { ascending: true }) // 재원(ㅈ)이 퇴원(ㅌ)보다 먼저 (ㄱㄴㄷ순)
       .order("name", { ascending: true }) // 이름 ㄱㄴㄷ순
