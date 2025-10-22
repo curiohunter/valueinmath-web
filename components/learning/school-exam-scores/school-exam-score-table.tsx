@@ -259,6 +259,7 @@ export function SchoolExamScoreTable({ scores, onDelete }: SchoolExamScoreTableP
                 max="100"
                 value={editScore}
                 onChange={(e) => setEditScore(e.target.value)}
+                onWheel={(e) => e.currentTarget.blur()}
               />
             </div>
             <div className="space-y-2">

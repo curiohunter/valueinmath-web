@@ -30,7 +30,7 @@ interface ScoreItem {
 
 export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamScoreModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [students, setStudents] = useState<Array<{ id: string; name: string; grade: number; status: string }>>([])
+  const [students, setStudents] = useState<Array<{ id: string; name: string; grade: number; status: string; school: string }>>([])
   const [availableExams, setAvailableExams] = useState<SchoolExam[]>([])
   const [studentSearchOpen, setStudentSearchOpen] = useState(false)
   const [studentSearchValue, setStudentSearchValue] = useState("")
@@ -187,7 +187,9 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                   aria-expanded={studentSearchOpen}
                   className="w-full justify-between"
                 >
-                  {selectedStudent ? `${selectedStudent.name} (${selectedStudent.grade}학년)` : "학생 선택..."}
+                  {selectedStudent
+                    ? `${selectedStudent.name} (${selectedStudent.school.replace(/학교$/, "")}${selectedStudent.grade})`
+                    : "학생 선택..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -223,7 +225,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                             <Check
                               className={cn("mr-2 h-4 w-4", studentId === student.id ? "opacity-100" : "opacity-0")}
                             />
-                            {student.name} ({student.grade}학년) - {student.status}
+                            {student.name} ({student.school.replace(/학교$/, "")}{student.grade}) - {student.status}
                           </CommandItem>
                         ))}
                     </CommandGroup>
@@ -324,7 +326,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                   <SelectItem value="none">연결 안 함</SelectItem>
                   {availableExams.map((exam) => (
                     <SelectItem key={exam.id} value={exam.id}>
-                      {exam.school_name} - {exam.exam_year}년 {exam.semester}학기 {exam.exam_type}
+                      {exam.school_name} - {exam.exam_year}년 {exam.grade}학년 {exam.semester}학기 {exam.exam_type}
                       {exam.pdf_file_path && " (PDF 있음)"}
                     </SelectItem>
                   ))}
@@ -360,6 +362,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                     max="100"
                     value={score.score}
                     onChange={(e) => handleScoreChange(index, "score", e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
                     placeholder="점수 (소수점 가능)"
                     className="w-40"
                   />
