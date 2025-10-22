@@ -26,7 +26,7 @@ import { CalendarIcon, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
@@ -69,7 +69,7 @@ export function MakeupModal({
   studentInfo,
   editingMakeup,
 }: MakeupModalProps) {
-  const supabase = createClient();
+  const supabase = getSupabaseBrowserClient(); // 싱글톤 사용
 
   // 중복 실행 방지 플래그
   const isSavingRef = useRef(false);
@@ -189,15 +189,14 @@ export function MakeupModal({
 
   // 저장 핸들러
   const handleSave = async () => {
-    // ✅ FIX 1: 중복 실행 방지 - 즉시 플래그 설정 (atomic operation)
+    // 중복 실행 방지
     if (isSavingRef.current) {
-      console.log("⚠️ handleSave already in progress, skipping duplicate call");
       return;
     }
-    isSavingRef.current = true;  // 즉시 설정하여 다음 호출 차단
+    isSavingRef.current = true;
     setLoading(true);
 
-    // ✅ FIX 2: 유효성 검사 (실패 시 플래그 초기화)
+    // 유효성 검사 (실패 시 플래그 초기화)
     if (makeupType === "absence" && absenceDates.length === 0) {
       isSavingRef.current = false;  // 실패 시 초기화
       setLoading(false);
@@ -261,43 +260,30 @@ export function MakeupModal({
           const absenceDate = formatDateToKST(absenceDates[0]);
 
           try {
-            // 중복 체크: 같은 날짜/학생/반/보강 기록이 이미 있는지 확인
-            const { data: existingLogs } = await supabase
+            // 보강일에 새로운 study_log 생성
+            const { error: insertError } = await supabase
               .from("study_logs")
-              .select("id")
-              .eq("student_id", studentInfo.studentId)
-              .eq("class_id", studentInfo.classId)
-              .eq("date", makeupDateStr)
-              .eq("attendance_status", 2) // 보강
-              .eq("note", `${absenceDate} 결석 보강`);
+              .insert({
+                student_id: studentInfo.studentId,
+                class_id: studentInfo.classId,
+                date: makeupDateStr,
+                attendance_status: 2, // 보강
+                homework: 5, // 정상
+                focus: 5, // 정상
+                note: `${absenceDate} 결석 보강`,
+                created_by: employee?.id || null,
+                student_name_snapshot: studentInfo.studentName,
+                class_name_snapshot: studentInfo.className
+              });
 
-            if (existingLogs && existingLogs.length > 0) {
-              console.log(`⚠️ 이미 존재하는 보강 기록: ${makeupDateStr} (${absenceDate} 결석 보강)`);
-              studyLogCreated = true; // 이미 존재하므로 성공으로 간주
+            if (!insertError) {
+              studyLogCreated = true;
+            } else if (insertError.code === '23505') {
+              // UNIQUE 제약 조건 위반 - 이미 존재함 (Supabase 내부 중복 방지)
+              studyLogCreated = true;
             } else {
-              // 보강일에 새로운 study_log 생성
-              const { error: insertError } = await supabase
-                .from("study_logs")
-                .insert({
-                  student_id: studentInfo.studentId,
-                  class_id: studentInfo.classId,
-                  date: makeupDateStr,
-                  attendance_status: 2, // 보강
-                  homework: 5, // 정상
-                  focus: 5, // 정상
-                  note: `${absenceDate} 결석 보강`,
-                  created_by: employee?.id || null,
-                  student_name_snapshot: studentInfo.studentName,
-                  class_name_snapshot: studentInfo.className
-                });
-
-              if (!insertError) {
-                console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
-                studyLogCreated = true;
-              } else {
-                console.error("보강 study_log 생성 실패:", insertError);
-                studyLogError = true;
-              }
+              console.error("보강 study_log 생성 실패:", insertError);
+              studyLogError = true;
             }
           } catch (error) {
             console.error("study_logs 동기화 중 오류:", error);
@@ -473,10 +459,8 @@ export function MakeupModal({
                   student_name_snapshot: studentInfo.studentName,
                   class_name_snapshot: studentInfo.className
                 });
-              
-              if (!logError) {
-                console.log(`결석 study_log 생성 완료: ${absenceDateStr}`);
-              } else {
+
+              if (logError) {
                 console.error("결석 study_log 생성 실패:", logError);
               }
             }
@@ -488,43 +472,27 @@ export function MakeupModal({
             const absenceDateStr = formatDateToKST(date);
 
             try {
-              // 중복 체크: 같은 날짜/학생/반/보강 기록이 이미 있는지 확인
-              const { data: existingLogs } = await supabase
+              // 보강일에 새로운 study_log 생성
+              const { error: insertError } = await supabase
                 .from("study_logs")
-                .select("id")
-                .eq("student_id", studentInfo.studentId)
-                .eq("class_id", studentInfo.classId)
-                .eq("date", makeupDateStr)
-                .eq("attendance_status", 2) // 보강
-                .eq("note", `${absenceDateStr} 결석 보강`);
+                .insert({
+                  student_id: studentInfo.studentId,
+                  class_id: studentInfo.classId,
+                  date: makeupDateStr,
+                  attendance_status: 2, // 보강
+                  homework: 5, // 정상
+                  focus: 5, // 정상
+                  note: `${absenceDateStr} 결석 보강`,
+                  created_by: employee?.id || null,
+                  student_name_snapshot: studentInfo.studentName,
+                  class_name_snapshot: studentInfo.className
+                });
 
-              if (existingLogs && existingLogs.length > 0) {
-                console.log(`⚠️ 이미 존재하는 보강 기록: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
-                studyLogCreated = true; // 이미 존재하므로 성공으로 간주
+              if (!insertError) {
+                studyLogCreated = true;
               } else {
-                // 보강일에 새로운 study_log 생성
-                const { error: insertError } = await supabase
-                  .from("study_logs")
-                  .insert({
-                    student_id: studentInfo.studentId,
-                    class_id: studentInfo.classId,
-                    date: makeupDateStr,
-                    attendance_status: 2, // 보강
-                    homework: 5, // 정상
-                    focus: 5, // 정상
-                    note: `${absenceDateStr} 결석 보강`,
-                    created_by: employee?.id || null,
-                    student_name_snapshot: studentInfo.studentName,
-                    class_name_snapshot: studentInfo.className
-                  });
-
-                if (!insertError) {
-                  console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
-                  studyLogCreated = true;
-                } else {
-                  console.error("보강 study_log 생성 실패:", insertError);
-                  studyLogError = true;
-                }
+                console.error("보강 study_log 생성 실패:", insertError);
+                studyLogError = true;
               }
             } catch (error) {
               console.error("study_logs 동기화 중 오류:", error);

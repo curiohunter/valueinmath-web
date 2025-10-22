@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { FileText, Download, Edit2, Trash2, CheckCircle2, Circle } from "lucide-react"
+import { FileText, Download, Edit2, Trash2, CheckCircle2, Circle, Eye } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import {
@@ -62,6 +62,28 @@ export function SchoolExamTable({ exams, onEdit, onDelete }: SchoolExamTableProp
     } catch (error) {
       console.error("Error downloading PDF:", error)
       toast.error("PDF 다운로드에 실패했습니다")
+    } finally {
+      setDownloadingId(null)
+    }
+  }
+
+  const handlePreview = async (exam: SchoolExam) => {
+    if (!exam.pdf_file_path) {
+      toast.error("PDF 파일이 없습니다")
+      return
+    }
+
+    setDownloadingId(exam.id)
+    try {
+      const url = await getPDFDownloadUrl(exam.pdf_file_path)
+
+      // 새 탭에서 PDF 열기 (브라우저 내장 뷰어 사용)
+      window.open(url, '_blank')
+
+      toast.success("새 탭에서 PDF를 열었습니다")
+    } catch (error) {
+      console.error("Error previewing PDF:", error)
+      toast.error("PDF 미리보기에 실패했습니다")
     } finally {
       setDownloadingId(null)
     }
@@ -133,7 +155,13 @@ export function SchoolExamTable({ exams, onEdit, onDelete }: SchoolExamTableProp
                 </TableCell>
                 <TableCell className="w-[90px]">{exam.exam_year}년</TableCell>
                 <TableCell className="w-[100px]">
-                  <Badge variant={exam.exam_type === "중간고사" ? "secondary" : "default"}>
+                  <Badge
+                    className={
+                      exam.exam_type === "중간고사"
+                        ? "bg-cyan-100 text-cyan-800 hover:bg-cyan-200"
+                        : "bg-orange-100 text-orange-800 hover:bg-orange-200"
+                    }
+                  >
                     {exam.exam_type}
                   </Badge>
                 </TableCell>
@@ -156,17 +184,30 @@ export function SchoolExamTable({ exams, onEdit, onDelete }: SchoolExamTableProp
                   </div>
                 </TableCell>
                 <TableCell className="w-[80px]">
-                  <div className="flex items-center justify-center">
+                  <div className="flex items-center justify-center gap-1">
                     {exam.pdf_file_path ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDownload(exam)}
-                        disabled={downloadingId === exam.id}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Download className="w-5 h-5" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePreview(exam)}
+                          disabled={downloadingId === exam.id}
+                          className="h-8 w-8 p-0"
+                          title="미리보기"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDownload(exam)}
+                          disabled={downloadingId === exam.id}
+                          className="h-8 w-8 p-0"
+                          title="다운로드"
+                        >
+                          <Download className="w-5 h-5" />
+                        </Button>
+                      </>
                     ) : (
                       <Circle className="w-5 h-5 text-muted-foreground" />
                     )}

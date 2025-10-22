@@ -52,6 +52,17 @@ export default function LearningTabs() {
         학교 시험지
       </Link>
       <Link
+        href="/learning/school-exam-scores"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname.startsWith("/learning/school-exam-scores")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        학교 시험 성적
+      </Link>
+      <Link
         href="/learning/learning-history"
         className={clsx(
           "px-4 py-2 font-semibold",
