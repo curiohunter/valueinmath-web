@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -70,7 +70,10 @@ export function MakeupModal({
   editingMakeup,
 }: MakeupModalProps) {
   const supabase = createClient();
-  
+
+  // 중복 실행 방지 플래그
+  const isSavingRef = useRef(false);
+
   // 상태 관리
   const [makeupType, setMakeupType] = useState<MakeupType>("absence");
   const [absenceDates, setAbsenceDates] = useState<Date[]>([]);
@@ -186,18 +189,28 @@ export function MakeupModal({
 
   // 저장 핸들러
   const handleSave = async () => {
-    // 유효성 검사
+    // ✅ FIX 1: 중복 실행 방지 - 즉시 플래그 설정 (atomic operation)
+    if (isSavingRef.current) {
+      console.log("⚠️ handleSave already in progress, skipping duplicate call");
+      return;
+    }
+    isSavingRef.current = true;  // 즉시 설정하여 다음 호출 차단
+    setLoading(true);
+
+    // ✅ FIX 2: 유효성 검사 (실패 시 플래그 초기화)
     if (makeupType === "absence" && absenceDates.length === 0) {
+      isSavingRef.current = false;  // 실패 시 초기화
+      setLoading(false);
       toast.error("결석일을 선택해주세요.");
       return;
     }
-    
+
     if (!makeupDate && status === "completed") {
+      isSavingRef.current = false;  // 실패 시 초기화
+      setLoading(false);
       toast.error("완료 상태는 보강일이 필요합니다.");
       return;
     }
-
-    setLoading(true);
     
     try {
       // 현재 사용자 정보 가져오기
@@ -246,31 +259,45 @@ export function MakeupModal({
         if (status === "completed" && makeupDate && makeupType === "absence" && absenceDates.length > 0) {
           const makeupDateStr = formatDateToKST(makeupDate);
           const absenceDate = formatDateToKST(absenceDates[0]);
-          
+
           try {
-            // 보강일에 새로운 study_log 생성 (중복 체크 없이 무조건 추가)
-            // 정규수업과 보강수업이 같은 날 있을 수 있음
-            const { error: insertError } = await supabase
+            // 중복 체크: 같은 날짜/학생/반/보강 기록이 이미 있는지 확인
+            const { data: existingLogs } = await supabase
               .from("study_logs")
-              .insert({
-                student_id: studentInfo.studentId,
-                class_id: studentInfo.classId,
-                date: makeupDateStr,
-                attendance_status: 2, // 보강
-                homework: 5, // 정상
-                focus: 5, // 정상
-                note: `${absenceDate} 결석 보강`,
-                created_by: employee?.id || null,
-                student_name_snapshot: studentInfo.studentName,
-                class_name_snapshot: studentInfo.className
-              });
-            
-            if (!insertError) {
-              console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
-              studyLogCreated = true;
+              .select("id")
+              .eq("student_id", studentInfo.studentId)
+              .eq("class_id", studentInfo.classId)
+              .eq("date", makeupDateStr)
+              .eq("attendance_status", 2) // 보강
+              .eq("note", `${absenceDate} 결석 보강`);
+
+            if (existingLogs && existingLogs.length > 0) {
+              console.log(`⚠️ 이미 존재하는 보강 기록: ${makeupDateStr} (${absenceDate} 결석 보강)`);
+              studyLogCreated = true; // 이미 존재하므로 성공으로 간주
             } else {
-              console.error("보강 study_log 생성 실패:", insertError);
-              studyLogError = true;
+              // 보강일에 새로운 study_log 생성
+              const { error: insertError } = await supabase
+                .from("study_logs")
+                .insert({
+                  student_id: studentInfo.studentId,
+                  class_id: studentInfo.classId,
+                  date: makeupDateStr,
+                  attendance_status: 2, // 보강
+                  homework: 5, // 정상
+                  focus: 5, // 정상
+                  note: `${absenceDate} 결석 보강`,
+                  created_by: employee?.id || null,
+                  student_name_snapshot: studentInfo.studentName,
+                  class_name_snapshot: studentInfo.className
+                });
+
+              if (!insertError) {
+                console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDate} 결석 보강)`);
+                studyLogCreated = true;
+              } else {
+                console.error("보강 study_log 생성 실패:", insertError);
+                studyLogError = true;
+              }
             }
           } catch (error) {
             console.error("study_logs 동기화 중 오류:", error);
@@ -459,31 +486,45 @@ export function MakeupModal({
           if (status === "completed" && makeupDate && makeupType === "absence" && newMakeup) {
             const makeupDateStr = formatDateToKST(makeupDate);
             const absenceDateStr = formatDateToKST(date);
-            
+
             try {
-              // 보강일에 새로운 study_log 생성 (중복 체크 없이 무조건 추가)
-              // 정규수업과 보강수업이 같은 날 있을 수 있음
-              const { error: insertError } = await supabase
+              // 중복 체크: 같은 날짜/학생/반/보강 기록이 이미 있는지 확인
+              const { data: existingLogs } = await supabase
                 .from("study_logs")
-                .insert({
-                  student_id: studentInfo.studentId,
-                  class_id: studentInfo.classId,
-                  date: makeupDateStr,
-                  attendance_status: 2, // 보강
-                  homework: 5, // 정상
-                  focus: 5, // 정상
-                  note: `${absenceDateStr} 결석 보강`,
-                  created_by: employee?.id || null,
-                  student_name_snapshot: studentInfo.studentName,
-                  class_name_snapshot: studentInfo.className
-                });
-              
-              if (!insertError) {
-                console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
-                studyLogCreated = true;
+                .select("id")
+                .eq("student_id", studentInfo.studentId)
+                .eq("class_id", studentInfo.classId)
+                .eq("date", makeupDateStr)
+                .eq("attendance_status", 2) // 보강
+                .eq("note", `${absenceDateStr} 결석 보강`);
+
+              if (existingLogs && existingLogs.length > 0) {
+                console.log(`⚠️ 이미 존재하는 보강 기록: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
+                studyLogCreated = true; // 이미 존재하므로 성공으로 간주
               } else {
-                console.error("보강 study_log 생성 실패:", insertError);
-                studyLogError = true;
+                // 보강일에 새로운 study_log 생성
+                const { error: insertError } = await supabase
+                  .from("study_logs")
+                  .insert({
+                    student_id: studentInfo.studentId,
+                    class_id: studentInfo.classId,
+                    date: makeupDateStr,
+                    attendance_status: 2, // 보강
+                    homework: 5, // 정상
+                    focus: 5, // 정상
+                    note: `${absenceDateStr} 결석 보강`,
+                    created_by: employee?.id || null,
+                    student_name_snapshot: studentInfo.studentName,
+                    class_name_snapshot: studentInfo.className
+                  });
+
+                if (!insertError) {
+                  console.log(`보강 study_log 생성 완료: ${makeupDateStr} (${absenceDateStr} 결석 보강)`);
+                  studyLogCreated = true;
+                } else {
+                  console.error("보강 study_log 생성 실패:", insertError);
+                  studyLogError = true;
+                }
               }
             } catch (error) {
               console.error("study_logs 동기화 중 오류:", error);
@@ -568,6 +609,7 @@ export function MakeupModal({
       toast.error("보강 저장 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+      isSavingRef.current = false; // 플래그 초기화
     }
   };
 
@@ -855,7 +897,11 @@ export function MakeupModal({
           <Button variant="outline" onClick={onClose} disabled={loading}>
             취소
           </Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={loading}
+          >
             {loading ? "저장 중..." : "저장"}
           </Button>
         </DialogFooter>

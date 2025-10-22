@@ -1,29 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Edit2, Trash2, Calendar, Clock, User, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Edit2, Trash2, Calendar, User, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
 import type { Database } from "@/types/database";
 
 type MakeupClass = Database["public"]["Tables"]["makeup_classes"]["Row"];
@@ -51,34 +43,60 @@ export function MakeupTable({
   onDelete,
   onStatusUpdate,
 }: MakeupTableProps) {
-  const supabase = createClient();
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [sortBy, setSortBy] = useState<"date" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 탭 변경 시 페이지 초기화
   React.useEffect(() => {
     setCurrentPage(1);
   }, [selectedTab]);
 
+  // 검색어 변경 시 페이지 초기화
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   // 탭별 데이터 필터링 및 정렬
   const filteredAndSortedMakeups = React.useMemo(() => {
-    // 먼저 필터링
+    // 먼저 탭별 필터링
     const filtered = makeupClasses.filter(makeup => {
+      // 탭별 필터링
+      let tabMatch = false;
       switch (selectedTab) {
         case "pending":
-          return makeup.status === "scheduled" && !makeup.makeup_date;
+          tabMatch = makeup.status === "scheduled" && !makeup.makeup_date;
+          break;
         case "scheduled":
-          return makeup.status === "scheduled" && makeup.makeup_date;
+          tabMatch = makeup.status === "scheduled" && makeup.makeup_date;
+          break;
         case "completed":
-          return makeup.status === "completed";
+          tabMatch = makeup.status === "completed";
+          break;
         case "cancelled":
-          return makeup.status === "cancelled";
+          tabMatch = makeup.status === "cancelled";
+          break;
         default:
-          return false;
+          tabMatch = false;
       }
+
+      if (!tabMatch) return false;
+
+      // 검색어 필터링
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const studentName = students.find(s => s.id === makeup.student_id)?.name || "";
+        const className = classes.find(c => c.id === makeup.class_id)?.name || "";
+
+        return (
+          studentName.toLowerCase().includes(query) ||
+          className.toLowerCase().includes(query)
+        );
+      }
+
+      return true;
     });
 
     // 보강 미정 탭에서만 정렬 적용
@@ -117,9 +135,9 @@ export function MakeupTable({
         }
       });
     }
-    
+
     return filtered;
-  }, [makeupClasses, selectedTab, sortBy, sortOrder, students]);
+  }, [makeupClasses, selectedTab, sortBy, sortOrder, students, classes, searchQuery]);
 
   // 페이지네이션 계산 (completed와 cancelled 탭에만 적용)
   const needsPagination = selectedTab === "completed" || selectedTab === "cancelled";
@@ -193,100 +211,17 @@ export function MakeupTable({
     return `${startTime.slice(0, 5)}-${endTime.slice(0, 5)}`;
   };
 
-  // 상태 변경 핸들러
-  const handleStatusChange = async (makeupId: string, newStatus: Database["public"]["Enums"]["makeup_status_enum"]) => {
-    setUpdatingStatus(makeupId);
-    try {
-      // 보강 정보 가져오기
-      const makeup = makeupClasses.find(m => m.id === makeupId);
-      if (!makeup) {
-        throw new Error("보강 정보를 찾을 수 없습니다.");
-      }
-
-      // 보강 상태 업데이트
-      const { error } = await supabase
-        .from("makeup_classes")
-        .update({ 
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", makeupId);
-
-      if (error) throw error;
-      
-      // 완료로 변경되고 보강일이 있는 경우, study_logs에 보강 기록 생성
-      // 결석 보강(absence)과 추가 수업(additional) 모두 처리
-      if (newStatus === "completed" && makeup.makeup_date) {
-        try {
-          // 현재 사용자 정보 가져오기
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { data: employee } = await supabase
-              .from("employees")
-              .select("id")
-              .eq("auth_id", user.id)
-              .single();
-
-            // 중복 체크 없이 무조건 새로운 학습일지 추가
-            // 정규수업과 보강수업이 같은 날 있을 수 있음
-            const { error: insertError } = await supabase
-              .from("study_logs")
-              .insert({
-                student_id: makeup.student_id,
-                class_id: makeup.class_id,
-                date: makeup.makeup_date,
-                attendance_status: 2, // 보강
-                homework: 5, // 정상
-                focus: 5, // 정상
-                note: makeup.makeup_type === 'absence' && makeup.absence_date 
-                  ? `${makeup.absence_date} 결석 보강` 
-                  : makeup.makeup_type === 'additional' 
-                  ? '추가 수업' 
-                  : '보강',
-                created_by: employee?.id || null,
-                student_name_snapshot: makeup.student_name_snapshot,
-                class_name_snapshot: makeup.class_name_snapshot
-              });
-            
-            if (!insertError) {
-              console.log(`보강 study_log 생성 완료: ${makeup.makeup_date}`);
-              // 토스트는 아래에서 통합해서 표시
-            } else {
-              console.error("보강 study_log 생성 실패 - 에러 상세:", {
-                error: insertError,
-                code: insertError.code,
-                message: insertError.message,
-                details: insertError.details,
-                hint: insertError.hint
-              });
-              // 에러 토스트만 표시
-              toast.error(`학습일지 생성 실패: ${insertError.message || '수동으로 추가해주세요.'}`);
-            }
-          }
-        } catch (error) {
-          console.error("study_logs 동기화 중 오류:", error);
-          toast.error("학습일지 동기화 실패");
-        }
-      }
-      
-      // 학습일지 생성 성공 여부에 따라 메시지 다르게 표시
-      if (newStatus === 'completed' && makeup?.makeup_date && makeup?.makeup_type === 'absence') {
-        toast.success(`상태가 변경되었습니다. ${makeup.makeup_date} 학습일지에 보강 기록이 추가되었습니다.`);
-      } else {
-        toast.success("상태가 변경되었습니다.");
-      }
-      // 상태만 업데이트하고 탭은 유지
-      const updatedMakeup = makeupClasses.find(m => m.id === makeupId);
-      if (updatedMakeup) {
-        updatedMakeup.status = newStatus;
-        // 부모 컴포넌트에 변경사항 알림
-        onStatusUpdate(makeupId, newStatus);
-      }
-    } catch (error) {
-      console.error("상태 변경 오류:", error);
-      toast.error("상태 변경 중 오류가 발생했습니다.");
-    } finally {
-      setUpdatingStatus(null);
+  // 상태별 한글 변환
+  const getStatusLabel = (status: Database["public"]["Enums"]["makeup_status_enum"]) => {
+    switch (status) {
+      case "scheduled":
+        return "예정";
+      case "completed":
+        return "완료";
+      case "cancelled":
+        return "취소";
+      default:
+        return status;
     }
   };
 
@@ -355,39 +290,54 @@ export function MakeupTable({
         </div>
 
         <TabsContent value={selectedTab} className="mt-0">
-          {/* 보강 미정 탭에만 정렬 버튼 표시 */}
-          {selectedTab === "pending" && filteredAndSortedMakeups.length > 0 && (
-            <div className="px-4 py-2 border-b bg-gray-50 flex items-center gap-2">
-              <span className="text-sm text-gray-600">정렬:</span>
-              <Button
-                variant={sortBy === "date" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleSort("date")}
-                className="h-8"
-              >
-                결석일
-                {sortBy === "date" && (
-                  sortOrder === "desc" ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUp className="ml-1 h-3 w-3" />
-                )}
-              </Button>
-              <Button
-                variant={sortBy === "name" ? "default" : "outline"}
-                size="sm"
-                onClick={() => handleSort("name")}
-                className="h-8"
-              >
-                학생 이름
-                {sortBy === "name" && (
-                  sortOrder === "asc" ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUp className="ml-1 h-3 w-3" />
-                )}
-              </Button>
-              <span className="text-xs text-gray-500 ml-2">
-                {sortBy === "date" 
-                  ? (sortOrder === "desc" ? "(최신순)" : "(과거순)")
-                  : (sortOrder === "asc" ? "(가나다순)" : "(가나다 역순)")}
-              </span>
+          {/* 검색 및 정렬 영역 */}
+          <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between gap-3">
+            {/* 검색 input */}
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="학생 이름 또는 반 이름 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 text-sm"
+              />
             </div>
-          )}
+
+            {/* 보강 미정 탭에만 정렬 버튼 표시 */}
+            {selectedTab === "pending" && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">정렬:</span>
+                <Button
+                  variant={sortBy === "date" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSort("date")}
+                  className="h-8"
+                >
+                  결석일
+                  {sortBy === "date" && (
+                    sortOrder === "desc" ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUp className="ml-1 h-3 w-3" />
+                  )}
+                </Button>
+                <Button
+                  variant={sortBy === "name" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSort("name")}
+                  className="h-8"
+                >
+                  학생 이름
+                  {sortBy === "name" && (
+                    sortOrder === "asc" ? <ArrowDown className="ml-1 h-3 w-3" /> : <ArrowUp className="ml-1 h-3 w-3" />
+                  )}
+                </Button>
+                <span className="text-xs text-gray-500 ml-2">
+                  {sortBy === "date"
+                    ? (sortOrder === "desc" ? "(최신순)" : "(과거순)")
+                    : (sortOrder === "asc" ? "(가나다순)" : "(가나다 역순)")}
+                </span>
+              </div>
+            )}
+          </div>
           
           {filteredAndSortedMakeups.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
@@ -464,20 +414,9 @@ export function MakeupTable({
                         )}
                       </TableCell>
                       <TableCell className="py-3 px-3 whitespace-nowrap">
-                        <Select
-                          value={makeup.status}
-                          onValueChange={(value) => handleStatusChange(makeup.id, value as Database["public"]["Enums"]["makeup_status_enum"])}
-                          disabled={updatingStatus === makeup.id}
-                        >
-                          <SelectTrigger className="h-7 text-xs w-[90px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="scheduled">예정</SelectItem>
-                            <SelectItem value="completed">완료</SelectItem>
-                            <SelectItem value="cancelled">취소</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Badge variant={getStatusVariant(makeup.status)} className="font-normal text-xs">
+                          {getStatusLabel(makeup.status)}
+                        </Badge>
                       </TableCell>
                       <TableCell className="py-3 px-3">
                         <span className="text-xs text-gray-600 block max-w-[150px] truncate" title={makeup.content || ""}>
