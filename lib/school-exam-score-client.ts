@@ -157,15 +157,33 @@ export async function createSchoolExamScores(formData: SchoolExamScoreFormData):
   }
 }
 
-// 학교 시험 성적 수정
+// 학교 시험 성적 수정 (전체 필드)
 export async function updateSchoolExamScore(
   id: string,
-  formData: { subject: string; score: number | null; notes?: string }
+  formData: {
+    school_type: "중학교" | "고등학교"
+    grade: 1 | 2 | 3
+    semester: 1 | 2
+    school_name: string
+    exam_year: number
+    exam_type: "중간고사" | "기말고사"
+    school_exam_id?: string | null
+    subject: string
+    score: number | null
+    notes?: string
+  }
 ): Promise<{ success: boolean }> {
   try {
     const supabase = getSupabaseBrowserClient()
 
     const updateData = {
+      school_type: formData.school_type,
+      grade: formData.grade,
+      semester: formData.semester,
+      school_name: formData.school_name,
+      exam_year: formData.exam_year,
+      exam_type: formData.exam_type,
+      school_exam_id: formData.school_exam_id || null,
       subject: formData.subject,
       score: formData.score,
       notes: formData.notes || null,

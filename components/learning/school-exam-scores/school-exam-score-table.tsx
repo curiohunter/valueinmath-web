@@ -23,67 +23,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { deleteSchoolExamScore, updateSchoolExamScore } from "@/lib/school-exam-score-client"
+import { deleteSchoolExamScore } from "@/lib/school-exam-score-client"
 import { getPDFDownloadUrl } from "@/lib/school-exam-client"
 import type { SchoolExamScore } from "@/types/school-exam-score"
 
 interface SchoolExamScoreTableProps {
   scores: SchoolExamScore[]
   onDelete: () => void
+  onEdit: (score: SchoolExamScore) => void
 }
 
-export function SchoolExamScoreTable({ scores, onDelete }: SchoolExamScoreTableProps) {
+export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamScoreTableProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [scoreToDelete, setScoreToDelete] = useState<SchoolExamScore | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [scoreToEdit, setScoreToEdit] = useState<SchoolExamScore | null>(null)
-  const [editSubject, setEditSubject] = useState("")
-  const [editScore, setEditScore] = useState("")
-  const [editNotes, setEditNotes] = useState("")
-  const [isUpdating, setIsUpdating] = useState(false)
-
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
-
-  const handleEditClick = (score: SchoolExamScore) => {
-    setScoreToEdit(score)
-    setEditSubject(score.subject)
-    setEditScore(score.score?.toString() || "")
-    setEditNotes(score.notes || "")
-    setEditDialogOpen(true)
-  }
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!scoreToEdit) return
-
-    setIsUpdating(true)
-    try {
-      await updateSchoolExamScore(scoreToEdit.id, {
-        subject: editSubject,
-        score: editScore ? parseFloat(editScore) : null,
-        notes: editNotes || undefined,
-      })
-      toast.success("성적이 수정되었습니다")
-      setEditDialogOpen(false)
-      onDelete() // Refresh data
-    } catch (error) {
-      console.error("Error updating score:", error)
-      toast.error("성적 수정에 실패했습니다")
-    } finally {
-      setIsUpdating(false)
-    }
-  }
 
   const handleDeleteClick = (score: SchoolExamScore) => {
     setScoreToDelete(score)
@@ -214,7 +169,7 @@ export function SchoolExamScoreTable({ scores, onDelete }: SchoolExamScoreTableP
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleEditClick(score)}
+                      onClick={() => onEdit(score)}
                     >
                       <Edit2 className="w-4 h-4" />
                     </Button>
@@ -232,61 +187,6 @@ export function SchoolExamScoreTable({ scores, onDelete }: SchoolExamScoreTableP
           </TableBody>
         </Table>
       </div>
-
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>성적 수정</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit_subject">과목</Label>
-              <Input
-                id="edit_subject"
-                value={editSubject}
-                onChange={(e) => setEditSubject(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit_score">점수</Label>
-              <Input
-                id="edit_score"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={editScore}
-                onChange={(e) => setEditScore(e.target.value)}
-                onWheel={(e) => e.currentTarget.blur()}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit_notes">비고</Label>
-              <Textarea
-                id="edit_notes"
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditDialogOpen(false)}
-                disabled={isUpdating}
-              >
-                취소
-              </Button>
-              <Button type="submit" disabled={isUpdating}>
-                {isUpdating ? "수정 중..." : "수정"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

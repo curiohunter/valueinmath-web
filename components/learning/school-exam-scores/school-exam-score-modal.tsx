@@ -12,15 +12,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { createSchoolExamScores, getActiveStudents } from "@/lib/school-exam-score-client"
+import { createSchoolExamScores, updateSchoolExamScore, getActiveStudents } from "@/lib/school-exam-score-client"
 import { getSchoolExams } from "@/lib/school-exam-client"
-import type { SchoolExamScoreFormData } from "@/types/school-exam-score"
+import type { SchoolExamScoreFormData, SchoolExamScore } from "@/types/school-exam-score"
 import type { SchoolExam } from "@/types/school-exam"
 
 interface SchoolExamScoreModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+  editingScore?: SchoolExamScore | null
 }
 
 interface ScoreItem {
@@ -28,7 +29,7 @@ interface ScoreItem {
   score: string
 }
 
-export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamScoreModalProps) {
+export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore }: SchoolExamScoreModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [students, setStudents] = useState<Array<{ id: string; name: string; grade: number; status: string; school: string }>>([])
   const [availableExams, setAvailableExams] = useState<SchoolExam[]>([])
@@ -88,6 +89,25 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
     loadMatchingExams()
   }, [schoolName, examYear, semester, examType, schoolType, grade])
 
+  // Initialize form when editingScore changes
+  useEffect(() => {
+    if (editingScore && isOpen) {
+      // Edit mode: populate form with existing data
+      setStudentId(editingScore.student_id)
+      setSchoolType(editingScore.school_type)
+      setGrade(editingScore.grade.toString() as "1" | "2" | "3")
+      setSemester(editingScore.semester.toString() as "1" | "2")
+      setSchoolName(editingScore.school_name)
+      setExamYear(editingScore.exam_year.toString())
+      setExamType(editingScore.exam_type)
+      setSchoolExamId(editingScore.school_exam_id || "none")
+      setScores([{ subject: editingScore.subject, score: editingScore.score?.toString() || "" }])
+      setNotes(editingScore.notes || "")
+    } else if (!editingScore && isOpen) {
+      // Create mode: reset to defaults (will be handled by handleClose)
+    }
+  }, [editingScore, isOpen])
+
   const handleAddScore = () => {
     setScores([...scores, { subject: "", score: "" }])
   }
@@ -122,29 +142,47 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
 
     setIsSubmitting(true)
     try {
-      const formData: SchoolExamScoreFormData = {
-        student_id: studentId,
-        school_type: schoolType,
-        grade: parseInt(grade) as 1 | 2 | 3,
-        semester: parseInt(semester) as 1 | 2,
-        school_name: schoolName,
-        exam_year: parseInt(examYear),
-        exam_type: examType,
-        school_exam_id: schoolExamId === "none" ? null : schoolExamId,
-        scores: scores.map((s) => ({
-          subject: s.subject,
-          score: s.score ? parseFloat(s.score) : null,
-        })),
-        notes,
+      if (editingScore) {
+        // Edit mode: update single score
+        const updateData = {
+          school_type: schoolType,
+          grade: parseInt(grade) as 1 | 2 | 3,
+          semester: parseInt(semester) as 1 | 2,
+          school_name: schoolName,
+          exam_year: parseInt(examYear),
+          exam_type: examType,
+          school_exam_id: schoolExamId === "none" ? null : schoolExamId,
+          subject: scores[0].subject,
+          score: scores[0].score ? parseFloat(scores[0].score) : null,
+          notes,
+        }
+        await updateSchoolExamScore(editingScore.id, updateData)
+        toast.success("성적이 수정되었습니다")
+      } else {
+        // Create mode: create multiple scores
+        const formData: SchoolExamScoreFormData = {
+          student_id: studentId,
+          school_type: schoolType,
+          grade: parseInt(grade) as 1 | 2 | 3,
+          semester: parseInt(semester) as 1 | 2,
+          school_name: schoolName,
+          exam_year: parseInt(examYear),
+          exam_type: examType,
+          school_exam_id: schoolExamId === "none" ? null : schoolExamId,
+          scores: scores.map((s) => ({
+            subject: s.subject,
+            score: s.score ? parseFloat(s.score) : null,
+          })),
+          notes,
+        }
+        await createSchoolExamScores(formData)
+        toast.success("성적이 등록되었습니다")
       }
-
-      await createSchoolExamScores(formData)
-      toast.success("성적이 등록되었습니다")
       onSuccess()
       handleClose()
     } catch (error) {
-      console.error("Error creating scores:", error)
-      toast.error("성적 등록에 실패했습니다")
+      console.error(`Error ${editingScore ? "updating" : "creating"} scores:`, error)
+      toast.error(`성적 ${editingScore ? "수정" : "등록"}에 실패했습니다`)
     } finally {
       setIsSubmitting(false)
     }
@@ -172,7 +210,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>학교 시험 성적 등록</DialogTitle>
+          <DialogTitle>{editingScore ? "학교 시험 성적 수정" : "학교 시험 성적 등록"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -186,9 +224,10 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                   role="combobox"
                   aria-expanded={studentSearchOpen}
                   className="w-full justify-between"
+                  disabled={!!editingScore}
                 >
                   {selectedStudent
-                    ? `${selectedStudent.name} (${selectedStudent.school.replace(/학교$/, "")}${selectedStudent.grade})`
+                    ? `${selectedStudent.name} (${selectedStudent.school?.replace(/학교$/, "") || ""}${selectedStudent.grade})`
                     : "학생 선택..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -225,7 +264,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
                             <Check
                               className={cn("mr-2 h-4 w-4", studentId === student.id ? "opacity-100" : "opacity-0")}
                             />
-                            {student.name} ({student.school.replace(/학교$/, "")}{student.grade}) - {student.status}
+                            {student.name} ({student.school?.replace(/학교$/, "") || ""}{student.grade}) - {student.status}
                           </CommandItem>
                         ))}
                     </CommandGroup>
@@ -388,7 +427,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess }: SchoolExamS
               취소
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "등록 중..." : "등록"}
+              {isSubmitting ? `${editingScore ? "수정" : "등록"} 중...` : editingScore ? "수정" : "등록"}
             </Button>
           </div>
         </form>
