@@ -34,22 +34,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="fixed inset-0 flex overflow-hidden">
       <Sidebar />
       <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-300 ${workspaceOpen ? 'mr-80' : ''}`}>
-        <Header 
-          setWorkspaceOpen={setWorkspaceOpen} 
+        <Header
+          setWorkspaceOpen={setWorkspaceOpen}
           workspaceOpen={workspaceOpen}
         />
         <DashboardContent>{children}</DashboardContent>
       </div>
-      
+
       {/* 고정 사이드 업무공간 패널 */}
       {user && workspaceOpen && (
-        <GlobalWorkspacePanel 
-          user={user} 
-          isOpen={workspaceOpen} 
-          onClose={() => setWorkspaceOpen(false)} 
+        <GlobalWorkspacePanel
+          user={user}
+          isOpen={workspaceOpen}
+          onClose={() => setWorkspaceOpen(false)}
         />
       )}
     </div>
