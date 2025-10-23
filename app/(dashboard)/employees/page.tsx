@@ -1,14 +1,9 @@
 import { Suspense } from "react"
-// 1. 새로운 Supabase 서버 클라이언트를 import 합니다.
-import { createServerClient } from "@/lib/auth/server" 
-import { EmployeesTable } from "./employees-table"
-import { EmployeesHeader } from "./employees-header"
-import { EmployeesFilters } from "./employees-filters"
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { createServerClient } from "@/lib/auth/server"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import type { Database } from "@/types/database"
+import { Skeleton } from "@/components/ui/skeleton"
+import { EmployeesPageClient } from "./employees-page-client"
 
 function AccessDenied() {
   return (
@@ -29,7 +24,6 @@ function AccessDenied() {
 }
 
 export default async function EmployeesPage() {
-  // 2. 가이드라인에 따라 클라이언트를 생성하고 사용자 정보를 가져옵니다.
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -37,7 +31,6 @@ export default async function EmployeesPage() {
     return <AccessDenied />
   }
 
-  // 3. 사용자 ID로 직원의 직책을 직접 조회합니다.
   const { data: employee, error: employeeError } = await supabase
     .from("employees")
     .select("position")
@@ -47,41 +40,11 @@ export default async function EmployeesPage() {
   if (employeeError || !employee) {
     return <AccessDenied />
   }
-  
-  // 4. 조회한 직책으로 권한을 확인합니다.
+
   const isAuthorized = employee.position === "원장" || employee.position === "부원장"
   if (!isAuthorized) {
     return <AccessDenied />
   }
 
-  // --- 권한이 확인된 경우에만 아래 UI를 렌더링 ---
-
-  return (
-    <div className="space-y-6">
-      <EmployeesHeader />
-      
-      <Card className="overflow-hidden">
-        <EmployeesFilters />
-        <CardContent className="p-0">
-          <Suspense fallback={<TableSkeleton />}>
-            <EmployeesTable />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function TableSkeleton() {
-  return (
-    <div className="p-6 space-y-4">
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-full" />
-      </div>
-    </div>
-  )
+  return <EmployeesPageClient />
 }

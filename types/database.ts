@@ -1012,6 +1012,8 @@ export type Database = {
           id: string
           name: string | null
           position: string | null
+          role: string | null
+          student_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1023,6 +1025,8 @@ export type Database = {
           id: string
           name?: string | null
           position?: string | null
+          role?: string | null
+          student_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1034,9 +1038,19 @@ export type Database = {
           id?: string
           name?: string | null
           position?: string | null
+          role?: string | null
+          student_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       students: {
         Row: {
