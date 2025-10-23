@@ -732,7 +732,7 @@ export default function TestLogsPage() {
           <div className={`transition-all duration-300 ${
             isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
           }`}>
-            <div className="w-72 max-h-[800px] flex-shrink-0 space-y-4 overflow-y-auto">
+            <div className="w-72 flex-shrink-0 space-y-4">
               {/* 날짜 선택 카드 */}
               <DateSelector date={date} onDateChange={setDate} />
               

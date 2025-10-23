@@ -825,7 +825,7 @@ export default function LearningPage() {
           
           {/* 왼쪽 사이드바 */}
           <div className={"transition-all duration-300 " + (isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden')}>
-            <div className="w-72 max-h-[800px] flex-shrink-0 space-y-4 overflow-y-auto">
+            <div className="w-72 flex-shrink-0 space-y-4">
               {/* 날짜 선택 카드 */}
               <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-50">
                 <div className="p-4">
