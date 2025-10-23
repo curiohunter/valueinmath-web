@@ -57,7 +57,7 @@ export async function middleware(request: NextRequest) {
   // Protected routes that require authentication
   const authRequiredPaths = [
     "/dashboard",
-    "/students", 
+    "/students",
     "/employees",
     "/schedule",
     "/learning",
@@ -65,8 +65,9 @@ export async function middleware(request: NextRequest) {
     "/settings",
     "/admin",
     "/agent",
+    "/portal",
   ]
-  const isProtectedRoute = authRequiredPaths.some(authPath => 
+  const isProtectedRoute = authRequiredPaths.some(authPath =>
     path === authPath || path.startsWith(`${authPath}/`)
   )
 
@@ -90,12 +91,20 @@ export async function middleware(request: NextRequest) {
     // Cache user info to avoid multiple DB calls
     const { data: profile } = await supabase
       .from("profiles")
-      .select("approval_status, name")
+      .select("approval_status, name, role")
       .eq("id", user.id)
       .single()
 
     if (!profile || !profile.name || profile.name.trim() === "" || profile.approval_status !== "approved") {
       return NextResponse.redirect(new URL("/pending-approval", request.url))
+    }
+
+    // Redirect students/parents to portal if they try to access other routes
+    if (profile.role === "student" || profile.role === "parent") {
+      if (path !== "/portal" && !path.startsWith("/portal/")) {
+        return NextResponse.redirect(new URL("/portal", request.url))
+      }
+      return res
     }
 
     // Admin-only routes
@@ -106,7 +115,7 @@ export async function middleware(request: NextRequest) {
         // @ts-ignore
         .eq("auth_id", user.id)
         .single()
-      
+
       if (!employee || (employee.position !== "원장" && employee.position !== "부원장")) {
         return NextResponse.redirect(new URL("/dashboard", request.url))
       }
@@ -129,5 +138,6 @@ export const config = {
     "/settings/:path*",
     "/admin/:path*",
     "/agent/:path*",
+    "/portal/:path*",
   ],
 }
