@@ -13,10 +13,13 @@ export function LoginForm() {
   const handleSubmit = async (formData: FormData) => {
     setIsLoading(true)
     try {
-      await signIn(formData)
+      const result = await signIn(formData)
+      if (result?.success && result?.redirectTo) {
+        // Hard navigation to ensure fresh session
+        window.location.href = result.redirectTo
+      }
     } catch (error) {
       // Server action will handle redirect with error
-    } finally {
       setIsLoading(false)
     }
   }
