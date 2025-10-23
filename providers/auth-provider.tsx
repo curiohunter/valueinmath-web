@@ -6,7 +6,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 interface AuthState {
-  user: User | null
+  user: (User & { profile?: { role?: string } }) | null
   loading: boolean
 }
 
@@ -16,38 +16,72 @@ const AuthContext = createContext<AuthState>({
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<(User & { profile?: { role?: string } }) | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = getSupabaseBrowserClient()
+
+  // 매번 새로운 클라이언트 인스턴스 생성
+  const [supabase] = useState(() => {
+    const { createBrowserClient } = require('@supabase/ssr')
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  })
 
   useEffect(() => {
-    // Check active sessions
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+    // Check active sessions and fetch profile
+    const loadUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+
+        setUser({ ...session.user, profile: profile || undefined })
+      } else {
+        setUser(null)
+      }
       setLoading(false)
-    })
+    }
+
+    loadUser()
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-      
-      // Handle auth state changes
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // SIGNED_IN 이벤트는 쿠키 설정 전에 발생할 수 있으므로 loadUser()로 처리
       if (_event === 'SIGNED_IN') {
-        router.refresh()
-      } else if (_event === 'SIGNED_OUT') {
+        setLoading(false)
+        return
+      }
+
+      // INITIAL_SESSION과 다른 이벤트는 정상 처리
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+
+        setUser({ ...session.user, profile: profile || undefined })
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+
+      // Handle auth state changes
+      if (_event === 'SIGNED_OUT') {
         router.push('/login')
-      } else if (_event === 'TOKEN_REFRESHED') {
-        // 토큰이 갱신되었을 때 user 정보 업데이트
-        setUser(session?.user ?? null)
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [supabase, router])
+  }, [router])
 
   return (
     <AuthContext.Provider value={{ user, loading }}>

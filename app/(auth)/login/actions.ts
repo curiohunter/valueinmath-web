@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
@@ -32,6 +33,12 @@ export async function signIn(formData: FormData) {
     password,
   })
 
+  console.log('[Login Action] Sign in result:', {
+    hasUser: !!data.user,
+    hasSession: !!data.session,
+    error: error?.message
+  })
+
   if (error) {
     // 에러 메시지 한국어 변환
     let errorMessage = error.message
@@ -47,24 +54,37 @@ export async function signIn(formData: FormData) {
 
   // 로그인 성공 후 프로필 확인
   if (data.user) {
+    console.log('[Login Action] User logged in:', data.user.id)
+
     const { data: profile } = await supabase
       .from('profiles')
-      .select('approval_status')
+      .select('approval_status, role')
       .eq('id', data.user.id)
       .single()
 
-    // 쿠키가 제대로 설정되도록 약간의 딜레이
-    await new Promise(resolve => setTimeout(resolve, 100))
+    console.log('[Login Action] Profile:', profile)
 
-    // 승인 상태에 따라 리디렉션
-    if (profile?.approval_status === 'approved') {
-      redirect('/dashboard')
-    } else {
+    // 승인 상태 확인
+    if (profile?.approval_status !== 'approved') {
+      console.log('[Login Action] Redirecting to pending-approval')
       redirect('/pending-approval')
     }
+
+    // Role에 따라 리디렉션 경로 결정
+    let targetPath = '/dashboard'
+    if (profile?.role === 'student' || profile?.role === 'parent') {
+      console.log('[Login Action] Target: portal (student/parent)')
+      targetPath = '/portal'
+    } else {
+      console.log('[Login Action] Target: dashboard (employee)')
+      targetPath = '/dashboard'
+    }
+
+    // Return the target path to the client for hard navigation
+    return { success: true, redirectTo: targetPath }
   }
 
-  redirect('/dashboard')
+  return { success: true, redirectTo: '/dashboard' }
 }
 
 export async function signInWithGoogle() {

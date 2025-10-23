@@ -16,16 +16,10 @@ import { MathflatSection } from "@/components/portal/mathflat-section"
 import { RefreshCw } from "lucide-react"
 
 export default function PortalPage() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [portalData, setPortalData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!user) return
-
-    loadPortalData()
-  }, [user])
 
   const loadPortalData = async () => {
     if (!user) return
@@ -45,20 +39,23 @@ export default function PortalPage() {
 
       if (!profile?.student_id) {
         setError("학생 정보가 연결되지 않았습니다.")
+        setLoading(false)
         return
       }
 
       const data = await getPortalData(profile.student_id)
       setPortalData(data)
     } catch (err: any) {
-      console.error("Error loading portal data:", err)
-      console.error("Error message:", err?.message)
-      console.error("Error stack:", err?.stack)
       setError(`데이터를 불러오는데 실패했습니다: ${err?.message || "알 수 없는 오류"}`)
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (authLoading || !user) return
+    loadPortalData()
+  }, [user?.id, authLoading])
 
   if (loading) {
     return (
