@@ -28,12 +28,13 @@ jobs:
         uses: actions/github-script@v7
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR_DIFF: ${{ steps.diff.outputs.diff }}
         with:
           script: |
             const https = require('https');
 
             // Diff 크기 제한 (100KB)
-            const diff = String(`${{ steps.diff.outputs.diff }}`);
+            const diff = process.env.PR_DIFF || '';
             if (diff.length > 100000) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -83,7 +84,7 @@ jobs:
               path: '/v1/chat/completions',
               method: 'POST',
               headers: {
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY,
                 'Content-Type': 'application/json',
                 'Content-Length': data.length
               }
