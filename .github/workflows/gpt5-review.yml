@@ -44,32 +44,25 @@ jobs:
               return;
             }
 
-            const reviewPrompt = String.raw`# ValueIn Academy 프로젝트 코드 리뷰
-
-            ## 프로젝트 컨텍스트
-            - Stack: Next.js 15 App Router, Supabase (PostgreSQL + Auth + RLS), TypeScript strict mode
-            - Domain: 학원 관리 시스템 (학생/학부모/교직원)
-
-            ## 리뷰 중점 사항
-            1. Supabase RLS 정책: 학생/학부모는 본인 데이터만, 교직원은 전체 접근
-            2. Next.js 15 호환성: async cookies(), Server Actions
-            3. TypeScript 타입 안전성: Nullable 필드 처리
-            4. 보안 취약점: SQL injection, XSS, CSRF
-            5. 성능 최적화: N+1 쿼리, 리렌더링, 번들 사이즈
-
-            ## 코드 변경 내용
-            ` + '```diff\n' + diff + '\n```' + String.raw`
-
-            ## 요청사항
-            각 파일별로 다음 형식으로 리뷰:
-            - Priority: Critical/High/Medium/Low
-            - Issue 설명
-            - 현재 코드 (Line XX-YY)
-            - Problem 설명
-            - Suggested Fix
-
-            ## Summary
-            Issues Found와 Recommendation 제공`;
+            const reviewPrompt = '# ValueIn Academy Code Review\n\n' +
+              '## Context\n' +
+              '- Stack: Next.js 15, Supabase (PostgreSQL + Auth + RLS), TypeScript\n' +
+              '- Domain: Academy Management System\n\n' +
+              '## Review Focus\n' +
+              '1. Supabase RLS: Students/parents can only access their own data\n' +
+              '2. Next.js 15: async cookies(), Server Actions\n' +
+              '3. TypeScript: Nullable field handling\n' +
+              '4. Security: SQL injection, XSS, CSRF\n' +
+              '5. Performance: N+1 queries, re-renders, bundle size\n\n' +
+              '## Code Changes\n```diff\n' + diff + '\n```\n\n' +
+              '## Format\n' +
+              'Review each file:\n' +
+              '- Priority: Critical/High/Medium/Low\n' +
+              '- Issue description\n' +
+              '- Problem explanation\n' +
+              '- Suggested fix\n\n' +
+              '## Summary\n' +
+              'Provide issues count and recommendation';
 
             // OpenAI API 호출 (GPT-5 Mini)
             const data = JSON.stringify({
