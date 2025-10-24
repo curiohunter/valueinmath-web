@@ -1,12 +1,19 @@
 name: GPT-5 Mini Code Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   ai-review:
     runs-on: ubuntu-latest
+    # 보안: 내부 PR만 허용 (fork PR 차단)
+    if: github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Checkout PR
@@ -45,39 +52,52 @@ jobs:
               return;
             }
 
-            const reviewPrompt = '# ValueIn Academy Code Review\n\n' +
-              '## Context\n' +
-              '- Stack: Next.js 15, Supabase (PostgreSQL + Auth + RLS), TypeScript\n' +
-              '- Domain: Academy Management System\n\n' +
-              '## Review Focus\n' +
-              '1. Supabase RLS: Students/parents can only access their own data\n' +
-              '2. Next.js 15: async cookies(), Server Actions\n' +
-              '3. TypeScript: Nullable field handling\n' +
-              '4. Security: SQL injection, XSS, CSRF\n' +
-              '5. Performance: N+1 queries, re-renders, bundle size\n\n' +
-              '## Code Changes\n```diff\n' + diff + '\n```\n\n' +
-              '## Format\n' +
-              'Review each file:\n' +
-              '- Priority: Critical/High/Medium/Low\n' +
-              '- Issue description\n' +
-              '- Problem explanation\n' +
-              '- Suggested fix\n\n' +
-              '## Summary\n' +
-              'Provide issues count and recommendation';
-
-            // OpenAI API 호출 (GPT-5 Mini)
-            const data = JSON.stringify({
-              model: 'gpt-4o-mini',  // GPT-5 Mini 모델
+            // OpenAI API 호출 (GPT-5 Mini) - JSON 객체로 직접 생성
+            const payload = {
+              model: 'gpt-4o-mini',
               messages: [
                 {
                   role: 'system',
                   content: 'You are a senior code reviewer specializing in Next.js, Supabase, and TypeScript. Provide concise, actionable feedback with specific code examples.'
                 },
-                { role: 'user', content: reviewPrompt }
+                {
+                  role: 'user',
+                  content: [
+                    '# ValueIn Academy Code Review',
+                    '',
+                    '## Context',
+                    '- Stack: Next.js 15, Supabase (PostgreSQL + Auth + RLS), TypeScript',
+                    '- Domain: Academy Management System',
+                    '',
+                    '## Review Focus',
+                    '1. Supabase RLS: Students/parents can only access their own data',
+                    '2. Next.js 15: async cookies(), Server Actions',
+                    '3. TypeScript: Nullable field handling',
+                    '4. Security: SQL injection, XSS, CSRF',
+                    '5. Performance: N+1 queries, re-renders, bundle size',
+                    '',
+                    '## Code Changes',
+                    '```diff',
+                    diff,
+                    '```',
+                    '',
+                    '## Format',
+                    'Review each file:',
+                    '- Priority: Critical/High/Medium/Low',
+                    '- Issue description',
+                    '- Problem explanation',
+                    '- Suggested fix',
+                    '',
+                    '## Summary',
+                    'Provide issues count and recommendation'
+                  ].join('\n')
+                }
               ],
               temperature: 0.3,
               max_tokens: 4000
-            });
+            };
+
+            const data = JSON.stringify(payload);
 
             const options = {
               hostname: 'api.openai.com',
