@@ -39,6 +39,20 @@
 - [x] Parent/Student approval system (admin approval workflow with delete)
 - [x] Parent/Student portal (학습 포털 with 6 data sources integration)
 
+#### Infrastructure & Automation (2025-10-24)
+- [x] GitHub CLI setup and authentication (gh v2.82.1)
+- [x] GitHub repository structure (12 labels, 3 milestones)
+- [x] GitHub Actions CI/CD pipeline
+  - CI workflow (TypeScript check, ESLint, build validation)
+  - GPT-5 Mini code review automation (gpt-4o-mini, ~$0.01/review)
+  - Database schema check workflow
+  - Dependabot weekly dependency updates
+- [x] GitHub Secrets configuration (OpenAI API, Supabase credentials)
+- [x] Comprehensive documentation
+  - `docs/github-cli-guide.md` (500+ lines, 14 sections)
+  - `docs/github-actions-workflow-guide.md` (500+ lines, usage & debugging)
+- [x] PR-based development workflow with automated quality gates
+
 #### Technical Improvements
 - [x] @supabase/ssr migration (from auth-helpers-nextjs)
 - [x] Next.js 15 async cookies() handling
@@ -60,19 +74,21 @@
 - [x] CLAUDE.md updated with current project state
 - [x] PLAN.md created with development roadmap
 - [x] GitHub CLI 활용 가이드 작성 (`docs/github-cli-guide.md`)
-- [ ] GitHub CLI 설치 및 인증
-- [ ] GitHub Actions CI/CD 파이프라인 구축
-- [ ] GPT-5 코드 리뷰 자동화 설정
+- [x] GitHub CLI 설치 및 인증 완료
+- [x] GitHub Actions CI/CD 파이프라인 구축 완료
+- [x] GPT-5 코드 리뷰 자동화 설정 완료
+- [x] GitHub Actions workflow 구축 가이드 작성 (`docs/github-actions-workflow-guide.md`)
 
 ---
 
 ## 📅 Upcoming Tasks
 
-### Phase 1: GitHub CLI & Automation (2주)
-- [ ] 라벨 및 마일스톤 체계 구축
-- [ ] 현재 작업 GitHub Issues로 이관
-- [ ] PR 기반 워크플로우 도입
-- [ ] GPT-5 ↔ Claude Code 협업 프로세스 정착
+### Phase 1: GitHub Workflow Adoption (진행 중)
+- [x] 라벨 및 마일스톤 체계 구축 (12 labels, 3 milestones)
+- [x] PR 기반 워크플로우 도입 (CI + GPT-5 Mini review)
+- [x] GPT-5 ↔ Claude Code 협업 프로세스 정착
+- [ ] 현재 작업 GitHub Issues로 이관 (필요시)
+- [ ] Issue/PR 템플릿 활용 정착 (1-2주 모니터링)
 
 ### Phase 2: SaaS Multi-tenancy Preparation (Q4 2025)
 - [ ] Database schema review for multi-academy support
@@ -110,6 +126,18 @@
 ## 📝 Recent Changes Log
 
 ### 2025-10-24
+- ✅ **GitHub Actions CI/CD 파이프라인 구축 완료**
+  - 4개 워크플로우 설정: CI, GPT-5 Mini Review, DB Schema Check, Dependabot
+  - GPT-5 Mini 자동 코드 리뷰 성공 (Critical 이슈 감지 및 PR 머지 차단 작동)
+  - GitHub Secrets 구성: OPENAI_API_KEY, SUPABASE_* 3개
+  - 12개 라벨 생성 (bug, enhancement, documentation, security, performance 등)
+  - 3개 마일스톤 생성 (v1.0 SaaS MVP, v0.9 Pre-Launch, v1.1 Growth Features)
+  - PR 템플릿 및 Issue 템플릿 설정 완료
+- ✅ **GitHub Actions 구축 가이드 작성**
+  - `docs/github-actions-workflow-guide.md` 작성 (500+ 라인)
+  - 핵심 원칙: 환경 변수 사용, 권한 관리, JSON 페이로드 처리
+  - 실패 사례 및 해결 방법 문서화
+  - 사용법, 디버깅, 보안, 비용 최적화, 유지보수 체크리스트
 - ✅ **GitHub CLI 도입 계획 수립**
   - `docs/github-cli-guide.md` 작성 완료 (14개 섹션, 500+ 라인)
   - 무료 플랜 기반 구체적 활용 방안 문서화
@@ -117,8 +145,9 @@
   - Phase별 실행 계획 수립 (즉시 시작 → CI/CD → 장기 운영)
   - 예상 비용 분석 완료 (GitHub Actions 무료, OpenAI API ~$3/월)
 - ✅ **PLAN.md 업데이트**
-  - GitHub CLI & Automation Phase 추가
-  - In Progress 섹션에 인프라 작업 추가
+  - Infrastructure & Automation 섹션 추가 (완료된 기능)
+  - Phase 1 진행 상황 업데이트
+  - Recent Changes Log에 GitHub Actions 작업 추가
 
 ### 2025-10-23
 - ✅ **Parent/Student Approval System Completed**
@@ -240,6 +269,10 @@
 9. Use `profiles.student_id` FK for approved registrations (NOT `pending_registrations.student_name`)
 10. Add RLS policies for student/parent data access (self-service portal pattern)
 11. Remove global `overflow: hidden` - let layouts manage their own scroll
+12. **GitHub Actions**: Use environment variables for `${{ }}` expressions in JavaScript
+13. **GitHub Actions**: Use `pull_request_target` + explicit permissions for PR write access
+14. **GitHub Actions**: Build JSON payloads as objects, then `JSON.stringify()`
+15. **GitHub Actions**: Validate YAML with `npx js-yaml` before committing
 
 ### Common Pitfalls Avoided
 1. Hydration errors with auth state (solved with AuthProvider)
@@ -249,6 +282,10 @@
 5. Form reset on drag-and-drop (solved with proper useCallback dependencies)
 6. Storage upload failures (solved with proper RLS policies on storage.objects)
 7. Table column misalignment (solved with explicit width classes)
+8. **GitHub Actions**: Template literal `${{ }}` syntax conflicts (solved with env variables)
+9. **GitHub Actions**: 403 permission errors on PRs (solved with `pull_request_target`)
+10. **GitHub Actions**: OpenAI JSON parsing errors (solved with object construction + stringify)
+11. **GitHub Actions**: Workflow not triggering on PRs (solved with branch rebase to include workflow file)
 
 ---
 
