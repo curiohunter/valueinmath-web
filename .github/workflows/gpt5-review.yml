@@ -31,10 +31,9 @@ jobs:
         with:
           script: |
             const https = require('https');
-            const http = require('http');
 
             // Diff 크기 제한 (100KB)
-            const diff = `${{ steps.diff.outputs.diff }}`;
+            const diff = String(`${{ steps.diff.outputs.diff }}`);
             if (diff.length > 100000) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -45,80 +44,32 @@ jobs:
               return;
             }
 
-            const reviewPrompt = `# ValueIn Academy 프로젝트 코드 리뷰
+            const reviewPrompt = String.raw`# ValueIn Academy 프로젝트 코드 리뷰
 
-## 프로젝트 컨텍스트
-- **Stack**: Next.js 15 App Router, Supabase (PostgreSQL + Auth + RLS), TypeScript strict mode
-- **Domain**: 학원 관리 시스템 (학생/학부모/교직원)
-- **Key Files**:
-  - \`app/(dashboard)/\`: 관리자 대시보드
-  - \`app/(portal)/\`: 학부모/학생 포털
-  - \`lib/supabase/\`: Supabase 클라이언트
-  - \`database/\`: RLS 정책 및 마이그레이션
+            ## 프로젝트 컨텍스트
+            - Stack: Next.js 15 App Router, Supabase (PostgreSQL + Auth + RLS), TypeScript strict mode
+            - Domain: 학원 관리 시스템 (학생/학부모/교직원)
 
-## 리뷰 중점 사항
-1. **Supabase RLS 정책**:
-   - 학생/학부모는 본인 데이터만 접근 (student_id, parent_id 필터)
-   - 교직원은 전체 접근 (auth_id, status='재직' 확인)
-   - CREATE TABLE 시 반드시 RLS ENABLE 및 정책 추가
+            ## 리뷰 중점 사항
+            1. Supabase RLS 정책: 학생/학부모는 본인 데이터만, 교직원은 전체 접근
+            2. Next.js 15 호환성: async cookies(), Server Actions
+            3. TypeScript 타입 안전성: Nullable 필드 처리
+            4. 보안 취약점: SQL injection, XSS, CSRF
+            5. 성능 최적화: N+1 쿼리, 리렌더링, 번들 사이즈
 
-2. **Next.js 15 호환성**:
-   - Server Actions: async cookies() 사용
-   - Client Components: 'use client' 지시어
-   - Server Components: getUser() 사용 (not getSession())
+            ## 코드 변경 내용
+            ` + '```diff\n' + diff + '\n```' + String.raw`
 
-3. **TypeScript 타입 안전성**:
-   - Supabase 타입 일치 (\`types/supabase.ts\`)
-   - Nullable 필드 안전 처리 (\`|| false\`, \`|| ''\`)
+            ## 요청사항
+            각 파일별로 다음 형식으로 리뷰:
+            - Priority: Critical/High/Medium/Low
+            - Issue 설명
+            - 현재 코드 (Line XX-YY)
+            - Problem 설명
+            - Suggested Fix
 
-4. **보안 취약점**:
-   - SQL injection 위험 (raw query 사용 금지)
-   - XSS (사용자 입력 sanitization)
-   - CSRF (Server Actions 사용)
-   - Rate limiting (SMS/Email API)
-
-5. **성능 최적화**:
-   - N+1 쿼리 방지 (JOIN 사용)
-   - 불필요한 리렌더링 (React.memo, useMemo)
-   - 큰 번들 사이즈 (dynamic import)
-
-## 코드 변경 내용
-\`\`\`diff
-${diff}
-\`\`\`
-
-## 요청사항
-각 파일별로 다음 형식으로 리뷰해주세요:
-
-### 📁 [파일경로]
-
-**Priority**: Critical | High | Medium | Low
-
-**Issue**: [문제 설명]
-
-**Current Code** (Line XX-YY):
-\`\`\`typescript
-[현재 코드]
-\`\`\`
-
-**Problem**: [왜 문제인지 설명]
-
-**Suggested Fix**:
-\`\`\`typescript
-[수정 제안 코드]
-\`\`\`
-
----
-
-## ✅ Summary
-**Issues Found**: X
-- 🔴 Critical: X
-- 🟡 High: X
-- 🟢 Medium: X
-- ⚪ Low: X
-
-**Recommendation**: [머지 가능 여부 및 조건]
-`;
+            ## Summary
+            Issues Found와 Recommendation 제공`;
 
             // OpenAI API 호출 (GPT-5 Mini)
             const data = JSON.stringify({
