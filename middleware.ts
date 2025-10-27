@@ -99,9 +99,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/pending-approval", request.url))
     }
 
-    // Redirect students/parents to portal if they try to access dashboard or other routes
+    // Redirect students/parents to portal if they try to access other routes
     if (profile.role === "student" || profile.role === "parent") {
-      if (!path.startsWith("/portal")) {
+      if (path !== "/portal" && !path.startsWith("/portal/")) {
         return NextResponse.redirect(new URL("/portal", request.url))
       }
       return res
