@@ -49,22 +49,28 @@ export async function signIn(formData: FormData) {
   if (data.user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('approval_status')
+      .select('approval_status, role')
       .eq('id', data.user.id)
       .single()
 
-    // 쿠키가 제대로 설정되도록 약간의 딜레이
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    // 승인 상태에 따라 리디렉션
-    if (profile?.approval_status === 'approved') {
-      redirect('/dashboard')
-    } else {
+    // 승인 상태 확인
+    if (profile?.approval_status !== 'approved') {
       redirect('/pending-approval')
     }
+
+    // Role에 따라 리디렉션 경로 결정
+    let redirectTo = '/dashboard'
+    if (profile?.role === 'student' || profile?.role === 'parent') {
+      redirectTo = '/portal'
+    } else if (profile?.role === 'employee') {
+      redirectTo = '/dashboard'
+    }
+
+    // 경로를 반환하여 클라이언트에서 hard navigation 처리
+    return { success: true, redirectTo }
   }
 
-  redirect('/dashboard')
+  return { success: true, redirectTo: '/dashboard' }
 }
 
 export async function signInWithGoogle() {
