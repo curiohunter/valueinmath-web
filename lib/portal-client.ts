@@ -9,6 +9,8 @@ import {
   MakeupClassItem,
   ConsultationItem,
   MathflatRecordItem,
+  TuitionFeeItem,
+  MonthlyAggregation,
 } from "@/types/portal"
 
 export async function getPortalData(studentId: string): Promise<PortalData> {
@@ -23,6 +25,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     makeupClassesData,
     consultationsData,
     mathflatData,
+    tuitionFeesData,
   ] = await Promise.all([
     supabase.from("students").select("*").eq("id", studentId).single(),
     supabase
@@ -61,6 +64,13 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
       .eq("student_id", studentId)
       .order("event_date", { ascending: false })
       .limit(50),
+    supabase
+      .from("tuition_fees")
+      .select("*")
+      .eq("student_id", studentId)
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(12), // 최근 12개월
   ])
 
   if (studentData.error) throw studentData.error
@@ -70,6 +80,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   if (makeupClassesData.error) throw makeupClassesData.error
   if (consultationsData.error) throw consultationsData.error
   if (mathflatData.error) throw mathflatData.error
+  if (tuitionFeesData.error) throw tuitionFeesData.error
 
   const studyLogs: StudyLogItem[] = studyLogsData.data.map((log) => ({
     id: log.id,
@@ -141,6 +152,18 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     correct_rate: record.correct_rate,
   }))
 
+  const tuitionFees: TuitionFeeItem[] = tuitionFeesData.data.map((fee) => ({
+    id: fee.id,
+    year: fee.year,
+    month: fee.month,
+    amount: fee.amount,
+    payment_status: fee.payment_status,
+    class_name: fee.class_name_snapshot,
+    is_sibling: fee.is_sibling,
+    period_start_date: fee.period_start_date,
+    period_end_date: fee.period_end_date,
+  }))
+
   // Calculate stats
   const stats: StudentOverviewStats = calculateStats(
     studyLogs,
@@ -160,6 +183,12 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     mathflatRecords.slice(0, 10)
   )
 
+  // Calculate monthly aggregations (last 6 months)
+  const monthly_aggregations: MonthlyAggregation[] = calculateMonthlyAggregations(
+    studyLogs,
+    testLogs
+  )
+
   return {
     student: {
       id: studentData.data.id,
@@ -176,6 +205,8 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     makeup_classes: makeupClasses,
     consultations,
     mathflat_records: mathflatRecords,
+    tuition_fees: tuitionFees,
+    monthly_aggregations,
   }
 }
 
@@ -309,4 +340,96 @@ function generateTimeline(
 
   // Sort by date descending
   return activities.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+function calculateMonthlyAggregations(
+  studyLogs: StudyLogItem[],
+  testLogs: TestLogItem[]
+): MonthlyAggregation[] {
+  const now = new Date()
+  const monthlyData: Map<string, MonthlyAggregation> = new Map()
+
+  // Initialize last 6 months
+  for (let i = 0; i < 6; i++) {
+    const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const year = targetDate.getFullYear()
+    const month = targetDate.getMonth() + 1
+    const key = `${year}-${month}`
+
+    monthlyData.set(key, {
+      year,
+      month,
+      attendance_rate: 0,
+      homework_rate: 0,
+      average_score: 0,
+      total_study_days: 0,
+      total_tests: 0,
+    })
+  }
+
+  // Process study logs
+  studyLogs.forEach((log) => {
+    const logDate = new Date(log.date)
+    const year = logDate.getFullYear()
+    const month = logDate.getMonth() + 1
+    const key = `${year}-${month}`
+
+    const data = monthlyData.get(key)
+    if (data) {
+      data.total_study_days++
+
+      // Count attendance (4-5 = attended)
+      if (log.attendance_status !== null && log.attendance_status >= 4) {
+        data.attendance_rate++
+      }
+
+      // Count homework completion (4-5 = completed)
+      if (log.homework !== null && log.homework >= 4) {
+        data.homework_rate++
+      }
+    }
+  })
+
+  // Process test logs
+  testLogs.forEach((log) => {
+    const logDate = new Date(log.date)
+    const year = logDate.getFullYear()
+    const month = logDate.getMonth() + 1
+    const key = `${year}-${month}`
+
+    const data = monthlyData.get(key)
+    if (data && log.test_score !== null) {
+      data.total_tests++
+      data.average_score += log.test_score
+    }
+  })
+
+  // Calculate percentages and averages
+  const results: MonthlyAggregation[] = []
+  monthlyData.forEach((data) => {
+    const attendanceCount = data.attendance_rate
+    const homeworkCount = data.homework_rate
+
+    // Calculate rates as percentages
+    data.attendance_rate =
+      data.total_study_days > 0
+        ? Math.round((attendanceCount / data.total_study_days) * 1000) / 10
+        : 0
+    data.homework_rate =
+      data.total_study_days > 0
+        ? Math.round((homeworkCount / data.total_study_days) * 1000) / 10
+        : 0
+
+    // Calculate average score
+    data.average_score =
+      data.total_tests > 0 ? Math.round((data.average_score / data.total_tests) * 10) / 10 : 0
+
+    results.push(data)
+  })
+
+  // Sort by year and month descending
+  return results.sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year
+    return b.month - a.month
+  })
 }
