@@ -13,10 +13,13 @@ export function LoginForm() {
   const handleSubmit = async (formData: FormData) => {
     setIsLoading(true)
     try {
-      await signIn(formData)
+      const result = await signIn(formData)
+      if (result?.success && result?.redirectTo) {
+        // Hard navigation으로 쿠키 전파 후 새 요청 발생
+        window.location.href = result.redirectTo
+      }
     } catch (error) {
       // Server action will handle redirect with error
-    } finally {
       setIsLoading(false)
     }
   }
