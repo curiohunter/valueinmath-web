@@ -5,7 +5,7 @@
 **Repository**: https://github.com/curiohunter/valueinmath-web
 **Stack**: Next.js 15, Supabase, TypeScript, Tailwind CSS
 **Deployment**: Vercel (auto-deploy on push to main)
-**Last Updated**: 2025-10-24
+**Last Updated**: 2025-10-27
 
 ---
 
@@ -45,6 +45,10 @@
 - [x] Security updates (xlsx 0.20.3, Next.js 15.4.7)
 - [x] Data change tracking pattern
 - [x] Collaboration lock for concurrent editing
+- [x] GitHub Actions CI/CD pipeline (TypeScript, ESLint, Build checks)
+- [x] GPT-5 Mini automated code review system
+- [x] Database migration validation workflow
+- [x] Dependabot security updates automation
 
 ---
 
@@ -56,13 +60,14 @@
   - Cron schedule: `30 23 28-31 * *` (KST 08:30)
   - Function: `save_monthly_academy_stats()`
 
-### Documentation & Infrastructure (2025-10-24)
+### Documentation & Infrastructure (2025-10-24 ~ 2025-10-27)
 - [x] CLAUDE.md updated with current project state
 - [x] PLAN.md created with development roadmap
 - [x] GitHub CLI 활용 가이드 작성 (`docs/github-cli-guide.md`)
-- [ ] GitHub CLI 설치 및 인증
-- [ ] GitHub Actions CI/CD 파이프라인 구축
-- [ ] GPT-5 코드 리뷰 자동화 설정
+- [x] GitHub CLI 설치 및 인증 (gh v2.82.1)
+- [x] GitHub Actions CI/CD 파이프라인 구축 (ci.yml, gpt5-review.yml, db-check.yml)
+- [x] GPT-5 코드 리뷰 자동화 설정 (OpenAI GPT-4o-mini)
+- [x] Dependabot 설정 완료 (주간 npm 패키지 업데이트)
 
 ---
 
@@ -108,6 +113,21 @@
 ---
 
 ## 📝 Recent Changes Log
+
+### 2025-10-25 ~ 2025-10-27
+- ✅ **GitHub Actions CI/CD 파이프라인 완료**
+  - CI Workflow: TypeScript, ESLint, Build 자동 검증
+  - GPT-5 Mini Code Review: OpenAI GPT-4o-mini 기반 AI 코드 리뷰
+  - Database Check: RLS 정책 및 SQL 구문 검증 자동화
+  - Dependabot: 주간 npm 패키지 업데이트 (12개 PR 생성)
+  - GitHub Secrets 설정 완료 (OPENAI_API_KEY, Supabase 자격증명)
+- ✅ **인증 시스템 버그 수정**
+  - 학생/학부모 로그인 쿠키 전파 문제 해결 (commit 111e15b)
+  - 싱글턴 패턴 복원으로 토큰 갱신 문제 해결 (commit 31b3f7f)
+- ✅ **의존성 업데이트 자동화**
+  - @types/node: 22.15.34 → 24.9.1 (#8)
+  - @radix-ui/react-tooltip: 1.1.6 → 1.2.8 (#7)
+  - @hookform/resolvers: 5.1.1 → 5.2.2 (#4)
 
 ### 2025-10-24
 - ✅ **GitHub CLI 도입 계획 수립**

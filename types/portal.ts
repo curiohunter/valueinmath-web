@@ -102,6 +102,28 @@ export interface ActivityTimelineItem {
   color?: string
 }
 
+export interface TuitionFeeItem {
+  id: string
+  year: number
+  month: number
+  amount: number
+  payment_status: string | null // '완납', '미납', '일부납부'
+  class_name: string | null
+  is_sibling: boolean | null
+  period_start_date: string | null
+  period_end_date: string | null
+}
+
+export interface MonthlyAggregation {
+  year: number
+  month: number
+  attendance_rate: number // 출석률 (%)
+  homework_rate: number // 숙제 완료율 (%)
+  average_score: number // 평균 시험 점수
+  total_study_days: number // 총 학습 일수
+  total_tests: number // 총 테스트 수
+}
+
 export interface PortalData {
   student: {
     id: string
@@ -118,4 +140,6 @@ export interface PortalData {
   makeup_classes: MakeupClassItem[]
   consultations: ConsultationItem[]
   mathflat_records: MathflatRecordItem[]
+  tuition_fees: TuitionFeeItem[]
+  monthly_aggregations: MonthlyAggregation[]
 }

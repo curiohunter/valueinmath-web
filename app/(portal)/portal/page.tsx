@@ -5,14 +5,17 @@ import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/providers/auth-provider"
 import { PortalData } from "@/types/portal"
 import { getPortalData } from "@/lib/portal-client"
-import { OverviewStats } from "@/components/portal/overview-stats"
+import { MonthlySummaryCards } from "@/components/portal/monthly-summary-cards"
+import { LearningTrendsChart } from "@/components/portal/learning-trends-chart"
 import { ActivityTimeline } from "@/components/portal/activity-timeline"
+import { TuitionSection } from "@/components/portal/tuition-section"
 import { StudyLogsSection } from "@/components/portal/study-logs-section"
 import { TestLogsSection } from "@/components/portal/test-logs-section"
 import { ExamScoresSection } from "@/components/portal/exam-scores-section"
 import { MakeupClassesSection } from "@/components/portal/makeup-classes-section"
 import { ConsultationsSection } from "@/components/portal/consultations-section"
 import { MathflatSection } from "@/components/portal/mathflat-section"
+import { QuickActionMenu } from "@/components/portal/quick-action-menu"
 import { RefreshCw } from "lucide-react"
 
 export default function PortalPage() {
@@ -92,35 +95,88 @@ export default function PortalPage() {
     )
   }
 
+  const handleCardClick = (cardType: "attendance" | "homework" | "score" | "tuition") => {
+    // Scroll to appropriate section based on card type
+    let sectionId = ""
+
+    switch (cardType) {
+      case "attendance":
+      case "homework":
+        sectionId = "study-logs-section"
+        break
+      case "score":
+        sectionId = "test-logs-section"
+        break
+      case "tuition":
+        sectionId = "tuition-section"
+        break
+    }
+
+    if (sectionId) {
+      document.getElementById(sectionId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    }
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Student Info */}
-      <div className="bg-card p-6 rounded-lg border">
-        <h2 className="text-2xl font-bold mb-2">{portalData.student.name}</h2>
-        <div className="flex gap-4 text-sm text-muted-foreground">
-          <span>{portalData.student.grade}학년</span>
-          <span>{portalData.student.school}</span>
-          <span className="font-semibold text-foreground">
-            {portalData.student.status}
-          </span>
+    <>
+      <div className="space-y-8 pb-20">
+        {/* 1. Profile Header - Student Info */}
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background p-6 rounded-lg border">
+          <h1 className="text-3xl font-bold mb-3">{portalData.student.name}</h1>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">학년:</span>
+              <span className="font-semibold">{portalData.student.grade}학년</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">학교:</span>
+              <span className="font-semibold">{portalData.student.school}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">상태:</span>
+              <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold">
+                {portalData.student.status}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Monthly Summary Cards */}
+        <MonthlySummaryCards
+          monthly_aggregations={portalData.monthly_aggregations}
+          tuition_fees={portalData.tuition_fees}
+          onCardClick={handleCardClick}
+        />
+
+        {/* 3. Learning Trends Chart */}
+        <LearningTrendsChart monthly_aggregations={portalData.monthly_aggregations} />
+
+        {/* 4. Two-Column Layout: Activity Timeline + Tuition Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ActivityTimeline activities={portalData.recent_activities} />
+          <TuitionSection
+            tuition_fees={portalData.tuition_fees}
+            studentName={portalData.student.name}
+          />
+        </div>
+
+        {/* 5. Collapsible Sections - Detailed Data */}
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold">상세 학습 기록</h2>
+          <StudyLogsSection logs={portalData.study_logs} />
+          <TestLogsSection logs={portalData.test_logs} />
+          <ExamScoresSection scores={portalData.school_exam_scores} />
+          <MakeupClassesSection classes={portalData.makeup_classes} />
+          <ConsultationsSection consultations={portalData.consultations} />
+          <MathflatSection records={portalData.mathflat_records} />
         </div>
       </div>
 
-      {/* Overview Stats */}
-      <OverviewStats stats={portalData.stats} />
-
-      {/* Activity Timeline */}
-      <ActivityTimeline activities={portalData.recent_activities} />
-
-      {/* Detailed Sections */}
-      <div className="space-y-6">
-        <StudyLogsSection logs={portalData.study_logs} />
-        <TestLogsSection logs={portalData.test_logs} />
-        <ExamScoresSection scores={portalData.school_exam_scores} />
-        <MakeupClassesSection classes={portalData.makeup_classes} />
-        <ConsultationsSection consultations={portalData.consultations} />
-        <MathflatSection records={portalData.mathflat_records} />
-      </div>
-    </div>
+      {/* 6. Quick Action Menu */}
+      <QuickActionMenu />
+    </>
   )
 }
