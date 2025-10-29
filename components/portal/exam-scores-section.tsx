@@ -1,5 +1,10 @@
+"use client"
+
+import { useState } from "react"
 import { SchoolExamScoreItem } from "@/types/portal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChevronDown, ChevronUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface ExamScoresSectionProps {
   scores: SchoolExamScoreItem[]
@@ -22,15 +27,18 @@ const getScoreBgColor = (score: number) => {
 }
 
 export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
+  const [isOpen, setIsOpen] = useState(true)
+
   // Group by exam (year, semester, type)
   const groupedScores = scores.reduce((acc, score) => {
-    const key = `${score.exam_year}-${score.exam_semester}-${score.exam_type}-${score.school_name || ""}`
+    const key = `${score.exam_year}-${score.semester}-${score.exam_type}-${score.school_name || ""}`
     if (!acc[key]) {
       acc[key] = {
         exam_year: score.exam_year,
-        exam_semester: score.exam_semester,
+        semester: score.semester,
         exam_type: score.exam_type,
         school_name: score.school_name,
+        grade: score.grade,
         scores: [],
       }
     }
@@ -40,15 +48,21 @@ export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
 
   const exams = Object.values(groupedScores).sort((a: any, b: any) => {
     if (a.exam_year !== b.exam_year) return b.exam_year - a.exam_year
-    return b.exam_semester - a.exam_semester
+    return b.semester - a.semester
   })
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>학교 시험 성적</CardTitle>
+      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronDown className="h-5 w-5 -rotate-90" />}
+          </Button>
+          <CardTitle>학교 시험 성적</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      {isOpen && (
+        <CardContent>
         {scores.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">학교 시험 성적이 없습니다.</p>
         ) : (
@@ -57,11 +71,8 @@ export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
               <div key={idx} className="border rounded-lg p-4">
                 <div className="mb-3">
                   <h3 className="font-semibold">
-                    {exam.exam_year}년 {exam.exam_semester}학기 {exam.exam_type}
+                    {exam.school_name || ""} {exam.grade}학년 {exam.semester}학기 {exam.exam_type}
                   </h3>
-                  {exam.school_name && (
-                    <p className="text-sm text-muted-foreground">{exam.school_name}</p>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -89,7 +100,8 @@ export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
             )}
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   )
 }

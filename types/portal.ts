@@ -49,9 +49,10 @@ export interface TestLogItem {
 export interface SchoolExamScoreItem {
   id: string
   exam_year: number
-  exam_semester: number
+  semester: number
   exam_type: string
   school_name: string | null
+  grade: number
   subject: string
   score: number
   created_at: string
@@ -114,14 +115,46 @@ export interface TuitionFeeItem {
   period_end_date: string | null
 }
 
+export interface ClassInfo {
+  id: string
+  name: string // 반 이름
+  subject: string
+  teacher_name: string | null // 담당 선생님 이름
+  monthly_fee: number | null
+}
+
 export interface MonthlyAggregation {
   year: number
   month: number
-  attendance_rate: number // 출석률 (%)
-  homework_rate: number // 숙제 완료율 (%)
-  average_score: number // 평균 시험 점수
+  // 출석 관련
+  attendance_count_5: number // 출석 횟수
+  attendance_count_4: number // 지각 횟수
+  attendance_count_3: number // 조퇴 횟수
+  attendance_count_2: number // 보강 횟수
+  attendance_count_1: number // 결석 횟수
+  // 숙제 관련
+  homework_avg: number // 숙제 평균 점수 (1-5)
+  // 집중도 관련
+  focus_avg: number // 집중도 평균 점수 (1-5)
+  // 기타
   total_study_days: number // 총 학습 일수
   total_tests: number // 총 테스트 수
+  average_score: number // 평균 시험 점수
+}
+
+export interface MathflatStats {
+  textbook_accuracy: number // 교재 정답률 (%)
+  textbook_problems: number // 교재 문제 수
+  worksheet_accuracy: number // 학습지 정답률 (%)
+  worksheet_problems: number // 학습지 문제 수
+  challenge_accuracy: number // 챌린지 정답률 (%)
+  challenge_problems: number // 챌린지 문제 수
+}
+
+export interface MonthlyMathflatStats {
+  year: number
+  month: number
+  stats: MathflatStats
 }
 
 export interface PortalData {
@@ -132,6 +165,7 @@ export interface PortalData {
     school: string | null
     status: string
   }
+  classes: ClassInfo[] // 학생이 등록된 반 목록 - 신규 추가
   stats: StudentOverviewStats
   recent_activities: ActivityTimelineItem[]
   study_logs: StudyLogItem[]
@@ -142,4 +176,5 @@ export interface PortalData {
   mathflat_records: MathflatRecordItem[]
   tuition_fees: TuitionFeeItem[]
   monthly_aggregations: MonthlyAggregation[]
+  monthly_mathflat_stats: MonthlyMathflatStats[] // 월별 매쓰플랫 통계
 }
