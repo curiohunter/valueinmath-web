@@ -11,6 +11,9 @@ import {
   MathflatRecordItem,
   TuitionFeeItem,
   MonthlyAggregation,
+  ClassInfo,
+  MathflatStats,
+  MonthlyMathflatStats,
 } from "@/types/portal"
 
 export async function getPortalData(studentId: string): Promise<PortalData> {
@@ -19,6 +22,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   // Fetch all data in parallel
   const [
     studentData,
+    classesData,
     studyLogsData,
     testLogsData,
     examScoresData,
@@ -28,6 +32,20 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     tuitionFeesData,
   ] = await Promise.all([
     supabase.from("students").select("*").eq("id", studentId).single(),
+    supabase
+      .from("class_students")
+      .select(`
+        classes (
+          id,
+          name,
+          subject,
+          monthly_fee,
+          teacher:employees!classes_teacher_id_fkey (
+            name
+          )
+        )
+      `)
+      .eq("student_id", studentId),
     supabase
       .from("study_logs")
       .select("*")
@@ -74,6 +92,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   ])
 
   if (studentData.error) throw studentData.error
+  if (classesData.error) throw classesData.error
   if (studyLogsData.error) throw studyLogsData.error
   if (testLogsData.error) throw testLogsData.error
   if (examScoresData.error) throw examScoresData.error
@@ -81,6 +100,21 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   if (consultationsData.error) throw consultationsData.error
   if (mathflatData.error) throw mathflatData.error
   if (tuitionFeesData.error) throw tuitionFeesData.error
+
+  // Map classes data with teacher information
+  const classes: ClassInfo[] = classesData.data
+    .map((item: any) => {
+      const classInfo = item.classes
+      if (!classInfo) return null
+      return {
+        id: classInfo.id,
+        name: classInfo.name,
+        subject: classInfo.subject,
+        teacher_name: classInfo.teacher?.name || null,
+        monthly_fee: classInfo.monthly_fee,
+      }
+    })
+    .filter((item): item is ClassInfo => item !== null)
 
   const studyLogs: StudyLogItem[] = studyLogsData.data.map((log) => ({
     id: log.id,
@@ -109,9 +143,10 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   const examScores: SchoolExamScoreItem[] = examScoresData.data.map((score) => ({
     id: score.id,
     exam_year: score.exam_year,
-    exam_semester: score.exam_semester,
+    semester: score.semester,
     exam_type: score.exam_type,
     school_name: score.school_name,
+    grade: score.grade,
     subject: score.subject,
     score: score.score,
     created_at: score.created_at || "",
@@ -189,6 +224,13 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     testLogs
   )
 
+  // Calculate monthly mathflat stats (for each month in aggregations)
+  const monthly_mathflat_stats: MonthlyMathflatStats[] = monthly_aggregations.map((monthData) => ({
+    year: monthData.year,
+    month: monthData.month,
+    stats: calculateMathflatStats(mathflatRecords, monthData.year, monthData.month),
+  }))
+
   return {
     student: {
       id: studentData.data.id,
@@ -197,6 +239,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
       school: studentData.data.school,
       status: studentData.data.status,
     },
+    classes,
     stats,
     recent_activities,
     study_logs: studyLogs,
@@ -207,6 +250,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     mathflat_records: mathflatRecords,
     tuition_fees: tuitionFees,
     monthly_aggregations,
+    monthly_mathflat_stats,
   }
 }
 
@@ -347,7 +391,7 @@ function calculateMonthlyAggregations(
   testLogs: TestLogItem[]
 ): MonthlyAggregation[] {
   const now = new Date()
-  const monthlyData: Map<string, MonthlyAggregation> = new Map()
+  const monthlyData: Map<string, any> = new Map()
 
   // Initialize last 6 months
   for (let i = 0; i < 6; i++) {
@@ -359,11 +403,18 @@ function calculateMonthlyAggregations(
     monthlyData.set(key, {
       year,
       month,
-      attendance_rate: 0,
-      homework_rate: 0,
-      average_score: 0,
+      attendance_count_5: 0,
+      attendance_count_4: 0,
+      attendance_count_3: 0,
+      attendance_count_2: 0,
+      attendance_count_1: 0,
+      homework_sum: 0,
+      homework_count: 0,
+      focus_sum: 0,
+      focus_count: 0,
       total_study_days: 0,
       total_tests: 0,
+      test_score_sum: 0,
     })
   }
 
@@ -378,14 +429,25 @@ function calculateMonthlyAggregations(
     if (data) {
       data.total_study_days++
 
-      // Count attendance (4-5 = attended)
-      if (log.attendance_status !== null && log.attendance_status >= 4) {
-        data.attendance_rate++
+      // Count attendance by score (1-5)
+      if (log.attendance_status !== null) {
+        if (log.attendance_status === 5) data.attendance_count_5++
+        else if (log.attendance_status === 4) data.attendance_count_4++
+        else if (log.attendance_status === 3) data.attendance_count_3++
+        else if (log.attendance_status === 2) data.attendance_count_2++
+        else if (log.attendance_status === 1) data.attendance_count_1++
       }
 
-      // Count homework completion (4-5 = completed)
-      if (log.homework !== null && log.homework >= 4) {
-        data.homework_rate++
+      // Accumulate homework scores for average
+      if (log.homework !== null) {
+        data.homework_sum += log.homework
+        data.homework_count++
+      }
+
+      // Accumulate focus scores for average
+      if (log.focus !== null) {
+        data.focus_sum += log.focus
+        data.focus_count++
       }
     }
   })
@@ -400,31 +462,33 @@ function calculateMonthlyAggregations(
     const data = monthlyData.get(key)
     if (data && log.test_score !== null) {
       data.total_tests++
-      data.average_score += log.test_score
+      data.test_score_sum += log.test_score
     }
   })
 
-  // Calculate percentages and averages
+  // Calculate averages
   const results: MonthlyAggregation[] = []
   monthlyData.forEach((data) => {
-    const attendanceCount = data.attendance_rate
-    const homeworkCount = data.homework_rate
-
-    // Calculate rates as percentages
-    data.attendance_rate =
-      data.total_study_days > 0
-        ? Math.round((attendanceCount / data.total_study_days) * 1000) / 10
-        : 0
-    data.homework_rate =
-      data.total_study_days > 0
-        ? Math.round((homeworkCount / data.total_study_days) * 1000) / 10
-        : 0
-
-    // Calculate average score
-    data.average_score =
-      data.total_tests > 0 ? Math.round((data.average_score / data.total_tests) * 10) / 10 : 0
-
-    results.push(data)
+    results.push({
+      year: data.year,
+      month: data.month,
+      attendance_count_5: data.attendance_count_5,
+      attendance_count_4: data.attendance_count_4,
+      attendance_count_3: data.attendance_count_3,
+      attendance_count_2: data.attendance_count_2,
+      attendance_count_1: data.attendance_count_1,
+      homework_avg: data.homework_count > 0
+        ? Math.round((data.homework_sum / data.homework_count) * 10) / 10
+        : 0,
+      focus_avg: data.focus_count > 0
+        ? Math.round((data.focus_sum / data.focus_count) * 10) / 10
+        : 0,
+      total_study_days: data.total_study_days,
+      total_tests: data.total_tests,
+      average_score: data.total_tests > 0
+        ? Math.round((data.test_score_sum / data.total_tests) * 10) / 10
+        : 0,
+    })
   })
 
   // Sort by year and month descending
@@ -432,4 +496,86 @@ function calculateMonthlyAggregations(
     if (a.year !== b.year) return b.year - a.year
     return b.month - a.month
   })
+}
+
+function calculateMathflatStats(
+  mathflatRecords: MathflatRecordItem[],
+  year?: number,
+  month?: number
+): MathflatStats {
+  let recentRecords: MathflatRecordItem[]
+
+  if (year !== undefined && month !== undefined) {
+    // Filter by specific month
+    recentRecords = mathflatRecords.filter((record) => {
+      if (!record.event_date) return false
+      const recordDate = new Date(record.event_date)
+      return recordDate.getFullYear() === year && recordDate.getMonth() + 1 === month
+    })
+  } else {
+    // Get records from last 30 days (fallback)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    recentRecords = mathflatRecords.filter((record) => {
+      if (!record.event_date) return false
+      const recordDate = new Date(record.event_date)
+      return recordDate >= thirtyDaysAgo
+    })
+  }
+
+  // Separate by mathflat_type
+  const textbookRecords = recentRecords.filter((r) => r.mathflat_type === "교재")
+  const worksheetRecords = recentRecords.filter((r) => r.mathflat_type === "학습지")
+  const challengeRecords = recentRecords.filter((r) =>
+    r.mathflat_type === "챌린지" || r.mathflat_type === "챌린지오답"
+  )
+
+  // Calculate textbook stats
+  const textbook_problems = textbookRecords.reduce(
+    (sum, r) => sum + (r.problem_solved || 0),
+    0
+  )
+  const textbook_correct = textbookRecords.reduce(
+    (sum, r) => sum + (r.correct_count || 0),
+    0
+  )
+  const textbook_accuracy = textbook_problems > 0
+    ? Math.round((textbook_correct / textbook_problems) * 1000) / 10
+    : 0
+
+  // Calculate worksheet stats
+  const worksheet_problems = worksheetRecords.reduce(
+    (sum, r) => sum + (r.problem_solved || 0),
+    0
+  )
+  const worksheet_correct = worksheetRecords.reduce(
+    (sum, r) => sum + (r.correct_count || 0),
+    0
+  )
+  const worksheet_accuracy = worksheet_problems > 0
+    ? Math.round((worksheet_correct / worksheet_problems) * 1000) / 10
+    : 0
+
+  // Calculate challenge stats
+  const challenge_problems = challengeRecords.reduce(
+    (sum, r) => sum + (r.problem_solved || 0),
+    0
+  )
+  const challenge_correct = challengeRecords.reduce(
+    (sum, r) => sum + (r.correct_count || 0),
+    0
+  )
+  const challenge_accuracy = challenge_problems > 0
+    ? Math.round((challenge_correct / challenge_problems) * 1000) / 10
+    : 0
+
+  return {
+    textbook_accuracy,
+    textbook_problems,
+    worksheet_accuracy,
+    worksheet_problems,
+    challenge_accuracy,
+    challenge_problems,
+  }
 }

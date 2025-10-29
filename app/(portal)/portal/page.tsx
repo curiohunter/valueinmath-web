@@ -7,8 +7,7 @@ import { PortalData } from "@/types/portal"
 import { getPortalData } from "@/lib/portal-client"
 import { MonthlySummaryCards } from "@/components/portal/monthly-summary-cards"
 import { LearningTrendsChart } from "@/components/portal/learning-trends-chart"
-import { ActivityTimeline } from "@/components/portal/activity-timeline"
-import { TuitionSection } from "@/components/portal/tuition-section"
+import { LearningCalendar } from "@/components/portal/learning-calendar"
 import { StudyLogsSection } from "@/components/portal/study-logs-section"
 import { TestLogsSection } from "@/components/portal/test-logs-section"
 import { ExamScoresSection } from "@/components/portal/exam-scores-section"
@@ -16,7 +15,8 @@ import { MakeupClassesSection } from "@/components/portal/makeup-classes-section
 import { ConsultationsSection } from "@/components/portal/consultations-section"
 import { MathflatSection } from "@/components/portal/mathflat-section"
 import { QuickActionMenu } from "@/components/portal/quick-action-menu"
-import { RefreshCw } from "lucide-react"
+import { ClassesSection } from "@/components/portal/classes-section"
+import { RefreshCw, GraduationCap } from "lucide-react"
 
 export default function PortalPage() {
   const { user } = useAuth()
@@ -124,58 +124,65 @@ export default function PortalPage() {
     <>
       <div className="space-y-8 pb-20">
         {/* 1. Profile Header - Student Info */}
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background p-6 rounded-lg border">
-          <h1 className="text-3xl font-bold mb-3">{portalData.student.name}</h1>
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-6 rounded-lg border border-blue-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="rounded-full p-3 bg-gradient-to-br from-blue-500 to-indigo-600">
+              <GraduationCap className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800">{portalData.student.name}</h1>
+          </div>
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">학년:</span>
-              <span className="font-semibold">{portalData.student.grade}학년</span>
+              <span className="text-gray-600">학년:</span>
+              <span className="font-semibold text-gray-800">{portalData.student.grade}학년</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">학교:</span>
-              <span className="font-semibold">{portalData.student.school}</span>
+              <span className="text-gray-600">학교:</span>
+              <span className="font-semibold text-gray-800">{portalData.student.school}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">상태:</span>
-              <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-semibold">
+              <span className="text-gray-600">상태:</span>
+              <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-full text-xs font-semibold shadow-sm">
                 {portalData.student.status}
               </span>
             </div>
           </div>
         </div>
 
-        {/* 2. Monthly Summary Cards */}
+        {/* 2. Classes Section - Student's Classes */}
+        <ClassesSection classes={portalData.classes} />
+
+        {/* 3. Monthly Summary Cards */}
         <MonthlySummaryCards
           monthly_aggregations={portalData.monthly_aggregations}
-          tuition_fees={portalData.tuition_fees}
-          onCardClick={handleCardClick}
+          monthly_mathflat_stats={portalData.monthly_mathflat_stats}
         />
 
-        {/* 3. Learning Trends Chart */}
+        {/* 4. Learning Trends Chart */}
         <LearningTrendsChart monthly_aggregations={portalData.monthly_aggregations} />
 
-        {/* 4. Two-Column Layout: Activity Timeline + Tuition Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ActivityTimeline activities={portalData.recent_activities} />
-          <TuitionSection
-            tuition_fees={portalData.tuition_fees}
-            studentName={portalData.student.name}
-          />
-        </div>
+        {/* 5. Learning Calendar - 학습 캘린더 */}
+        <LearningCalendar
+          study_logs={portalData.study_logs}
+          test_logs={portalData.test_logs}
+          makeup_classes={portalData.makeup_classes}
+          consultations={portalData.consultations}
+          mathflat_records={portalData.mathflat_records}
+        />
 
-        {/* 5. Collapsible Sections - Detailed Data */}
+        {/* 6. Collapsible Sections - Detailed Data */}
         <div className="space-y-6">
           <h2 className="text-2xl font-bold">상세 학습 기록</h2>
+          <ExamScoresSection scores={portalData.school_exam_scores} />
           <StudyLogsSection logs={portalData.study_logs} />
           <TestLogsSection logs={portalData.test_logs} />
-          <ExamScoresSection scores={portalData.school_exam_scores} />
           <MakeupClassesSection classes={portalData.makeup_classes} />
           <ConsultationsSection consultations={portalData.consultations} />
           <MathflatSection records={portalData.mathflat_records} />
         </div>
       </div>
 
-      {/* 6. Quick Action Menu */}
+      {/* 7. Quick Action Menu */}
       <QuickActionMenu />
     </>
   )
