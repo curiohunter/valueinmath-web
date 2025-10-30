@@ -5,7 +5,7 @@
 **Repository**: https://github.com/curiohunter/valueinmath-web
 **Stack**: Next.js 15, Supabase, TypeScript, Tailwind CSS
 **Deployment**: Vercel (auto-deploy on push to main)
-**Last Updated**: 2025-10-27
+**Last Updated**: 2025-10-30
 
 ---
 
@@ -113,6 +113,25 @@
 ---
 
 ## 📝 Recent Changes Log
+
+### 2025-10-30
+- ✅ **Portal 학습일지 UI 개선 (Phase 1)**
+  - scoreColor 함수 추가 (learning 페이지 컬러 시스템 적용)
+  - 출석/숙제/집중도 colorful badge UI 구현
+  - 교재 레이블 변경: "교재1" → "수업", "교재2" → "숙제"
+  - BookOpen, FileText 아이콘 추가
+  - 컴포넌트: `components/portal/study-logs-section.tsx`
+- ✅ **반관리 페이지 시간표 표시 및 학생 정보 개선**
+  - 시간표 컬럼 추가: 각 반의 시간표 테이블에 표시
+  - 시간표 포맷: "월수금 19:00-21:00" 형태, 요일 그룹별 줄바꿈 처리
+  - 학생 이름 포맷: "홍길동(초6)" 형태로 학교급+학년 표시
+  - 인쇄 기능: 시간표 및 학생 정보 포함하여 출력
+  - 수정 파일: `page.tsx`, `classes-table.tsx`, `print-classes-table.tsx`
+- ✅ **보강 모달 시간 보존 버그 수정**
+  - 편집 모드에서 기존 보강 시간이 2PM으로 변경되는 문제 해결
+  - useEffect 조건 추가: 편집 모드 시 기본값 설정 방지
+  - Select 컴포넌트 fallback 제거: undefined 사용으로 변경
+  - 파일: `components/learning/makeup-classes/makeup-modal.tsx`
 
 ### 2025-10-25 ~ 2025-10-27
 - ✅ **GitHub Actions CI/CD 파이프라인 완료**
