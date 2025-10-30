@@ -34,10 +34,9 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
     (fee) => fee.year === currentYear && fee.month === currentMonth
   )
 
-  // Calculate unpaid total
-  const unpaidTotal = tuition_fees
-    .filter((fee) => fee.payment_status === "미납")
-    .reduce((sum, fee) => sum + fee.amount, 0)
+  // Get unpaid items
+  const unpaidItems = tuition_fees.filter((fee) => fee.payment_status === "미납")
+  const unpaidTotal = unpaidItems.reduce((sum, fee) => sum + fee.amount, 0)
 
   // Pagination
   const totalPages = Math.ceil(tuition_fees.length / ITEMS_PER_PAGE)
@@ -122,6 +121,12 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
             {currentTuition && (
               <div className="space-y-1 text-sm">
                 <div className="flex items-center gap-2">
+                  <span className="text-gray-600">년월:</span>
+                  <span className="font-semibold">
+                    {currentTuition.year}.{String(currentTuition.month).padStart(2, "0")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
                   <span className="text-gray-600">금액:</span>
                   <span className="font-semibold">
                     {currentTuition.amount.toLocaleString()}원
@@ -131,6 +136,14 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
                   <div className="flex items-center gap-2">
                     <span className="text-gray-600">반명:</span>
                     <span>{currentTuition.class_name}</span>
+                  </div>
+                )}
+                {(currentTuition.period_start_date || currentTuition.period_end_date) && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-600">기간:</span>
+                    <span>
+                      {currentTuition.period_start_date || "-"} ~ {currentTuition.period_end_date || "-"}
+                    </span>
                   </div>
                 )}
                 {currentTuition.is_sibling && (
@@ -144,14 +157,55 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
         </CardContent>
       </Card>
 
-      {/* Unpaid Total Alert */}
-      {unpaidTotal > 0 && (
+      {/* Unpaid Items Alert */}
+      {unpaidItems.length > 0 && (
         <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm text-red-800 font-medium">미납 금액이 있습니다</p>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              미납 내역 ({unpaidItems.length}건)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Unpaid Items List */}
+              <div className="space-y-3">
+                {unpaidItems.map((fee) => (
+                  <div
+                    key={fee.id}
+                    className="border-l-4 border-red-400 bg-white p-3 rounded"
+                  >
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-600">년월:</span>{" "}
+                        <span className="font-semibold">
+                          {fee.year}.{String(fee.month).padStart(2, "0")}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">금액:</span>{" "}
+                        <span className="font-semibold text-red-600">
+                          {fee.amount.toLocaleString()}원
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">반명:</span>{" "}
+                        <span>{fee.class_name || "-"}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">기간:</span>{" "}
+                        <span>
+                          {fee.period_start_date || "-"} ~ {fee.period_end_date || "-"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total Unpaid Amount */}
+              <div className="pt-3 border-t border-red-200">
+                <p className="text-sm text-red-800 font-medium">총 미납 금액</p>
                 <p className="text-2xl font-bold text-red-600 mt-1">
                   {unpaidTotal.toLocaleString()}원
                 </p>
@@ -185,6 +239,7 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
                       <TableHead>년월</TableHead>
                       <TableHead>금액</TableHead>
                       <TableHead>반명</TableHead>
+                      <TableHead>기간</TableHead>
                       <TableHead className="text-center">형제할인</TableHead>
                       <TableHead className="text-center">납부상태</TableHead>
                     </TableRow>
@@ -197,6 +252,9 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
                         </TableCell>
                         <TableCell>{fee.amount.toLocaleString()}원</TableCell>
                         <TableCell>{fee.class_name || "-"}</TableCell>
+                        <TableCell className="text-sm">
+                          {fee.period_start_date || "-"} ~ {fee.period_end_date || "-"}
+                        </TableCell>
                         <TableCell className="text-center">
                           {fee.is_sibling ? (
                             <Badge variant="secondary" className="text-xs">
@@ -229,13 +287,18 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
                       <div className="text-2xl font-bold text-gray-900">
                         {fee.amount.toLocaleString()}원
                       </div>
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <span>{fee.class_name || "반 정보 없음"}</span>
-                        {fee.is_sibling && (
-                          <Badge variant="secondary" className="text-xs">
-                            형제할인
-                          </Badge>
-                        )}
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <div className="flex items-center justify-between">
+                          <span>{fee.class_name || "반 정보 없음"}</span>
+                          {fee.is_sibling && (
+                            <Badge variant="secondary" className="text-xs">
+                              형제할인
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs">
+                          기간: {fee.period_start_date || "-"} ~ {fee.period_end_date || "-"}
+                        </div>
                       </div>
                     </div>
                   </Card>
