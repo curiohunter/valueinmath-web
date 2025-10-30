@@ -105,24 +105,25 @@ export function MakeupModal({
       setAbsenceReason(editingMakeup.absence_reason || "");
       if (editingMakeup.makeup_date) {
         setMakeupDate(new Date(editingMakeup.makeup_date));
-        
-        // 보강일이 있을 때만 시간 설정
-        if (editingMakeup.start_time) {
+
+        // 보강일이 있을 때 시간 설정 (유효한 시간이 있는 경우에만)
+        // null이거나 "00:00:00"인 경우는 시간 미정으로 처리
+        if (editingMakeup.start_time && editingMakeup.start_time !== "00:00:00") {
           const [hour, minute] = editingMakeup.start_time.split(':');
-          setStartHour(hour || "14");
-          setStartMinute(minute || "00");
+          setStartHour(hour || null);
+          setStartMinute(minute || null);
         } else {
-          setStartHour("14");
-          setStartMinute("00");
+          setStartHour(null);
+          setStartMinute(null);
         }
-        
-        if (editingMakeup.end_time) {
+
+        if (editingMakeup.end_time && editingMakeup.end_time !== "00:00:00") {
           const [hour, minute] = editingMakeup.end_time.split(':');
-          setEndHour(hour || "15");
-          setEndMinute(minute || "00");
+          setEndHour(hour || null);
+          setEndMinute(minute || null);
         } else {
-          setEndHour("15");
-          setEndMinute("00");
+          setEndHour(null);
+          setEndMinute(null);
         }
       } else {
         // 보강일이 없으면 시간도 null
@@ -151,22 +152,25 @@ export function MakeupModal({
     }
   }, [editingMakeup]);
   
-  // 보강일 선택 시 시간 초기화
+  // 보강일 선택 시 시간 초기화 (새로 추가하는 경우에만)
   useEffect(() => {
-    if (makeupDate && !startHour && !startMinute) {
-      // 보강일을 선택하고 시간이 아직 설정되지 않은 경우 기본값 설정
-      setStartHour("14");
-      setStartMinute("00");
-      setEndHour("15");
-      setEndMinute("00");
-    } else if (!makeupDate) {
-      // 보강일을 지우면 시간도 초기화
-      setStartHour(null);
-      setStartMinute(null);
-      setEndHour(null);
-      setEndMinute(null);
+    // 편집 모드가 아닐 때만 자동 설정
+    if (!editingMakeup) {
+      if (makeupDate && !startHour && !startMinute) {
+        // 보강일을 선택하고 시간이 아직 설정되지 않은 경우 기본값 설정
+        setStartHour("14");
+        setStartMinute("00");
+        setEndHour("15");
+        setEndMinute("00");
+      } else if (!makeupDate) {
+        // 보강일을 지우면 시간도 초기화
+        setStartHour(null);
+        setStartMinute(null);
+        setEndHour(null);
+        setEndMinute(null);
+      }
     }
-  }, [makeupDate]);
+  }, [makeupDate, editingMakeup, startHour, startMinute]);
   
   // 시작 시간 변경 시 종료 시간 자동 설정 (1시간 후)
   useEffect(() => {
@@ -747,7 +751,7 @@ export function MakeupModal({
                   <div>
                     <Label className="text-xs text-gray-500 mb-1">시작 시간</Label>
                     <div className="flex gap-2">
-                      <Select value={startHour || "14"} onValueChange={setStartHour}>
+                      <Select value={startHour || undefined} onValueChange={setStartHour}>
                         <SelectTrigger className="w-24">
                           <SelectValue placeholder="시" />
                         </SelectTrigger>
@@ -759,7 +763,7 @@ export function MakeupModal({
                           ))}
                         </SelectContent>
                       </Select>
-                      <Select value={startMinute || "00"} onValueChange={setStartMinute}>
+                      <Select value={startMinute || undefined} onValueChange={setStartMinute}>
                         <SelectTrigger className="w-24">
                           <SelectValue placeholder="분" />
                         </SelectTrigger>
@@ -778,7 +782,7 @@ export function MakeupModal({
                   <div>
                     <Label className="text-xs text-gray-500 mb-1">종료 시간</Label>
                     <div className="flex gap-2">
-                      <Select value={endHour || "15"} onValueChange={setEndHour}>
+                      <Select value={endHour || undefined} onValueChange={setEndHour}>
                         <SelectTrigger className="w-24">
                           <SelectValue placeholder="시" />
                         </SelectTrigger>
@@ -790,7 +794,7 @@ export function MakeupModal({
                           ))}
                         </SelectContent>
                       </Select>
-                      <Select value={endMinute || "00"} onValueChange={setEndMinute}>
+                      <Select value={endMinute || undefined} onValueChange={setEndMinute}>
                         <SelectTrigger className="w-24">
                           <SelectValue placeholder="분" />
                         </SelectTrigger>
