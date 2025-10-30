@@ -132,6 +132,10 @@
   - useEffect 조건 추가: 편집 모드 시 기본값 설정 방지
   - Select 컴포넌트 fallback 제거: undefined 사용으로 변경
   - 파일: `components/learning/makeup-classes/makeup-modal.tsx`
+- ✅ **학습일지 & 테스트 관리 페이지 반 필터 정렬 개선**
+  - 반 선택 필터를 선생님별로 정렬 (가나다순)
+  - 같은 선생님 내에서는 반 이름으로 정렬
+  - 수정 파일: `learning/page.tsx`, `learning/test-logs/page.tsx`
 
 ### 2025-10-25 ~ 2025-10-27
 - ✅ **GitHub Actions CI/CD 파이프라인 완료**
