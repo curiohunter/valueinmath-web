@@ -30,12 +30,13 @@ export function LearningTrendsChart({ monthly_aggregations }: LearningTrendsChar
     .reverse() // Oldest to newest for chart
 
   // Transform data for Recharts
-  const chartData = filteredData.map((item) => ({
-    month: `${item.year}.${String(item.month).padStart(2, "0")}`,
-    출석률: item.attendance_rate,
-    과제수행률: item.homework_rate,
-    평균점수: item.average_score,
-  }))
+  const chartData = filteredData.map((item) => {
+    return {
+      month: `${item.year}.${String(item.month).padStart(2, "0")}`,
+      숙제평균: item.homework_avg,
+      집중도평균: item.focus_avg,
+    }
+  })
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -45,8 +46,7 @@ export function LearningTrendsChart({ monthly_aggregations }: LearningTrendsChar
           <p className="font-semibold mb-2">{label}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toFixed(1)}
-              {entry.name === "평균점수" ? "점" : "%"}
+              {entry.name}: {entry.value.toFixed(1)}점
             </p>
           ))}
         </div>
@@ -54,6 +54,7 @@ export function LearningTrendsChart({ monthly_aggregations }: LearningTrendsChar
     }
     return null
   }
+
 
   return (
     <Card>
@@ -105,7 +106,9 @@ export function LearningTrendsChart({ monthly_aggregations }: LearningTrendsChar
                 tick={{ fontSize: 12 }}
                 stroke="#6b7280"
                 tickLine={false}
-                domain={[0, 100]}
+                domain={[0, 5]}
+                ticks={[0, 1, 2, 3, 4, 5]}
+                label={{ value: "점", position: "insideLeft", style: { fontSize: 12 } }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend
@@ -114,15 +117,7 @@ export function LearningTrendsChart({ monthly_aggregations }: LearningTrendsChar
               />
               <Line
                 type="monotone"
-                dataKey="출석률"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={{ fill: "#3b82f6", r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="과제수행률"
+                dataKey="숙제평균"
                 stroke="#10b981"
                 strokeWidth={2}
                 dot={{ fill: "#10b981", r: 4 }}
@@ -130,51 +125,36 @@ export function LearningTrendsChart({ monthly_aggregations }: LearningTrendsChar
               />
               <Line
                 type="monotone"
-                dataKey="평균점수"
-                stroke="#f59e0b"
+                dataKey="집중도평균"
+                stroke="#a855f7"
                 strokeWidth={2}
-                dot={{ fill: "#f59e0b", r: 4 }}
+                dot={{ fill: "#a855f7", r: 4 }}
                 activeDot={{ r: 6 }}
-                yAxisId={0}
               />
             </LineChart>
           </ResponsiveContainer>
         )}
 
-        {/* Mobile: Additional info */}
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center md:hidden">
-          {chartData.length > 0 && (
-            <>
-              <div className="text-xs">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <div className="w-3 h-0.5 bg-blue-500"></div>
-                  <span className="text-gray-600">출석률</span>
+        {/* Data values below chart */}
+        {chartData.length > 0 && (
+          <div className="mt-4 border-t pt-3">
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${chartData.length}, 1fr)` }}>
+              {chartData.map((data, index) => (
+                <div key={index} className="text-center">
+                  <div className="text-xs text-gray-500 mb-1 font-medium">{data.month}</div>
+                  <div className="text-xs">
+                    <div className="text-green-600 font-semibold">
+                      숙제 {data.숙제평균.toFixed(1)}
+                    </div>
+                    <div className="text-purple-600 font-semibold">
+                      집중 {data.집중도평균.toFixed(1)}
+                    </div>
+                  </div>
                 </div>
-                <p className="font-semibold text-blue-600">
-                  {chartData[chartData.length - 1].출석률.toFixed(1)}%
-                </p>
-              </div>
-              <div className="text-xs">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <div className="w-3 h-0.5 bg-green-500"></div>
-                  <span className="text-gray-600">과제수행률</span>
-                </div>
-                <p className="font-semibold text-green-600">
-                  {chartData[chartData.length - 1].과제수행률.toFixed(1)}%
-                </p>
-              </div>
-              <div className="text-xs">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <div className="w-3 h-0.5 bg-orange-500"></div>
-                  <span className="text-gray-600">평균점수</span>
-                </div>
-                <p className="font-semibold text-orange-600">
-                  {chartData[chartData.length - 1].평균점수.toFixed(1)}점
-                </p>
-              </div>
-            </>
-          )}
-        </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

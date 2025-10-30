@@ -1,7 +1,12 @@
+"use client"
+
+import { useState } from "react"
 import { ConsultationItem } from "@/types/portal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
+import { ChevronDown, ChevronUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface ConsultationsSectionProps {
   consultations: ConsultationItem[]
@@ -14,12 +19,20 @@ const statusColors = {
 }
 
 export function ConsultationsSection({ consultations }: ConsultationsSectionProps) {
+  const [isOpen, setIsOpen] = useState(true)
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>상담 기록</CardTitle>
+      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronDown className="h-5 w-5 -rotate-90" />}
+          </Button>
+          <CardTitle>상담 기록</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      {isOpen && (
+        <CardContent>
         {consultations.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">상담 기록이 없습니다.</p>
         ) : (
@@ -77,7 +90,8 @@ export function ConsultationsSection({ consultations }: ConsultationsSectionProp
             )}
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   )
 }

@@ -1,7 +1,12 @@
+"use client"
+
+import { useState } from "react"
 import { TestLogItem } from "@/types/portal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
+import { ChevronDown, ChevronUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface TestLogsSectionProps {
   logs: TestLogItem[]
@@ -16,12 +21,20 @@ const getScoreColor = (score: number | null) => {
 }
 
 export function TestLogsSection({ logs }: TestLogsSectionProps) {
+  const [isOpen, setIsOpen] = useState(true)
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>테스트 기록</CardTitle>
+      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronDown className="h-5 w-5 -rotate-90" />}
+          </Button>
+          <CardTitle>테스트 기록</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      {isOpen && (
+        <CardContent>
         {logs.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">테스트 기록이 없습니다.</p>
         ) : (
@@ -65,7 +78,8 @@ export function TestLogsSection({ logs }: TestLogsSectionProps) {
             )}
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   )
 }
