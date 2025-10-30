@@ -1,252 +1,400 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MonthlyAggregation, TuitionFeeItem } from "@/types/portal"
+import { Button } from "@/components/ui/button"
+import { MonthlyAggregation, MonthlyMathflatStats } from "@/types/portal"
 import {
   CalendarCheck,
   BookCheck,
+  Target,
   TrendingUp,
-  CreditCard,
-  ArrowUp,
-  ArrowDown,
-  Minus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface MonthlySummaryCardsProps {
   monthly_aggregations: MonthlyAggregation[]
-  tuition_fees: TuitionFeeItem[]
-  onCardClick?: (cardType: "attendance" | "homework" | "score" | "tuition") => void
+  monthly_mathflat_stats: MonthlyMathflatStats[]
 }
 
-interface CardData {
-  id: "attendance" | "homework" | "score" | "tuition"
-  title: string
-  value: string
-  unit: string
-  change: number | null
-  changeLabel: string
-  icon: React.ReactNode
-  color: string
-  bgColor: string
+// 점수 라벨 (StudyLogTable.tsx 참고)
+const attendanceLabels: Record<number, string> = {
+  5: "출석",
+  4: "지각",
+  3: "조퇴",
+  2: "보강",
+  1: "결석"
+}
+
+// 점수 범위별 설명 (모든 범위 표시)
+const getScoreRangeDescriptions = (type: "homework" | "focus") => {
+  if (type === "homework") {
+    return [
+      { range: "4-5점", description: "매우 양호 (90% 이상 완수)", minScore: 4 },
+      { range: "3-4점", description: "보통 (추가 추적 필요)", minScore: 3 },
+      { range: "2-3점", description: "주의 필요 (보강 필요)", minScore: 2 },
+      { range: "1-2점", description: "조치 필요", minScore: 1 },
+    ]
+  } else {
+    return [
+      { range: "4-5점", description: "매우 양호 (열의 있고 잘 참여)", minScore: 4 },
+      { range: "3-4점", description: "보통 (대체로 잘 참여)", minScore: 3 },
+      { range: "2-3점", description: "주의 필요 (조치 필요)", minScore: 2 },
+      { range: "1-2점", description: "집중력 매우 부족", minScore: 1 },
+    ]
+  }
+}
+
+// 현재 점수가 해당 범위에 속하는지 확인
+const isInRange = (score: number, minScore: number) => {
+  if (minScore === 4) return score >= 4
+  if (minScore === 3) return score >= 3 && score < 4
+  if (minScore === 2) return score >= 2 && score < 3
+  return score >= 1 && score < 2
+}
+
+// 점수 색상 함수
+const scoreColor = (score: number) => {
+  if (score >= 4.5) return "text-green-600"
+  if (score >= 3.5) return "text-blue-600"
+  if (score >= 2.5) return "text-yellow-600"
+  if (score >= 1.5) return "text-orange-600"
+  return "text-red-600"
 }
 
 export function MonthlySummaryCards({
   monthly_aggregations,
-  tuition_fees,
-  onCardClick,
+  monthly_mathflat_stats,
 }: MonthlySummaryCardsProps) {
-  // Get current month and previous month data
-  const currentMonth = monthly_aggregations[0]
-  const previousMonth = monthly_aggregations[1]
+  // State for selected month index (0 = current month)
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState(0)
 
-  // Get current month tuition fee
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonthNum = now.getMonth() + 1
-  const currentTuition = tuition_fees.find(
-    (fee) => fee.year === currentYear && fee.month === currentMonthNum
-  )
-
-  // Calculate attendance rate and change
-  const attendanceRate = currentMonth?.attendance_rate || 0
-  const attendanceChange = currentMonth && previousMonth
-    ? currentMonth.attendance_rate - previousMonth.attendance_rate
-    : null
-
-  // Calculate homework completion rate and change
-  const homeworkRate = currentMonth?.homework_rate || 0
-  const homeworkChange = currentMonth && previousMonth
-    ? currentMonth.homework_rate - previousMonth.homework_rate
-    : null
-
-  // Calculate average score and change
-  const averageScore = currentMonth?.average_score || 0
-  const scoreChange = currentMonth && previousMonth
-    ? currentMonth.average_score - previousMonth.average_score
-    : null
-
-  // Determine color for each metric
-  const getColorClass = (value: number, type: "rate" | "score") => {
-    if (type === "rate") {
-      if (value >= 90) return { color: "text-green-600", bg: "bg-green-50" }
-      if (value >= 70) return { color: "text-yellow-600", bg: "bg-yellow-50" }
-      return { color: "text-red-600", bg: "bg-red-50" }
-    } else {
-      // score
-      if (value >= 85) return { color: "text-green-600", bg: "bg-green-50" }
-      if (value >= 70) return { color: "text-yellow-600", bg: "bg-yellow-50" }
-      return { color: "text-red-600", bg: "bg-red-50" }
-    }
-  }
-
-  const attendanceColor = getColorClass(attendanceRate, "rate")
-  const homeworkColor = getColorClass(homeworkRate, "rate")
-  const scoreColor = getColorClass(averageScore, "score")
-
-  // Tuition status
-  const tuitionStatus = currentTuition?.payment_status || "미납"
-  const tuitionColor =
-    tuitionStatus === "완납"
-      ? { color: "text-green-600", bg: "bg-green-50" }
-      : tuitionStatus === "일부납부"
-      ? { color: "text-yellow-600", bg: "bg-yellow-50" }
-      : { color: "text-red-600", bg: "bg-red-50" }
-
-  const cards: CardData[] = [
-    {
-      id: "attendance",
-      title: "출석률",
-      value: attendanceRate.toFixed(1),
-      unit: "%",
-      change: attendanceChange,
-      changeLabel: "전월 대비",
-      icon: <CalendarCheck className="h-5 w-5" />,
-      color: attendanceColor.color,
-      bgColor: attendanceColor.bg,
-    },
-    {
-      id: "homework",
-      title: "과제 수행률",
-      value: homeworkRate.toFixed(1),
-      unit: "%",
-      change: homeworkChange,
-      changeLabel: "전월 대비",
-      icon: <BookCheck className="h-5 w-5" />,
-      color: homeworkColor.color,
-      bgColor: homeworkColor.bg,
-    },
-    {
-      id: "score",
-      title: "평균 점수",
-      value: averageScore.toFixed(1),
-      unit: "점",
-      change: scoreChange,
-      changeLabel: "전월 대비",
-      icon: <TrendingUp className="h-5 w-5" />,
-      color: scoreColor.color,
-      bgColor: scoreColor.bg,
-    },
-    {
-      id: "tuition",
-      title: "원비 납부",
-      value: tuitionStatus,
-      unit: "",
-      change: null,
-      changeLabel: currentTuition
-        ? `${currentTuition.amount.toLocaleString()}원`
-        : "정보 없음",
-      icon: <CreditCard className="h-5 w-5" />,
-      color: tuitionColor.color,
-      bgColor: tuitionColor.bg,
-    },
-  ]
-
-  const renderChangeIndicator = (change: number | null) => {
-    if (change === null || change === 0) {
-      return (
-        <span className="flex items-center gap-0.5 text-xs text-gray-500">
-          <Minus className="h-3 w-3" />
-          <span>변동 없음</span>
-        </span>
-      )
-    }
-
-    if (change > 0) {
-      return (
-        <span className="flex items-center gap-0.5 text-xs text-green-600">
-          <ArrowUp className="h-3 w-3" />
-          <span>{Math.abs(change).toFixed(1)}</span>
-        </span>
-      )
-    }
-
+  if (monthly_aggregations.length === 0) {
     return (
-      <span className="flex items-center gap-0.5 text-xs text-red-600">
-        <ArrowDown className="h-3 w-3" />
-        <span>{Math.abs(change).toFixed(1)}</span>
-      </span>
+      <div className="text-center text-muted-foreground py-8">
+        학습 데이터가 없습니다.
+      </div>
     )
   }
 
+  // Get selected month data
+  const currentMonth = monthly_aggregations[selectedMonthIndex]
+  const currentMathflatStats = monthly_mathflat_stats[selectedMonthIndex]?.stats || {
+    textbook_accuracy: 0,
+    textbook_problems: 0,
+    worksheet_accuracy: 0,
+    worksheet_problems: 0,
+    challenge_accuracy: 0,
+    challenge_problems: 0,
+  }
+
+  // 출석 횟수
+  const attendanceCounts = [
+    { score: 5, label: attendanceLabels[5], count: currentMonth.attendance_count_5 },
+    { score: 4, label: attendanceLabels[4], count: currentMonth.attendance_count_4 },
+    { score: 3, label: attendanceLabels[3], count: currentMonth.attendance_count_3 },
+    { score: 2, label: attendanceLabels[2], count: currentMonth.attendance_count_2 },
+    { score: 1, label: attendanceLabels[1], count: currentMonth.attendance_count_1 },
+  ].filter(item => item.count > 0) // 0회는 제외
+
+  // 숙제 평균
+  const homeworkAvg = currentMonth.homework_avg
+
+  // 집중도 평균
+  const focusAvg = currentMonth.focus_avg
+
   return (
-    <div className="w-full">
-      {/* Mobile: Horizontal scroll with snap */}
-      <div className="md:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
-        {cards.map((card) => (
-          <div
-            key={card.id}
-            className="snap-center shrink-0 w-[280px] first:ml-4 last:mr-4"
-          >
-            <Card
-              className={cn(
-                "cursor-pointer hover:shadow-md transition-shadow h-full",
-                card.bgColor
-              )}
-              onClick={() => onCardClick?.(card.id)}
+    <div className="w-full space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h2 className="text-lg font-semibold">
+          해당월 학습 현황 - {currentMonth.year}.{String(currentMonth.month).padStart(2, "0")}
+        </h2>
+        <div className="flex gap-2 flex-wrap">
+          {monthly_aggregations.slice(0, 6).map((month, index) => (
+            <Button
+              key={`${month.year}-${month.month}`}
+              variant={selectedMonthIndex === index ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedMonthIndex(index)}
             >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-                <div className={cn("rounded-full p-2", card.bgColor)}>
-                  {card.icon}
+              {month.month}월
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile: Horizontal scroll */}
+      <div className="md:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
+        {/* 1. 출석 카드 */}
+        <div className="snap-center shrink-0 w-[280px] first:ml-4 last:mr-4">
+          <Card className="h-full bg-blue-50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">출석</CardTitle>
+              <div className="rounded-full p-2 bg-blue-100">
+                <CalendarCheck className="h-5 w-5 text-blue-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {attendanceCounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">데이터 없음</p>
+                ) : (
+                  attendanceCounts.map((item) => (
+                    <div key={item.score} className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">
+                        {item.score}: {item.label}
+                      </span>
+                      <span className="font-semibold">{item.count}회</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-xs text-muted-foreground">
+                  총 {currentMonth.total_study_days}일 학습
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 2. 숙제 카드 */}
+        <div className="snap-center shrink-0 w-[280px]">
+          <Card className="h-full bg-green-50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">숙제</CardTitle>
+              <div className="rounded-full p-2 bg-green-100">
+                <BookCheck className="h-5 w-5 text-green-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className={cn("text-3xl font-bold", scoreColor(homeworkAvg))}>
+                {homeworkAvg.toFixed(1)}
+                <span className="text-xl ml-1">점</span>
+              </div>
+              <div className="mt-3 pt-3 border-t space-y-1">
+                {getScoreRangeDescriptions("homework").map((item) => (
+                  <p
+                    key={item.range}
+                    className={cn(
+                      "text-xs",
+                      isInRange(homeworkAvg, item.minScore)
+                        ? "font-semibold text-green-700"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {item.range}: {item.description}
+                  </p>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 3. 집중도 카드 */}
+        <div className="snap-center shrink-0 w-[280px]">
+          <Card className="h-full bg-purple-50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">수업 집중도</CardTitle>
+              <div className="rounded-full p-2 bg-purple-100">
+                <Target className="h-5 w-5 text-purple-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className={cn("text-3xl font-bold", scoreColor(focusAvg))}>
+                {focusAvg.toFixed(1)}
+                <span className="text-xl ml-1">점</span>
+              </div>
+              <div className="mt-3 pt-3 border-t space-y-1">
+                {getScoreRangeDescriptions("focus").map((item) => (
+                  <p
+                    key={item.range}
+                    className={cn(
+                      "text-xs",
+                      isInRange(focusAvg, item.minScore)
+                        ? "font-semibold text-purple-700"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {item.range}: {item.description}
+                  </p>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 4. 매쓰플랫 카드 */}
+        <div className="snap-center shrink-0 w-[280px] last:mr-4">
+          <Card className="h-full bg-orange-50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">매쓰플랫</CardTitle>
+              <div className="rounded-full p-2 bg-orange-100">
+                <TrendingUp className="h-5 w-5 text-orange-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">교재</span>
+                  <span className="font-semibold text-orange-600">
+                    {currentMathflatStats.textbook_accuracy.toFixed(1)}%
+                  </span>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className={cn("text-3xl font-bold", card.color)}>
-                  {card.value}
-                  {card.unit && <span className="text-xl ml-1">{card.unit}</span>}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">학습지</span>
+                  <span className="font-semibold text-orange-600">
+                    {currentMathflatStats.worksheet_accuracy.toFixed(1)}%
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  {card.change !== null ? (
-                    <>
-                      {renderChangeIndicator(card.change)}
-                      <span className="text-xs text-gray-500">{card.changeLabel}</span>
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-600">{card.changeLabel}</span>
-                  )}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">챌린지</span>
+                  <span className="font-semibold text-orange-600">
+                    {currentMathflatStats.challenge_accuracy.toFixed(1)}%
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        ))}
+              </div>
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-xs text-muted-foreground">
+                  총 {currentMathflatStats.textbook_problems + currentMathflatStats.worksheet_problems + currentMathflatStats.challenge_problems}문제 풀이 (이번 달)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Tablet/Desktop: Grid layout */}
       <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((card) => (
-          <Card
-            key={card.id}
-            className={cn(
-              "cursor-pointer hover:shadow-md transition-shadow",
-              card.bgColor
-            )}
-            onClick={() => onCardClick?.(card.id)}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-              <div className={cn("rounded-full p-2", card.bgColor)}>
-                {card.icon}
+        {/* 1. 출석 카드 */}
+        <Card className="bg-blue-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">출석</CardTitle>
+            <div className="rounded-full p-2 bg-blue-100">
+              <CalendarCheck className="h-5 w-5 text-blue-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {attendanceCounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">데이터 없음</p>
+              ) : (
+                attendanceCounts.map((item) => (
+                  <div key={item.score} className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">
+                      {item.score}: {item.label}
+                    </span>
+                    <span className="font-semibold">{item.count}회</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-xs text-muted-foreground">
+                총 {currentMonth.total_study_days}일 학습
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 2. 숙제 카드 */}
+        <Card className="bg-green-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">숙제</CardTitle>
+            <div className="rounded-full p-2 bg-green-100">
+              <BookCheck className="h-5 w-5 text-green-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-3xl font-bold", scoreColor(homeworkAvg))}>
+              {homeworkAvg.toFixed(1)}
+              <span className="text-xl ml-1">점</span>
+            </div>
+            <div className="mt-3 pt-3 border-t space-y-1">
+              {getScoreRangeDescriptions("homework").map((item) => (
+                <p
+                  key={item.range}
+                  className={cn(
+                    "text-xs",
+                    isInRange(homeworkAvg, item.minScore)
+                      ? "font-semibold text-green-700"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {item.range}: {item.description}
+                </p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 3. 집중도 카드 */}
+        <Card className="bg-purple-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">수업 집중도</CardTitle>
+            <div className="rounded-full p-2 bg-purple-100">
+              <Target className="h-5 w-5 text-purple-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-3xl font-bold", scoreColor(focusAvg))}>
+              {focusAvg.toFixed(1)}
+              <span className="text-xl ml-1">점</span>
+            </div>
+            <div className="mt-3 pt-3 border-t space-y-1">
+              {getScoreRangeDescriptions("focus").map((item) => (
+                <p
+                  key={item.range}
+                  className={cn(
+                    "text-xs",
+                    isInRange(focusAvg, item.minScore)
+                      ? "font-semibold text-purple-700"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {item.range}: {item.description}
+                </p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 4. 매쓰플랫 카드 */}
+        <Card className="bg-orange-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">매쓰플랫</CardTitle>
+            <div className="rounded-full p-2 bg-orange-100">
+              <TrendingUp className="h-5 w-5 text-orange-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">교재</span>
+                <span className="font-semibold text-orange-600">
+                  {currentMathflatStats.textbook_accuracy.toFixed(1)}%
+                </span>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className={cn("text-3xl font-bold", card.color)}>
-                {card.value}
-                {card.unit && <span className="text-xl ml-1">{card.unit}</span>}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">학습지</span>
+                <span className="font-semibold text-orange-600">
+                  {currentMathflatStats.worksheet_accuracy.toFixed(1)}%
+                </span>
               </div>
-              <div className="flex items-center gap-2 mt-2">
-                {card.change !== null ? (
-                  <>
-                    {renderChangeIndicator(card.change)}
-                    <span className="text-xs text-gray-500">{card.changeLabel}</span>
-                  </>
-                ) : (
-                  <span className="text-xs text-gray-600">{card.changeLabel}</span>
-                )}
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">챌린지</span>
+                <span className="font-semibold text-orange-600">
+                  {currentMathflatStats.challenge_accuracy.toFixed(1)}%
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-xs text-muted-foreground">
+                총 {currentMathflatStats.textbook_problems + currentMathflatStats.worksheet_problems + currentMathflatStats.challenge_problems}문제 풀이 (이번 달)
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Custom scrollbar hide for mobile */}

@@ -5,7 +5,7 @@ import { StudyLogItem } from "@/types/portal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { ChevronDown, ChevronUp, BookOpen, FileText } from "lucide-react"
+import { ChevronDown, ChevronUp, BookOpen, FileText, UserCheck, ClipboardCheck, Target } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface StudyLogsSectionProps {
@@ -81,64 +81,85 @@ export function StudyLogsSection({ logs }: StudyLogsSectionProps) {
                   </div>
                 </div>
 
-                {/* Status badges - 한 줄로 표시 */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* 출석 */}
-                  {log.attendance_status && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">출석</span>
-                      <span className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full border-2 ${scoreColor(log.attendance_status)}`}>
+                {/* 테이블 형태 레이아웃 */}
+                <div className="grid grid-cols-5 gap-3 text-sm">
+                  {/* 출석 컬럼 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 text-xs font-medium text-green-600">
+                      <UserCheck className="w-3 h-3" />
+                      <span>출석</span>
+                    </div>
+                    {log.attendance_status ? (
+                      <span className={`inline-flex items-center justify-center w-full px-2 py-1.5 text-xs font-semibold rounded-full border-2 ${scoreColor(log.attendance_status)}`}>
                         {attendanceLabels[log.attendance_status]}
                       </span>
-                    </div>
-                  )}
-
-                  {/* 숙제 */}
-                  {log.homework && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">숙제</span>
-                      <span className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full border-2 ${scoreColor(log.homework)}`}>
-                        {homeworkLabels[log.homework]}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* 집중도 */}
-                  {log.focus && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-muted-foreground">집중도</span>
-                      <span className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-full border-2 ${scoreColor(log.focus)}`}>
-                        {focusLabels[log.focus]}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* 수업/숙제 교재 정보 */}
-                {(log.book1 || log.book2) && (
-                  <div className="space-y-2 pt-2 border-t">
-                    {log.book1 && (
-                      <div className="flex items-start gap-2 text-sm">
-                        <BookOpen className="w-4 h-4 mt-0.5 text-blue-600 flex-shrink-0" />
-                        <div>
-                          <span className="font-semibold text-blue-700">수업:</span>{" "}
-                          <span>{log.book1}</span>
-                          {log.book1log && <span className="text-muted-foreground"> - {log.book1log}</span>}
-                        </div>
-                      </div>
-                    )}
-                    {log.book2 && (
-                      <div className="flex items-start gap-2 text-sm">
-                        <FileText className="w-4 h-4 mt-0.5 text-green-600 flex-shrink-0" />
-                        <div>
-                          <span className="font-semibold text-green-700">숙제:</span>{" "}
-                          <span>{log.book2}</span>
-                          {log.book2log && <span className="text-muted-foreground"> - {log.book2log}</span>}
-                        </div>
-                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
                     )}
                   </div>
-                )}
+
+                  {/* 숙제 컬럼 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 text-xs font-medium text-purple-600">
+                      <ClipboardCheck className="w-3 h-3" />
+                      <span>숙제</span>
+                    </div>
+                    {log.homework ? (
+                      <span className={`inline-flex items-center justify-center w-full px-2 py-1.5 text-xs font-semibold rounded-full border-2 ${scoreColor(log.homework)}`}>
+                        {homeworkLabels[log.homework]}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </div>
+
+                  {/* 집중도 컬럼 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 text-xs font-medium text-indigo-600">
+                      <Target className="w-3 h-3" />
+                      <span>집중도</span>
+                    </div>
+                    {log.focus ? (
+                      <span className={`inline-flex items-center justify-center w-full px-2 py-1.5 text-xs font-semibold rounded-full border-2 ${scoreColor(log.focus)}`}>
+                        {focusLabels[log.focus]}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </div>
+
+                  {/* 수업 컬럼 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 text-xs font-medium text-blue-600">
+                      <BookOpen className="w-3 h-3" />
+                      <span>수업</span>
+                    </div>
+                    {log.book1 ? (
+                      <div className="text-xs">
+                        <div className="font-medium">{log.book1}</div>
+                        {log.book1log && <div className="text-muted-foreground mt-0.5">{log.book1log}</div>}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </div>
+
+                  {/* 숙제 컬럼 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1 text-xs font-medium text-orange-600">
+                      <FileText className="w-3 h-3" />
+                      <span>숙제</span>
+                    </div>
+                    {log.book2 ? (
+                      <div className="text-xs">
+                        <div className="font-medium">{log.book2}</div>
+                        {log.book2log && <div className="text-muted-foreground mt-0.5">{log.book2log}</div>}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </div>
+                </div>
 
                 {/* Note */}
                 {log.note && (
