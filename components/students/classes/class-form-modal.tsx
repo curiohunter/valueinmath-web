@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Plus, X } from "lucide-react"
+import { Plus, X, Clock } from "lucide-react"
 
 interface Teacher {
   id: string
@@ -19,6 +19,12 @@ interface Student {
   grade?: number | null
   school_type?: string | null
   status?: string // 재원/퇴원 등
+}
+
+interface Schedule {
+  day_of_week: '월' | '화' | '수' | '목' | '금' | '토'
+  start_time: string  // "HH:mm" format
+  end_time: string    // "HH:mm" format
 }
 
 interface ClassFormModalProps {
@@ -58,6 +64,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
   const [studentSearch, setStudentSearch] = useState("")
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([])
+  const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(false)
 
   // edit 모드일 때 초기값 세팅
@@ -71,12 +78,33 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
       setSelectedStudents(
         enrolledStudents.filter(s => initialData.selectedStudentIds.includes(s.id))
       )
+
+      // Fetch existing schedules for this class
+      const fetchSchedules = async () => {
+        const supabase = createClient<Database>()
+        const { data, error } = await supabase
+          .from("class_schedules")
+          .select("day_of_week, start_time, end_time")
+          .eq("class_id", initialData.id!)
+          .order("day_of_week")
+
+        if (!error && data) {
+          const formattedSchedules: Schedule[] = data.map(s => ({
+            day_of_week: s.day_of_week as Schedule['day_of_week'],
+            start_time: s.start_time.substring(0, 5), // HH:mm:ss -> HH:mm
+            end_time: s.end_time.substring(0, 5),
+          }))
+          setSchedules(formattedSchedules)
+        }
+      }
+      fetchSchedules()
     } else if (open && mode === "create") {
       setName("")
       setSubject("수학")
       setMonthlyFee("")
       setSelectedTeacher(null)
       setSelectedStudents([])
+      setSchedules([])
     }
   }, [open, mode, initialData, teachers, enrolledStudents])
 
@@ -131,6 +159,22 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
   const handleSelectTeacher = (t: Teacher) => setSelectedTeacher(t)
   const handleRemoveTeacher = () => setSelectedTeacher(null)
 
+  // 시간표 관리
+  const days: Array<'월' | '화' | '수' | '목' | '금' | '토'> = ['월', '화', '수', '목', '금', '토']
+  const toggleDay = (day: typeof days[number]) => {
+    const exists = schedules.find(s => s.day_of_week === day)
+    if (exists) {
+      setSchedules(schedules.filter(s => s.day_of_week !== day))
+    } else {
+      setSchedules([...schedules, { day_of_week: day, start_time: "19:00", end_time: "21:00" }])
+    }
+  }
+  const updateScheduleTime = (day: typeof days[number], field: 'start_time' | 'end_time', value: string) => {
+    setSchedules(schedules.map(s =>
+      s.day_of_week === day ? { ...s, [field]: value } : s
+    ))
+  }
+
   // 저장/등록
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -160,6 +204,16 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         const inserts = selectedStudents.map(student => ({ class_id: newClass.id, student_id: student.id }))
         await supabase.from("class_students").insert(inserts)
       }
+      // 3. 시간표 생성
+      if (newClass && schedules.length > 0) {
+        const scheduleInserts = schedules.map(s => ({
+          class_id: newClass.id,
+          day_of_week: s.day_of_week,
+          start_time: s.start_time,
+          end_time: s.end_time,
+        }))
+        await supabase.from("class_schedules").insert(scheduleInserts)
+      }
     } else if (mode === "edit" && initialData?.id) {
       // 1. 반 정보 수정
       const { error } = await supabase.from("classes").update({
@@ -178,13 +232,26 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
       if (deleteError) {
         console.error('class_students 삭제 오류:', deleteError)
       }
-      
+
       if (selectedStudents.length > 0) {
         const inserts = selectedStudents.map(student => ({ class_id: initialData.id, student_id: student.id }))
         const { error: insertError } = await supabase.from("class_students").insert(inserts)
         if (insertError) {
           console.error('class_students 추가 오류:', insertError)
         }
+      }
+
+      // 3. 기존 시간표 삭제 후 새로 insert
+      await supabase.from("class_schedules").delete().eq("class_id", initialData.id)
+
+      if (schedules.length > 0) {
+        const scheduleInserts = schedules.map(s => ({
+          class_id: initialData.id,
+          day_of_week: s.day_of_week,
+          start_time: s.start_time,
+          end_time: s.end_time,
+        }))
+        await supabase.from("class_schedules").insert(scheduleInserts)
       }
     }
     setLoading(false)
@@ -250,6 +317,8 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
                 <SelectContent>
                   <SelectItem value="수학">수학</SelectItem>
                   <SelectItem value="과학">과학</SelectItem>
+                  <SelectItem value="수학특강">수학특강</SelectItem>
+                  <SelectItem value="과학특강">과학특강</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -268,6 +337,53 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
                   원
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* 시간표 입력 섹션 */}
+          <div className="mt-6 border-t border-gray-200 pt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-gray-600" />
+              <label className="text-sm font-medium text-gray-700">
+                시간표 (선택)
+              </label>
+            </div>
+            <div className="grid grid-cols-6 gap-3">
+              {days.map(day => {
+                const schedule = schedules.find(s => s.day_of_week === day)
+                const isSelected = !!schedule
+                return (
+                  <div key={day} className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleDay(day)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isSelected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                    {isSelected && (
+                      <div className="space-y-2">
+                        <Input
+                          type="time"
+                          value={schedule.start_time}
+                          onChange={e => updateScheduleTime(day, 'start_time', e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          type="time"
+                          value={schedule.end_time}
+                          onChange={e => updateScheduleTime(day, 'end_time', e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
