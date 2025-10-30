@@ -125,13 +125,29 @@ export default function LearningPage() {
   // 사이드바 열림/닫힘 상태
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
-  // 필터링 및 정렬된 데이터
+  // 필터링 및 정렬된 데이터 (선생님별 → 반 이름 → 학생 이름)
   const filteredAndSortedRows = rows
     .filter(row => selectedClassIds.length === 0 || selectedClassIds.includes(row.classId))
     .sort((a, b) => {
-      const classA = classes.find(c => c.id === a.classId)?.name || "";
-      const classB = classes.find(c => c.id === b.classId)?.name || "";
-      if (classA !== classB) return classA.localeCompare(classB, "ko");
+      const classA = classes.find(c => c.id === a.classId);
+      const classB = classes.find(c => c.id === b.classId);
+
+      // 선생님 이름으로 먼저 정렬
+      const teacherA = teachers.find(t => t.id === classA?.teacher_id)?.name || 'ㅎ';
+      const teacherB = teachers.find(t => t.id === classB?.teacher_id)?.name || 'ㅎ';
+
+      if (teacherA !== teacherB) {
+        return teacherA.localeCompare(teacherB, 'ko');
+      }
+
+      // 같은 선생님이면 반 이름으로 정렬
+      const classNameA = classA?.name || "";
+      const classNameB = classB?.name || "";
+      if (classNameA !== classNameB) {
+        return classNameA.localeCompare(classNameB, "ko");
+      }
+
+      // 같은 반이면 학생 이름으로 정렬
       return a.name.localeCompare(b.name, "ko");
     });
 
@@ -149,8 +165,20 @@ export default function LearningPage() {
       const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
       const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type");
       const { data: teacherData } = await supabase.from("employees").select("id, name");
-      
-      setClasses(classData || []);
+
+      // 선생님별로 정렬 (선생님 이름 → 반 이름)
+      const sortedClasses = (classData || []).sort((a: any, b: any) => {
+        const teacherA = (teacherData || []).find(t => t.id === a.teacher_id)?.name || 'ㅎ';
+        const teacherB = (teacherData || []).find(t => t.id === b.teacher_id)?.name || 'ㅎ';
+
+        if (teacherA !== teacherB) {
+          return teacherA.localeCompare(teacherB, 'ko');
+        }
+
+        return a.name.localeCompare(b.name, 'ko');
+      });
+
+      setClasses(sortedClasses);
       setClassStudents(classStudentData || []);
       setStudents(studentData || []);
       setTeachers(teacherData || []);

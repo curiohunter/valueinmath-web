@@ -70,7 +70,20 @@ export default function TestLogsPage() {
       const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
       const { data: studentData } = await supabase.from("students").select("id, name, status");
       const { data: teacherData } = await supabase.from("employees").select("id, name");
-      setClasses(classData || []);
+
+      // 선생님별로 정렬 (선생님 이름 → 반 이름)
+      const sortedClasses = (classData || []).sort((a: any, b: any) => {
+        const teacherA = (teacherData || []).find(t => t.id === a.teacher_id)?.name || 'ㅎ';
+        const teacherB = (teacherData || []).find(t => t.id === b.teacher_id)?.name || 'ㅎ';
+
+        if (teacherA !== teacherB) {
+          return teacherA.localeCompare(teacherB, 'ko');
+        }
+
+        return a.name.localeCompare(b.name, 'ko');
+      });
+
+      setClasses(sortedClasses);
       setClassStudents(classStudentData || []);
       setStudents(studentData || []);
       setTeachers(teacherData || []);
