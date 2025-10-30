@@ -12,12 +12,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+interface Schedule {
+  day_of_week: string
+  start_time: string
+  end_time: string
+}
+
 interface Class {
   id: string
   name: string
   subject: string
   teacher_id: string | null
   monthly_fee?: number
+  schedules?: Schedule[]
 }
 interface Teacher {
   id: string
@@ -43,6 +50,33 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [classToDelete, setClassToDelete] = useState<Class | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // 시간표 포맷팅 함수
+  const formatSchedule = (schedules?: Schedule[]) => {
+    if (!schedules || schedules.length === 0) return "시간표 미등록"
+
+    // 시간대별로 그룹화
+    const timeGroups = new Map<string, string[]>()
+    schedules.forEach(s => {
+      const startTime = s.start_time.substring(0, 5) // HH:mm
+      const endTime = s.end_time.substring(0, 5)
+      const timeKey = `${startTime}-${endTime}`
+      if (!timeGroups.has(timeKey)) {
+        timeGroups.set(timeKey, [])
+      }
+      timeGroups.get(timeKey)!.push(s.day_of_week)
+    })
+
+    // 포맷팅 - 줄바꿈으로 구분
+    const formatted = Array.from(timeGroups.entries()).map(([time, days], index) => (
+      <React.Fragment key={time}>
+        {index > 0 && <br />}
+        {days.join('')} {time}
+      </React.Fragment>
+    ))
+
+    return <>{formatted}</>
+  }
 
   const handleDeleteClick = (cls: Class) => {
     setClassToDelete(cls)
@@ -71,11 +105,12 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
         <div className="overflow-x-auto">
         <table className="w-full">
           <colgroup>
-            <col style={{width: '15%'}} />
-            <col style={{width: '25%'}} />
-            <col style={{width: '10%'}} />
-            <col style={{width: '15%'}} />
             <col style={{width: '12%'}} />
+            <col style={{width: '20%'}} />
+            <col style={{width: '15%'}} />
+            <col style={{width: '8%'}} />
+            <col style={{width: '12%'}} />
+            <col style={{width: '10%'}} />
             <col style={{width: '8%'}} />
             <col style={{width: '15%'}} />
           </colgroup>
@@ -86,6 +121,9 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
               </th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 학생 미리보기
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                시간표
               </th>
               <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
                 과목
@@ -107,7 +145,7 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
           <tbody className="divide-y divide-gray-200">
             {classes.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-16 text-center">
+                <td colSpan={8} className="px-6 py-16 text-center">
                   <div className="text-gray-400 text-4xl mb-4">📚</div>
                   <div className="text-lg font-medium text-gray-500 mb-2">등록된 반이 없습니다</div>
                   <div className="text-sm text-gray-400">새 반을 만들어 보세요</div>
@@ -148,6 +186,11 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-600" style={{ maxWidth: '200px' }}>
                         {studentPreview}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-xs text-gray-600">
+                        {formatSchedule(c.schedules)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">

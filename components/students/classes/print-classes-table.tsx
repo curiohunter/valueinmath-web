@@ -1,11 +1,18 @@
 import React from "react"
 
+interface Schedule {
+  day_of_week: string
+  start_time: string
+  end_time: string
+}
+
 interface Class {
   id: string
   name: string
   subject: string
   teacher_id: string | null
   monthly_fee?: number
+  schedules?: Schedule[]
 }
 
 interface Teacher {
@@ -18,6 +25,8 @@ interface Student {
   id: string
   name: string
   status?: string
+  school_type?: string
+  grade?: number
 }
 
 interface PrintClassesTableProps {
@@ -28,20 +37,63 @@ interface PrintClassesTableProps {
   currentDate: Date
 }
 
-export function PrintClassesTable({ 
-  classes, 
-  teachers, 
-  students, 
+export function PrintClassesTable({
+  classes,
+  teachers,
+  students,
   classStudents,
-  currentDate 
+  currentDate
 }: PrintClassesTableProps) {
-  // 반별 학생 매핑 (재원 상태인 학생만)
+  // 시간표 포맷팅 함수
+  const formatSchedule = (schedules?: Schedule[]) => {
+    if (!schedules || schedules.length === 0) return "시간표 미등록"
+
+    // 시간대별로 그룹화
+    const timeGroups = new Map<string, string[]>()
+    schedules.forEach(s => {
+      const startTime = s.start_time.substring(0, 5) // HH:mm
+      const endTime = s.end_time.substring(0, 5)
+      const timeKey = `${startTime}-${endTime}`
+      if (!timeGroups.has(timeKey)) {
+        timeGroups.set(timeKey, [])
+      }
+      timeGroups.get(timeKey)!.push(s.day_of_week)
+    })
+
+    // 포맷팅 - 줄바꿈으로 구분
+    const formatted = Array.from(timeGroups.entries()).map(([time, days], index) => (
+      <React.Fragment key={time}>
+        {index > 0 && <br />}
+        {days.join('')} {time}
+      </React.Fragment>
+    ))
+
+    return <>{formatted}</>
+  }
+
+  // 반별 학생 매핑 (재원 상태인 학생만, 학교급+학년 포함)
   const getClassStudents = (classId: string) => {
     return classStudents
       .filter(cs => cs.class_id === classId)
       .map(cs => students.find(s => s.id === cs.student_id))
       .filter((s): s is Student => s !== undefined && s.status === '재원')
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }
+
+  // 학생 이름 포맷팅 (학교급+학년 포함)
+  const formatStudentName = (student: Student) => {
+    const schoolTypeMap: Record<string, string> = {
+      '초등학교': '초',
+      '중학교': '중',
+      '고등학교': '고'
+    }
+    const schoolAbbr = student.school_type ? schoolTypeMap[student.school_type] || '' : ''
+    const gradeStr = student.grade ? `${student.grade}` : ''
+
+    if (schoolAbbr && gradeStr) {
+      return `${student.name}(${schoolAbbr}${gradeStr})`
+    }
+    return student.name
   }
 
   // 선생님별로 반 그룹화
@@ -157,6 +209,14 @@ export function PrintClassesTable({
           font-size: 14px;
           color: #4b5563;
         }
+        .schedule-info {
+          margin-top: 8px;
+          padding: 8px;
+          background-color: #f9fafb;
+          border-radius: 4px;
+          font-size: 13px;
+          color: #6b7280;
+        }
         .student-list {
           margin-top: 10px;
         }
@@ -236,6 +296,11 @@ export function PrintClassesTable({
                     <span>월 원비: {monthlyFee.toLocaleString()}원</span>
                     <span>학생 수: {classStudentList.length}명</span>
                   </div>
+                  {cls.schedules && cls.schedules.length > 0 && (
+                    <div className="schedule-info">
+                      📅 시간표: {formatSchedule(cls.schedules)}
+                    </div>
+                  )}
                   
                   {classStudentList.length > 0 && (
                     <div className="student-list">
@@ -243,7 +308,7 @@ export function PrintClassesTable({
                       <div className="student-grid">
                         {classStudentList.map(student => (
                           <div key={student.id} className="student-item">
-                            • {student.name}
+                            • {formatStudentName(student)}
                           </div>
                         ))}
                       </div>

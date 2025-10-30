@@ -27,16 +27,28 @@ export default function ClassesPage() {
     setLoading(true)
     const supabase = createClient()
     
-    const [classesRes, teachersRes, studentsRes, classStudentsRes] = await Promise.all([
+    const [classesRes, teachersRes, studentsRes, classStudentsRes, schedulesRes] = await Promise.all([
       supabase.from("classes").select("*, monthly_fee").order("teacher_id", { ascending: true }).order("name", { ascending: true }),
       supabase.from("employees")
         .select("id, name, position")
         .in("position", ["원장", "강사"])
         .order("name", { ascending: true }),
       supabase.from("students").select("id, name, status, school_type, grade").order("name", { ascending: true }),
-      supabase.from("class_students").select("class_id, student_id")
+      supabase.from("class_students").select("class_id, student_id"),
+      supabase.from("class_schedules").select("*")
     ])
-    setClasses(classesRes.data ?? [])
+    // 시간표를 classes에 매핑
+    const classesWithSchedules = (classesRes.data ?? []).map(cls => ({
+      ...cls,
+      schedules: (schedulesRes.data ?? [])
+        .filter(s => s.class_id === cls.id)
+        .sort((a, b) => {
+          const dayOrder = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 }
+          return (dayOrder[a.day_of_week as keyof typeof dayOrder] || 7) - (dayOrder[b.day_of_week as keyof typeof dayOrder] || 7)
+        })
+    }))
+
+    setClasses(classesWithSchedules)
     setTeachers(teachersRes.data ?? [])
     setStudents(studentsRes.data ?? [])
     setClassStudents(classStudentsRes.data ?? [])
@@ -57,7 +69,7 @@ export default function ClassesPage() {
     return acc
   }, {})
 
-  // 반별 학생 이름 매핑 (재원 상태인 학생만, 최대 2명)
+  // 반별 학생 정보 매핑 (재원 상태인 학생만, 학교급+학년 포함)
   const studentNamesMap = classStudents.reduce((acc: Record<string, string[]>, cs: any) => {
     const student = students.find(s => s.id === cs.student_id)
     // 재원 상태인 학생만 포함
@@ -65,7 +77,18 @@ export default function ClassesPage() {
       if (!acc[cs.class_id]) {
         acc[cs.class_id] = []
       }
-      acc[cs.class_id].push(student.name)
+      // 학교급 약어 매핑
+      const schoolTypeMap: Record<string, string> = {
+        '초등학교': '초',
+        '중학교': '중',
+        '고등학교': '고'
+      }
+      const schoolAbbr = schoolTypeMap[student.school_type] || ''
+      const gradeStr = student.grade ? `${student.grade}` : ''
+      const displayName = schoolAbbr && gradeStr
+        ? `${student.name}(${schoolAbbr}${gradeStr})`
+        : student.name
+      acc[cs.class_id].push(displayName)
     }
     return acc
   }, {})
