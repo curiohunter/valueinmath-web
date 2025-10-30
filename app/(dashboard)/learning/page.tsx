@@ -1214,13 +1214,13 @@ export default function LearningPage() {
                   <thead>
                     <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                       <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-8"></th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">학생</th>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-32">학생</th>
                       <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-36">날짜</th>
                       <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">출결</th>
                       <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">숙제</th>
                       <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-16">집중도</th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
-                        <div className="flex items-center gap-2">
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">
+                        <div className="flex items-center gap-1">
                           <span>교재</span>
                           <button
                             onClick={() => handleBulkApply("book1")}
@@ -1231,8 +1231,8 @@ export default function LearningPage() {
                           </button>
                         </div>
                       </th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
-                        <div className="flex items-center gap-2">
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">
+                        <div className="flex items-center gap-1">
                           <span>진도</span>
                           <button
                             onClick={() => handleBulkApply("book1log")}
@@ -1243,9 +1243,9 @@ export default function LearningPage() {
                           </button>
                         </div>
                       </th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
-                        <div className="flex items-center gap-2">
-                          <span>숙제교재</span>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs">숙제교재</span>
                           <button
                             onClick={() => handleBulkApply("book2")}
                             className="text-gray-400 hover:text-gray-600"
@@ -1255,9 +1255,9 @@ export default function LearningPage() {
                           </button>
                         </div>
                       </th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700">
-                        <div className="flex items-center gap-2">
-                          <span>숙제진도</span>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs">숙제진도</span>
                           <button
                             onClick={() => handleBulkApply("book2log")}
                             className="text-gray-400 hover:text-gray-600"
@@ -1267,7 +1267,7 @@ export default function LearningPage() {
                           </button>
                         </div>
                       </th>
-                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-32">특이사항</th>
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-24">특이사항</th>
                       <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700 w-20">삭제</th>
                     </tr>
                   </thead>
@@ -1314,7 +1314,7 @@ export default function LearningPage() {
                               <td className="px-4 py-3 text-sm text-gray-600">
                                 {/* 반 이름은 그룹 헤더에 있으므로 비우기 */}
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-700">
+                              <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
                                 {row.name || students.find(s => s.id === row.studentId)?.name || row.studentId}
                               </td>
                               <td className="px-4 py-3 text-center">
@@ -1362,8 +1362,8 @@ export default function LearningPage() {
                                 </span>
                               </td>
                               <td className="px-4 py-3">
-                                <div 
-                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                <div
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline truncate max-w-[80px]"
                                   onClick={() => openModal(originalIdx, "book1", row.book1)}
                                   title={row.book1}
                                 >
@@ -1371,8 +1371,8 @@ export default function LearningPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <div 
-                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                <div
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline truncate max-w-[80px]"
                                   onClick={() => openModal(originalIdx, "book1log", row.book1log)}
                                   title={row.book1log}
                                 >
@@ -1380,8 +1380,8 @@ export default function LearningPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <div 
-                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                <div
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline truncate max-w-[80px]"
                                   onClick={() => openModal(originalIdx, "book2", row.book2)}
                                   title={row.book2}
                                 >
@@ -1389,8 +1389,8 @@ export default function LearningPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <div 
-                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                <div
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline truncate max-w-[80px]"
                                   onClick={() => openModal(originalIdx, "book2log", row.book2log)}
                                   title={row.book2log}
                                 >
@@ -1398,8 +1398,8 @@ export default function LearningPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <div 
-                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline"
+                                <div
+                                  className="text-sm text-gray-700 cursor-pointer hover:text-blue-600 hover:underline truncate max-w-[80px]"
                                   onClick={() => openModal(originalIdx, "note", row.note)}
                                   title={row.note}
                                 >
