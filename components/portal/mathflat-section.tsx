@@ -1,8 +1,12 @@
+"use client"
+
+import { useState } from "react"
 import { MathflatRecordItem } from "@/types/portal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { Target, CheckCircle, XCircle } from "lucide-react"
+import { Target, CheckCircle, XCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface MathflatSectionProps {
   records: MathflatRecordItem[]
@@ -17,6 +21,8 @@ const getAccuracyColor = (rate: number | null) => {
 }
 
 export function MathflatSection({ records }: MathflatSectionProps) {
+  const [isOpen, setIsOpen] = useState(true)
+
   // Calculate totals
   const totalProblems = records.reduce((sum, r) => sum + (r.problem_solved || 0), 0)
   const totalCorrect = records.reduce((sum, r) => sum + (r.correct_count || 0), 0)
@@ -25,13 +31,17 @@ export function MathflatSection({ records }: MathflatSectionProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronDown className="h-5 w-5 -rotate-90" />}
+          </Button>
           <Target className="w-5 h-5" />
-          매쓰플랫 학습
-        </CardTitle>
+          <CardTitle>매쓰플랫 학습</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      {isOpen && (
+        <CardContent>
         {records.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">매쓰플랫 학습 기록이 없습니다.</p>
         ) : (
@@ -121,7 +131,8 @@ export function MathflatSection({ records }: MathflatSectionProps) {
             </div>
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   )
 }

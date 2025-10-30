@@ -12,6 +12,7 @@ import {
   TuitionFeeItem,
   MonthlyAggregation,
   ClassInfo,
+  ClassSchedule,
   MathflatStats,
   MonthlyMathflatStats,
 } from "@/types/portal"
@@ -42,6 +43,12 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
           monthly_fee,
           teacher:employees!classes_teacher_id_fkey (
             name
+          ),
+          class_schedules (
+            id,
+            day_of_week,
+            start_time,
+            end_time
           )
         )
       `)
@@ -101,17 +108,31 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   if (mathflatData.error) throw mathflatData.error
   if (tuitionFeesData.error) throw tuitionFeesData.error
 
-  // Map classes data with teacher information
+  // Map classes data with teacher information and schedules
   const classes: ClassInfo[] = classesData.data
     .map((item: any) => {
       const classInfo = item.classes
       if (!classInfo) return null
+
+      // Sort and format schedules
+      const dayOrder: Record<string, number> = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 }
+      const schedules: ClassSchedule[] = (classInfo.class_schedules || [])
+        .map((s: any) => ({
+          id: s.id,
+          class_id: classInfo.id,
+          day_of_week: s.day_of_week,
+          start_time: s.start_time.substring(0, 5), // HH:mm:ss -> HH:mm
+          end_time: s.end_time.substring(0, 5),
+        }))
+        .sort((a: ClassSchedule, b: ClassSchedule) => dayOrder[a.day_of_week] - dayOrder[b.day_of_week])
+
       return {
         id: classInfo.id,
         name: classInfo.name,
         subject: classInfo.subject,
         teacher_name: classInfo.teacher?.name || null,
         monthly_fee: classInfo.monthly_fee,
+        schedules,
       }
     })
     .filter((item): item is ClassInfo => item !== null)

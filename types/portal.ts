@@ -115,12 +115,21 @@ export interface TuitionFeeItem {
   period_end_date: string | null
 }
 
+export interface ClassSchedule {
+  id: string
+  class_id: string
+  day_of_week: '월' | '화' | '수' | '목' | '금' | '토'
+  start_time: string  // "HH:mm" format
+  end_time: string
+}
+
 export interface ClassInfo {
   id: string
   name: string // 반 이름
-  subject: string
+  subject: '수학' | '과학' | '수학특강' | '과학특강'
   teacher_name: string | null // 담당 선생님 이름
   monthly_fee: number | null
+  schedules: ClassSchedule[] // 시간표
 }
 
 export interface MonthlyAggregation {

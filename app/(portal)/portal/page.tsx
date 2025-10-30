@@ -16,7 +16,9 @@ import { ConsultationsSection } from "@/components/portal/consultations-section"
 import { MathflatSection } from "@/components/portal/mathflat-section"
 import { QuickActionMenu } from "@/components/portal/quick-action-menu"
 import { ClassesSection } from "@/components/portal/classes-section"
-import { RefreshCw, GraduationCap } from "lucide-react"
+import { TuitionSection } from "@/components/portal/tuition-section"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RefreshCw, GraduationCap, BookOpen, CreditCard } from "lucide-react"
 
 export default function PortalPage() {
   const { user } = useAuth()
@@ -152,34 +154,59 @@ export default function PortalPage() {
         {/* 2. Classes Section - Student's Classes */}
         <ClassesSection classes={portalData.classes} />
 
-        {/* 3. Monthly Summary Cards */}
-        <MonthlySummaryCards
-          monthly_aggregations={portalData.monthly_aggregations}
-          monthly_mathflat_stats={portalData.monthly_mathflat_stats}
-        />
+        {/* 3. Tabs - 학습상황 / 원비관리 */}
+        <Tabs defaultValue="learning" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="learning" className="flex items-center gap-2">
+              <BookOpen className="h-4 w-4" />
+              학습상황
+            </TabsTrigger>
+            <TabsTrigger value="tuition" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              원비관리
+            </TabsTrigger>
+          </TabsList>
 
-        {/* 4. Learning Trends Chart */}
-        <LearningTrendsChart monthly_aggregations={portalData.monthly_aggregations} />
+          {/* 학습상황 탭 */}
+          <TabsContent value="learning" className="space-y-8 mt-6">
+            {/* Monthly Summary Cards */}
+            <MonthlySummaryCards
+              monthly_aggregations={portalData.monthly_aggregations}
+              monthly_mathflat_stats={portalData.monthly_mathflat_stats}
+            />
 
-        {/* 5. Learning Calendar - 학습 캘린더 */}
-        <LearningCalendar
-          study_logs={portalData.study_logs}
-          test_logs={portalData.test_logs}
-          makeup_classes={portalData.makeup_classes}
-          consultations={portalData.consultations}
-          mathflat_records={portalData.mathflat_records}
-        />
+            {/* Learning Trends Chart */}
+            <LearningTrendsChart monthly_aggregations={portalData.monthly_aggregations} />
 
-        {/* 6. Collapsible Sections - Detailed Data */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold">상세 학습 기록</h2>
-          <ExamScoresSection scores={portalData.school_exam_scores} />
-          <StudyLogsSection logs={portalData.study_logs} />
-          <TestLogsSection logs={portalData.test_logs} />
-          <MakeupClassesSection classes={portalData.makeup_classes} />
-          <ConsultationsSection consultations={portalData.consultations} />
-          <MathflatSection records={portalData.mathflat_records} />
-        </div>
+            {/* Learning Calendar - 학습 캘린더 */}
+            <LearningCalendar
+              study_logs={portalData.study_logs}
+              test_logs={portalData.test_logs}
+              makeup_classes={portalData.makeup_classes}
+              consultations={portalData.consultations}
+              mathflat_records={portalData.mathflat_records}
+            />
+
+            {/* Collapsible Sections - Detailed Data */}
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold">상세 학습 기록</h2>
+              <ExamScoresSection scores={portalData.school_exam_scores} />
+              <StudyLogsSection logs={portalData.study_logs} />
+              <TestLogsSection logs={portalData.test_logs} />
+              <MakeupClassesSection classes={portalData.makeup_classes} />
+              <ConsultationsSection consultations={portalData.consultations} />
+              <MathflatSection records={portalData.mathflat_records} />
+            </div>
+          </TabsContent>
+
+          {/* 원비관리 탭 */}
+          <TabsContent value="tuition" className="mt-6">
+            <TuitionSection
+              tuition_fees={portalData.tuition_fees}
+              studentName={portalData.student.name}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* 7. Quick Action Menu */}

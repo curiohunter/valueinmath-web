@@ -1,7 +1,12 @@
+"use client"
+
+import { useState } from "react"
 import { MakeupClassItem } from "@/types/portal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
+import { ChevronDown, ChevronUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface MakeupClassesSectionProps {
   classes: MakeupClassItem[]
@@ -20,12 +25,20 @@ const statusLabels = {
 }
 
 export function MakeupClassesSection({ classes }: MakeupClassesSectionProps) {
+  const [isOpen, setIsOpen] = useState(true)
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>보강 수업</CardTitle>
+      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronDown className="h-5 w-5 -rotate-90" />}
+          </Button>
+          <CardTitle>보강 수업</CardTitle>
+        </div>
       </CardHeader>
-      <CardContent>
+      {isOpen && (
+        <CardContent>
         {classes.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">보강 수업 기록이 없습니다.</p>
         ) : (
@@ -83,7 +96,8 @@ export function MakeupClassesSection({ classes }: MakeupClassesSectionProps) {
             )}
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   )
 }
