@@ -16,6 +16,7 @@ import {
   MathflatStats,
   MonthlyMathflatStats,
 } from "@/types/portal"
+import { getStudentComments } from "@/lib/comments-client"
 
 export async function getPortalData(studentId: string): Promise<PortalData> {
   const supabase = createClient()
@@ -31,6 +32,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     consultationsData,
     mathflatData,
     tuitionFeesData,
+    consultationRequestsData,
   ] = await Promise.all([
     supabase.from("students").select("*").eq("id", studentId).single(),
     supabase
@@ -90,6 +92,15 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
       .order("year", { ascending: false })
       .order("month", { ascending: false })
       .limit(12), // 최근 12개월
+    supabase
+      .from("consultation_requests")
+      .select(`
+        *,
+        student:students!consultation_requests_student_id_fkey (name),
+        counselor:employees!consultation_requests_counselor_id_fkey (name)
+      `)
+      .eq("student_id", studentId)
+      .order("created_at", { ascending: false }),
   ])
 
   if (studentData.error) throw studentData.error
@@ -101,6 +112,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   if (consultationsData.error) throw consultationsData.error
   if (mathflatData.error) throw mathflatData.error
   if (tuitionFeesData.error) throw tuitionFeesData.error
+  if (consultationRequestsData.error) throw consultationRequestsData.error
 
   // Map classes data with teacher information and schedules
   const classes: ClassInfo[] = classesData.data
@@ -214,6 +226,25 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     period_end_date: fee.period_end_date,
   }))
 
+  // Get learning comments with replies and reactions
+  const learningComments = await getStudentComments(studentId)
+
+  // Map consultation requests
+  const consultationRequests = consultationRequestsData.data.map((req: any) => ({
+    id: req.id,
+    student_id: req.student_id,
+    requester_id: req.requester_id,
+    method: req.method,
+    type: req.type,
+    content: req.content,
+    counselor_id: req.counselor_id,
+    status: req.status,
+    created_at: req.created_at,
+    updated_at: req.updated_at,
+    student_name: req.student?.name || "알 수 없음",
+    counselor_name: req.counselor?.name || null,
+  }))
+
   // Calculate stats
   const stats: StudentOverviewStats = calculateStats(
     studyLogs,
@@ -266,6 +297,8 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     tuition_fees: tuitionFees,
     monthly_aggregations,
     monthly_mathflat_stats,
+    learning_comments: learningComments,
+    consultation_requests: consultationRequests,
   }
 }
 

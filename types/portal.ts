@@ -1,4 +1,6 @@
 import { Database } from "./database"
+import { CommentCardData } from "./comments"
+import { ConsultationRequest } from "./consultation-requests"
 
 export type UserRole = "employee" | "parent" | "student"
 
@@ -174,7 +176,7 @@ export interface PortalData {
     school: string | null
     status: string
   }
-  classes: ClassInfo[] // 학생이 등록된 반 목록 - 신규 추가
+  classes: ClassInfo[] // 학생이 등록된 반 목록
   stats: StudentOverviewStats
   recent_activities: ActivityTimelineItem[]
   study_logs: StudyLogItem[]
@@ -186,4 +188,6 @@ export interface PortalData {
   tuition_fees: TuitionFeeItem[]
   monthly_aggregations: MonthlyAggregation[]
   monthly_mathflat_stats: MonthlyMathflatStats[] // 월별 매쓰플랫 통계
+  learning_comments: CommentCardData[] // 월별 학습 코멘트 (선생님)
+  consultation_requests: ConsultationRequest[] // 학부모 상담 요청
 }
