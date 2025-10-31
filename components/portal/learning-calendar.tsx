@@ -55,7 +55,7 @@ export function LearningCalendar({
     // Study logs
     ...study_logs.map((log) => ({
       id: `study-${log.id}`,
-      title: `📚 ${log.book1 ? log.book1 : (log.class_name || "학습일지")}`,
+      title: `📚 ${log.book1 || log.class_name || "학습일지"}${log.attendance_status ? `(${attendanceLabels[log.attendance_status]})` : ""}`,
       date: log.date,
       backgroundColor: "#10b981", // emerald-500
       borderColor: "#10b981",
@@ -81,7 +81,7 @@ export function LearningCalendar({
     // Mathflat records
     ...mathflat_records.map((record) => ({
       id: `mathflat-${record.id}`,
-      title: `📊 매쓰플랫 (${record.problem_solved || 0}문제, ${record.correct_rate?.toFixed(0) || 0}%)`,
+      title: `📊 ${record.book_title || "매쓰플랫"} (${record.problem_solved || 0}문제, ${record.correct_rate?.toFixed(0) || 0}%)`,
       date: record.event_date || "",
       backgroundColor: "#f59e0b", // amber-500 (결석 색)
       borderColor: "#f59e0b",
@@ -94,7 +94,7 @@ export function LearningCalendar({
     // Makeup classes
     ...makeup_classes.map((cls) => ({
       id: `makeup-${cls.id}`,
-      title: `🔄 ${cls.class_name || "보강"} (${cls.makeup_type === "결석보강" ? "결석" : "추가"})`,
+      title: `🔄 ${cls.makeup_type === "결석보강" ? "결석보강" : "추가수업"}(${cls.class_name || "보강"})`,
       date: cls.makeup_date || cls.absence_date || "",
       backgroundColor: "#8b5cf6", // violet-500
       borderColor: "#8b5cf6",

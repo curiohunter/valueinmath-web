@@ -57,38 +57,32 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
       .from("study_logs")
       .select("*")
       .eq("student_id", studentId)
-      .order("date", { ascending: false })
-      .limit(50),
+      .order("date", { ascending: false }),
     supabase
       .from("test_logs")
       .select("*")
       .eq("student_id", studentId)
-      .order("date", { ascending: false })
-      .limit(50),
+      .order("date", { ascending: false }),
     supabase
       .from("school_exam_scores")
       .select("*")
       .eq("student_id", studentId)
-      .order("created_at", { ascending: false })
-      .limit(50),
+      .order("created_at", { ascending: false }),
     supabase
       .from("makeup_classes")
       .select("*")
       .eq("student_id", studentId)
-      .order("absence_date", { ascending: false })
-      .limit(50),
+      .order("absence_date", { ascending: false }),
     supabase
       .from("consultations")
       .select("*")
       .eq("student_id", studentId)
-      .order("date", { ascending: false })
-      .limit(50),
+      .order("date", { ascending: false }),
     supabase
       .from("mathflat_records")
       .select("*")
       .eq("student_id", studentId)
-      .order("event_date", { ascending: false })
-      .limit(50),
+      .order("event_date", { ascending: false }),
     supabase
       .from("tuition_fees")
       .select("*")
@@ -411,32 +405,30 @@ function calculateMonthlyAggregations(
   studyLogs: StudyLogItem[],
   testLogs: TestLogItem[]
 ): MonthlyAggregation[] {
-  const now = new Date()
   const monthlyData: Map<string, any> = new Map()
 
-  // Initialize last 6 months
-  for (let i = 0; i < 6; i++) {
-    const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const year = targetDate.getFullYear()
-    const month = targetDate.getMonth() + 1
+  // Helper function to get or create monthly data
+  const getMonthData = (year: number, month: number) => {
     const key = `${year}-${month}`
-
-    monthlyData.set(key, {
-      year,
-      month,
-      attendance_count_5: 0,
-      attendance_count_4: 0,
-      attendance_count_3: 0,
-      attendance_count_2: 0,
-      attendance_count_1: 0,
-      homework_sum: 0,
-      homework_count: 0,
-      focus_sum: 0,
-      focus_count: 0,
-      total_study_days: 0,
-      total_tests: 0,
-      test_score_sum: 0,
-    })
+    if (!monthlyData.has(key)) {
+      monthlyData.set(key, {
+        year,
+        month,
+        attendance_count_5: 0,
+        attendance_count_4: 0,
+        attendance_count_3: 0,
+        attendance_count_2: 0,
+        attendance_count_1: 0,
+        homework_sum: 0,
+        homework_count: 0,
+        focus_sum: 0,
+        focus_count: 0,
+        total_study_days: 0,
+        total_tests: 0,
+        test_score_sum: 0,
+      })
+    }
+    return monthlyData.get(key)
   }
 
   // Process study logs
@@ -444,32 +436,29 @@ function calculateMonthlyAggregations(
     const logDate = new Date(log.date)
     const year = logDate.getFullYear()
     const month = logDate.getMonth() + 1
-    const key = `${year}-${month}`
 
-    const data = monthlyData.get(key)
-    if (data) {
-      data.total_study_days++
+    const data = getMonthData(year, month)
+    data.total_study_days++
 
-      // Count attendance by score (1-5)
-      if (log.attendance_status !== null) {
-        if (log.attendance_status === 5) data.attendance_count_5++
-        else if (log.attendance_status === 4) data.attendance_count_4++
-        else if (log.attendance_status === 3) data.attendance_count_3++
-        else if (log.attendance_status === 2) data.attendance_count_2++
-        else if (log.attendance_status === 1) data.attendance_count_1++
-      }
+    // Count attendance by score (1-5)
+    if (log.attendance_status !== null) {
+      if (log.attendance_status === 5) data.attendance_count_5++
+      else if (log.attendance_status === 4) data.attendance_count_4++
+      else if (log.attendance_status === 3) data.attendance_count_3++
+      else if (log.attendance_status === 2) data.attendance_count_2++
+      else if (log.attendance_status === 1) data.attendance_count_1++
+    }
 
-      // Accumulate homework scores for average
-      if (log.homework !== null) {
-        data.homework_sum += log.homework
-        data.homework_count++
-      }
+    // Accumulate homework scores for average
+    if (log.homework !== null) {
+      data.homework_sum += log.homework
+      data.homework_count++
+    }
 
-      // Accumulate focus scores for average
-      if (log.focus !== null) {
-        data.focus_sum += log.focus
-        data.focus_count++
-      }
+    // Accumulate focus scores for average
+    if (log.focus !== null) {
+      data.focus_sum += log.focus
+      data.focus_count++
     }
   })
 
@@ -478,10 +467,9 @@ function calculateMonthlyAggregations(
     const logDate = new Date(log.date)
     const year = logDate.getFullYear()
     const month = logDate.getMonth() + 1
-    const key = `${year}-${month}`
 
-    const data = monthlyData.get(key)
-    if (data && log.test_score !== null) {
+    const data = getMonthData(year, month)
+    if (log.test_score !== null) {
       data.total_tests++
       data.test_score_sum += log.test_score
     }

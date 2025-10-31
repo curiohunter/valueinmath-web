@@ -27,7 +27,8 @@ const getScoreBgColor = (score: number) => {
 }
 
 export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
+  const [showCount, setShowCount] = useState(12)
 
   // Group by exam (year, semester, type)
   const groupedScores = scores.reduce((acc, score) => {
@@ -51,6 +52,8 @@ export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
     return b.semester - a.semester
   })
 
+  const displayedExams = exams.slice(0, showCount)
+
   return (
     <Card>
       <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
@@ -67,7 +70,7 @@ export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
           <p className="text-center text-muted-foreground py-8">학교 시험 성적이 없습니다.</p>
         ) : (
           <div className="space-y-4">
-            {exams.slice(0, 10).map((exam: any, idx: number) => (
+            {displayedExams.map((exam: any, idx: number) => (
               <div key={idx} className="border rounded-lg p-4">
                 <div className="mb-3">
                   <h3 className="font-semibold">
@@ -93,10 +96,29 @@ export function ExamScoresSection({ scores }: ExamScoresSectionProps) {
               </div>
             ))}
 
-            {exams.length > 10 && (
-              <p className="text-center text-sm text-muted-foreground">
-                외 {exams.length - 10}개의 시험 기록
-              </p>
+            {exams.length > showCount && (
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCount(prev => prev + 12)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  외 {exams.length - showCount}개의 시험 기록 더보기
+                </Button>
+              </div>
+            )}
+            {showCount > 12 && showCount >= exams.length && (
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCount(12)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  접기
+                </Button>
+              </div>
             )}
           </div>
         )}
