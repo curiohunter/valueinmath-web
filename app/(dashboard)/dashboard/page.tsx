@@ -18,7 +18,7 @@ import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/com
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
 import { StudentManagementList } from "@/components/dashboard/student-management-list"
-import { StudentCommentEditor } from "@/components/dashboard/student-comment-editor"
+import { PortalView } from "@/components/portal/portal-view"
 // ConsultationModal removed - using StudentFormModal instead
 import type { Database } from "@/types/database"
 
@@ -31,6 +31,7 @@ import { ClassFormModal } from "@/components/students/classes/class-form-modal"
 import { QuickAccessSection } from "@/components/dashboard/QuickAccessSection"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/providers/auth-provider"
 import { calendarService } from "@/services/calendar"
 import { atRiskSnapshotService } from "@/services/at-risk-snapshot-service"
 import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
@@ -67,11 +68,13 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
   const supabase = createClient()
   const [consultations, setConsultations] = useState<ConsultationData[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
   const [atRiskStudents, setAtRiskStudents] = useState<TeacherGroup[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [stats, setStats] = useState<DashboardStats>({
     activeStudents: 0,
     activeStudentsByDept: {},
@@ -1074,6 +1077,30 @@ export default function DashboardPage() {
     // 미들웨어에서 이미 인증을 확인했으므로 여기서는 데이터만 로드
   }, [])
 
+  // Load current employee ID
+  useEffect(() => {
+    const loadEmployeeId = async () => {
+      if (!user) return
+
+      try {
+        const { data: employee } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("auth_id", user.id)
+          .eq("status", "재직")
+          .single()
+
+        if (employee) {
+          setEmployeeId(employee.id)
+        }
+      } catch (error) {
+        console.error("Failed to load employee ID:", error)
+      }
+    }
+
+    loadEmployeeId()
+  }, [user])
+
   // 위험 학생 데이터 로딩 - 상담 페이지와 동일한 서비스 사용
   const loadAtRiskStudents = async () => {
     try {
@@ -1329,22 +1356,28 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* 우측: 코멘트 작성 폼 (50%) */}
+            {/* 우측: 포털 뷰 (50%) */}
             <div>
-              <StudentCommentEditor
-                student={selectedStudentForComment}
-                year={commentYear}
-                month={commentMonth}
-                onSaveSuccess={() => {
-                  // 목록 새로고침
-                  setCommentListRefreshTrigger(prev => prev + 1)
-                }}
-                onRequestNextStudent={() => {
-                  // 다음 미작성 학생으로 자동 이동하는 로직은 StudentManagementList에서 처리
-                  // 현재는 목록만 새로고침
-                  setCommentListRefreshTrigger(prev => prev + 1)
-                }}
-              />
+              {selectedStudentForComment ? (
+                <PortalView
+                  studentId={selectedStudentForComment.id}
+                  viewerRole="employee"
+                  employeeId={employeeId || undefined}
+                  onRefresh={() => {
+                    // 목록 새로고침
+                    setCommentListRefreshTrigger(prev => prev + 1)
+                  }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-[60vh] border-2 border-dashed border-gray-300 rounded-lg">
+                  <div className="text-center space-y-2">
+                    <p className="text-muted-foreground">좌측에서 학생을 선택하세요</p>
+                    <p className="text-sm text-muted-foreground">
+                      학생의 전체 포털 뷰가 여기에 표시됩니다
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>

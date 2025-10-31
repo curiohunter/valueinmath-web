@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/auth/server"
-import { createConsultationRequest } from "@/services/consultation-requests"
+import { createNotificationsForAllEmployees } from "@/services/notifications"
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,21 +43,63 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create consultation request
-    const consultationRequest = await createConsultationRequest(
-      {
+    // Create consultation request using server client
+    const { data: consultationRequest, error: insertError } = await supabase
+      .from("consultation_requests")
+      .insert({
         student_id,
+        requester_id: user.id,
         method,
         type,
         content,
-      },
-      user.id
-    )
+        status: '대기중',
+      })
+      .select(`
+        *,
+        student:students!consultation_requests_student_id_fkey (
+          name
+        )
+      `)
+      .single()
+
+    if (insertError) {
+      console.error("Insert error:", insertError)
+      throw insertError
+    }
+
+    if (!consultationRequest) {
+      throw new Error("상담 요청 생성에 실패했습니다.")
+    }
+
+    // Create notifications for all employees (non-critical)
+    try {
+      await createNotificationsForAllEmployees({
+        type: 'consultation_request',
+        title: '새로운 상담 요청',
+        content: `${(consultationRequest.student as any)?.name || '학생'}님의 학부모가 ${type} 상담을 요청했습니다.`,
+        related_id: consultationRequest.id,
+      })
+    } catch (notifError) {
+      console.error('알림 생성 실패:', notifError)
+      // 알림 실패는 치명적이지 않으므로 계속 진행
+    }
 
     return NextResponse.json(
       {
         success: true,
-        data: consultationRequest,
+        data: {
+          id: consultationRequest.id,
+          student_id: consultationRequest.student_id,
+          requester_id: consultationRequest.requester_id,
+          method: consultationRequest.method,
+          type: consultationRequest.type,
+          content: consultationRequest.content,
+          counselor_id: consultationRequest.counselor_id,
+          status: consultationRequest.status,
+          created_at: consultationRequest.created_at,
+          updated_at: consultationRequest.updated_at,
+          student_name: (consultationRequest.student as any)?.name || "알 수 없음",
+        },
         message: "상담 요청이 등록되었습니다.",
       },
       { status: 201 }

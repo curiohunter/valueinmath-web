@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/auth/server"
-import { createLearningComment } from "@/services/comments"
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,16 +64,43 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create learning comment
-    const comment = await createLearningComment(
-      {
+    // Check for duplicate (same student, same year/month)
+    const { data: existing } = await supabase
+      .from("learning_comments")
+      .select("id")
+      .eq("student_id", student_id)
+      .eq("year", year)
+      .eq("month", month)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `${year}년 ${month}월 코멘트가 이미 존재합니다.` },
+        { status: 409 }
+      )
+    }
+
+    // Create learning comment using server client
+    const { data: comment, error: insertError } = await supabase
+      .from("learning_comments")
+      .insert({
         student_id,
+        teacher_id: employee.id,
         year,
         month,
         content,
-      },
-      employee.id
-    )
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error("Insert error:", insertError)
+      throw insertError
+    }
+
+    if (!comment) {
+      throw new Error("코멘트 작성에 실패했습니다.")
+    }
 
     return NextResponse.json(
       {
