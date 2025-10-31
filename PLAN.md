@@ -5,7 +5,7 @@
 **Repository**: https://github.com/curiohunter/valueinmath-web
 **Stack**: Next.js 15, Supabase, TypeScript, Tailwind CSS
 **Deployment**: Vercel (auto-deploy on push to main)
-**Last Updated**: 2025-10-30
+**Last Updated**: 2025-10-31
 
 ---
 
@@ -28,7 +28,7 @@
 - [x] Consultation management system
 - [x] Dashboard with comprehensive stats
 
-#### Management Features (2025-07-09 ~ 2025-10-23)
+#### Management Features (2025-07-09 ~ 2025-10-31)
 - [x] Tuition management with Excel export
 - [x] Learning history & test logs
 - [x] Makeup class tracking
@@ -38,6 +38,7 @@
 - [x] School exam scores system (student-subject-score tracking with decimal support)
 - [x] Parent/Student approval system (admin approval workflow with delete)
 - [x] Parent/Student portal (학습 포털 with 6 data sources integration)
+- [x] Parent-Teacher communication system (monthly learning comments with replies/reactions)
 
 #### Technical Improvements
 - [x] @supabase/ssr migration (from auth-helpers-nextjs)
@@ -113,6 +114,27 @@
 ---
 
 ## 📝 Recent Changes Log
+
+### 2025-10-31
+- ✅ **학부모-선생님 소통 시스템 완성**
+  - 선생님용 월별 학습 코멘트 작성 기능 (학생 선택, 년/월 선택)
+  - 학생별 학습 상황 표시 (5개 카드: 학습/시험/상담/보강/매쓰플랫)
+  - 클릭 가능한 카드로 상세 데이터 표시
+  - 학습 카드: 출석/숙제/집중도 평균 점수 + 라벨 표시
+  - 매쓰플랫 카드: 유형별 문제수 및 정답률
+  - 학부모/학생용 코멘트 조회 및 답글/반응 기능
+  - Components: `student-comment-editor.tsx`, `teacher-comment-form.tsx`, `comments-section.tsx`
+  - Services: `comments.ts`, `consultation-requests.ts`
+  - API Routes: `/api/learning-comments`, `/api/consultation-requests`
+- ✅ **데이터베이스 스키마 정렬**
+  - study_logs: `attendance` → `attendance_status`
+  - test_logs: `test_date` → `date`, `test_name` → `test`, `score` → `test_score`
+  - consultations: `consultation_date` → `date`, 필드명 표준화
+  - makeup_classes: `scheduled_date` → `absence_date`
+  - mathflat_records: 실제 스키마 적용 (mathflat_type, problem_solved, correct_count)
+- ✅ **타임존 문제 해결**
+  - toISOString() → formatDate() 로컬 시간대 사용
+  - 월별 날짜 범위 계산 정확도 개선
 
 ### 2025-10-30
 - ✅ **Portal 학습일지 UI 개선 (Phase 1)**

@@ -9,13 +9,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, AlertCircle, Clock, CheckCircle2, CreditCard, CheckSquare } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, AlertCircle, Clock, CheckCircle2, CreditCard, CheckSquare, BarChart3 } from "lucide-react"
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
 import { EntranceTestTable, type EntranceTestData as EntranceTestTableData } from "@/components/dashboard/EntranceTestTable"
 import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
+import { StudentManagementList } from "@/components/dashboard/student-management-list"
+import { StudentCommentEditor } from "@/components/dashboard/student-comment-editor"
 // ConsultationModal removed - using StudentFormModal instead
 import type { Database } from "@/types/database"
 
@@ -97,6 +100,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
   const [editingTest, setEditingTest] = useState<EntranceTestData | null>(null)
+
+  // 학생관리 탭 상태
+  const [selectedStudentForComment, setSelectedStudentForComment] = useState<any>(null)
+  const [commentYear, setCommentYear] = useState(new Date().getFullYear())
+  const [commentMonth, setCommentMonth] = useState(new Date().getMonth() + 1)
+  const [commentListRefreshTrigger, setCommentListRefreshTrigger] = useState(0)
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   // 테이블로 변경되어 더 이상 필요하지 않음
@@ -1127,11 +1136,24 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* 통계 카드 */}
-      <StatsCards stats={stats} atRiskStudents={atRiskStudents} />
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            운영현황
+          </TabsTrigger>
+          <TabsTrigger value="students" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            학생관리
+          </TabsTrigger>
+        </TabsList>
 
-      {/* 바로가기 섹션 */}
-      <QuickAccessSection />
+        <TabsContent value="overview" className="space-y-6 mt-6">
+          {/* 통계 카드 */}
+          <StatsCards stats={stats} atRiskStudents={atRiskStudents} />
+
+          {/* 바로가기 섹션 */}
+          <QuickAccessSection />
 
       {/* 중간 영역: 신규상담 + 입학테스트 관리 */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
@@ -1283,6 +1305,50 @@ export default function DashboardPage() {
           selectedStudentIds: [newlyEnrolledStudent.id]
         } : undefined}
       />
+        </TabsContent>
+
+        <TabsContent value="students" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 좌측: 학생 목록 (50%) */}
+            <div>
+              <StudentManagementList
+                selectedYear={commentYear}
+                selectedMonth={commentMonth}
+                selectedStudentId={selectedStudentForComment?.id}
+                onStudentSelect={(student) => {
+                  setSelectedStudentForComment(student)
+                }}
+                onYearMonthChange={(year, month) => {
+                  setCommentYear(year)
+                  setCommentMonth(month)
+                }}
+                onRefresh={() => {
+                  setCommentListRefreshTrigger(prev => prev + 1)
+                }}
+                refreshTrigger={commentListRefreshTrigger}
+              />
+            </div>
+
+            {/* 우측: 코멘트 작성 폼 (50%) */}
+            <div>
+              <StudentCommentEditor
+                student={selectedStudentForComment}
+                year={commentYear}
+                month={commentMonth}
+                onSaveSuccess={() => {
+                  // 목록 새로고침
+                  setCommentListRefreshTrigger(prev => prev + 1)
+                }}
+                onRequestNextStudent={() => {
+                  // 다음 미작성 학생으로 자동 이동하는 로직은 StudentManagementList에서 처리
+                  // 현재는 목록만 새로고침
+                  setCommentListRefreshTrigger(prev => prev + 1)
+                }}
+              />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -18,13 +18,17 @@ import { QuickActionMenu } from "@/components/portal/quick-action-menu"
 import { ClassesSection } from "@/components/portal/classes-section"
 import { TuitionSection } from "@/components/portal/tuition-section"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { RefreshCw, GraduationCap, BookOpen, CreditCard } from "lucide-react"
+import { RefreshCw, GraduationCap, BookOpen, CreditCard, MessageCircle } from "lucide-react"
+import { CommentsSection } from "@/components/portal/comments-section"
+import { TeacherCommentForm } from "@/components/portal/teacher-comment-form"
 
 export default function PortalPage() {
   const { user } = useAuth()
   const [portalData, setPortalData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<"employee" | "student" | "parent" | null>(null)
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -41,14 +45,41 @@ export default function PortalPage() {
     try {
       const supabase = createClient()
 
-      // Get user profile to find student_id
+      // Get user profile to determine role
       const { data: profile } = await supabase
         .from("profiles")
-        .select("student_id")
+        .select("role, student_id")
         .eq("id", user.id)
         .single()
 
-      if (!profile?.student_id) {
+      if (!profile) {
+        setError("사용자 정보를 찾을 수 없습니다.")
+        return
+      }
+
+      setUserRole(profile.role as "employee" | "student" | "parent")
+
+      // If employee, fetch employee ID for teacher features
+      if (profile.role === "employee") {
+        const { data: employee } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("auth_id", user.id)
+          .eq("status", "재직")
+          .single()
+
+        if (employee) {
+          setEmployeeId(employee.id)
+        }
+
+        // Employees don't need to load full portal data
+        // They just use the comment form
+        setLoading(false)
+        return
+      }
+
+      // For students/parents, load portal data as before
+      if (!profile.student_id) {
         setError("학생 정보가 연결되지 않았습니다.")
         return
       }
@@ -89,6 +120,32 @@ export default function PortalPage() {
     )
   }
 
+  // For employees, show teacher view (comment form)
+  if (userRole === "employee") {
+    if (!employeeId) {
+      return (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <p className="text-muted-foreground">직원 정보를 찾을 수 없습니다.</p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-8 pb-20">
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-6 rounded-lg border border-blue-200 shadow-sm">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">선생님 포털</h1>
+          <p className="text-gray-600">학생들의 월별 학습 코멘트를 작성할 수 있습니다.</p>
+        </div>
+
+        <TeacherCommentForm
+          teacherId={employeeId}
+          onSuccess={loadPortalData}
+        />
+      </div>
+    )
+  }
+
+  // For students/parents, check portal data
   if (!portalData) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -213,9 +270,9 @@ export default function PortalPage() {
         {/* 2. Classes Section - Student's Classes */}
         <ClassesSection classes={portalData.classes} />
 
-        {/* 3. Tabs - 학습상황 / 원비관리 */}
+        {/* 3. Tabs - 학습상황 / 원비관리 / 코멘트 */}
         <Tabs defaultValue="learning" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="learning" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               학습상황
@@ -223,6 +280,10 @@ export default function PortalPage() {
             <TabsTrigger value="tuition" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
               원비관리
+            </TabsTrigger>
+            <TabsTrigger value="comments" className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              코멘트
             </TabsTrigger>
           </TabsList>
 
@@ -263,6 +324,16 @@ export default function PortalPage() {
             <TuitionSection
               tuition_fees={portalData.tuition_fees}
               studentName={portalData.student.name}
+            />
+          </TabsContent>
+
+          {/* 코멘트 탭 */}
+          <TabsContent value="comments" className="mt-6">
+            <CommentsSection
+              studentId={portalData.student.id}
+              comments={portalData.learning_comments || []}
+              consultationRequests={portalData.consultation_requests || []}
+              onRefresh={loadPortalData}
             />
           </TabsContent>
         </Tabs>
