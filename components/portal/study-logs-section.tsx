@@ -52,7 +52,10 @@ const scoreColor = (score: number) => {
 };
 
 export function StudyLogsSection({ logs }: StudyLogsSectionProps) {
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
+  const [showCount, setShowCount] = useState(12)
+
+  const displayedLogs = logs.slice(0, showCount)
 
   return (
     <Card>
@@ -70,7 +73,7 @@ export function StudyLogsSection({ logs }: StudyLogsSectionProps) {
           <p className="text-center text-muted-foreground py-8">학습 일지가 없습니다.</p>
         ) : (
           <div className="space-y-4">
-            {logs.slice(0, 10).map((log) => (
+            {displayedLogs.map((log) => (
               <div key={log.id} className="border rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -170,10 +173,29 @@ export function StudyLogsSection({ logs }: StudyLogsSectionProps) {
               </div>
             ))}
 
-            {logs.length > 10 && (
-              <p className="text-center text-sm text-muted-foreground">
-                외 {logs.length - 10}개의 학습 일지
-              </p>
+            {logs.length > showCount && (
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCount(prev => prev + 12)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  외 {logs.length - showCount}개의 학습 일지 더보기
+                </Button>
+              </div>
+            )}
+            {showCount > 12 && showCount >= logs.length && (
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCount(12)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  접기
+                </Button>
+              </div>
             )}
           </div>
         )}

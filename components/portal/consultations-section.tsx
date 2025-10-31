@@ -19,7 +19,15 @@ const statusColors = {
 }
 
 export function ConsultationsSection({ consultations }: ConsultationsSectionProps) {
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
+  const [showCount, setShowCount] = useState(12)
+
+  // 완료된 정기상담만 필터링
+  const filteredConsultations = consultations.filter(
+    (consult) => consult.status === "완료" && consult.type === "정기상담"
+  )
+
+  const displayedConsultations = filteredConsultations.slice(0, showCount)
 
   return (
     <Card>
@@ -33,60 +41,50 @@ export function ConsultationsSection({ consultations }: ConsultationsSectionProp
       </CardHeader>
       {isOpen && (
         <CardContent>
-        {consultations.length === 0 ? (
+        {filteredConsultations.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">상담 기록이 없습니다.</p>
         ) : (
           <div className="space-y-4">
-            {consultations.slice(0, 10).map((consult) => (
+            {displayedConsultations.map((consult) => (
               <div key={consult.id} className="border rounded-lg p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold">{consult.type}</h3>
-                      <span className="text-xs bg-muted px-2 py-1 rounded">
-                        {consult.method}
-                      </span>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          statusColors[consult.status as keyof typeof statusColors] ||
-                          "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {consult.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {format(new Date(consult.date), "yyyy년 M월 d일", { locale: ko })}
-                      {consult.counselor_name && ` • ${consult.counselor_name}`}
-                    </div>
+                <div className="mb-3">
+                  <div className="text-sm text-muted-foreground">
+                    {format(new Date(consult.date), "yyyy년 M월 d일", { locale: ko })}
+                    {consult.counselor_name && ` • ${consult.counselor_name}`}
                   </div>
                 </div>
 
                 {consult.content && (
-                  <div className="text-sm bg-muted p-3 rounded mb-2">
-                    <div className="font-medium mb-1">상담 내용</div>
+                  <div className="text-sm bg-muted p-3 rounded">
                     <div className="whitespace-pre-wrap">{consult.content}</div>
-                  </div>
-                )}
-
-                {consult.next_action && (
-                  <div className="text-sm border-l-2 border-primary pl-3 py-1">
-                    <div className="font-medium text-primary">다음 조치</div>
-                    <div className="text-muted-foreground">{consult.next_action}</div>
-                    {consult.next_date && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(consult.next_date), "M월 d일 예정", { locale: ko })}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             ))}
 
-            {consultations.length > 10 && (
-              <p className="text-center text-sm text-muted-foreground">
-                외 {consultations.length - 10}개의 상담 기록
-              </p>
+            {filteredConsultations.length > showCount && (
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCount(prev => prev + 12)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  외 {filteredConsultations.length - showCount}개의 상담 기록 더보기
+                </Button>
+              </div>
+            )}
+            {showCount > 12 && showCount >= filteredConsultations.length && (
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCount(12)}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  접기
+                </Button>
+              </div>
             )}
           </div>
         )}

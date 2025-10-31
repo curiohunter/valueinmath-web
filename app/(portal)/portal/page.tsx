@@ -149,6 +149,65 @@ export default function PortalPage() {
               </span>
             </div>
           </div>
+
+          {/* Homework Information - Most Recent 2 Days */}
+          {(() => {
+            // Get unique dates from study logs (sorted by date descending)
+            const uniqueDates = Array.from(
+              new Set(portalData.study_logs.map(log => log.date))
+            ).slice(0, 2)
+
+            if (uniqueDates.length === 0) return null
+
+            // Group logs by date
+            const logsByDate = uniqueDates.map(date => ({
+              date,
+              logs: portalData.study_logs.filter(log => log.date === date)
+            }))
+
+            return (
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  최근 숙제 정보
+                </h3>
+                <div className="space-y-3">
+                  {logsByDate.map(({ date, logs }) => (
+                    <div key={date} className="bg-white/60 rounded-md p-3 border border-blue-100">
+                      <div className="text-xs text-gray-600 mb-2 font-medium">
+                        {new Date(date).toLocaleDateString('ko-KR', {
+                          month: 'long',
+                          day: 'numeric',
+                          weekday: 'short'
+                        })}
+                      </div>
+                      <div className="space-y-2">
+                        {logs.map((log, idx) => (
+                          <div key={idx} className="text-sm">
+                            {log.book2 && (
+                              <div className="flex gap-2">
+                                <span className="text-gray-600 min-w-[60px]">교재:</span>
+                                <span className="font-semibold text-gray-800">{log.book2}</span>
+                              </div>
+                            )}
+                            {log.book2log && (
+                              <div className="flex gap-2">
+                                <span className="text-gray-600 min-w-[60px]">숙제:</span>
+                                <span className="text-gray-800">{log.book2log}</span>
+                              </div>
+                            )}
+                            {!log.book2 && !log.book2log && (
+                              <div className="text-gray-500 text-xs">숙제 정보 없음</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* 2. Classes Section - Student's Classes */}

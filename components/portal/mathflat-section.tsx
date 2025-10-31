@@ -21,7 +21,10 @@ const getAccuracyColor = (rate: number | null) => {
 }
 
 export function MathflatSection({ records }: MathflatSectionProps) {
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
+  const [showCount, setShowCount] = useState(12)
+
+  const displayedRecords = records.slice(0, showCount)
 
   // Calculate totals
   const totalProblems = records.reduce((sum, r) => sum + (r.problem_solved || 0), 0)
@@ -76,7 +79,7 @@ export function MathflatSection({ records }: MathflatSectionProps) {
 
             {/* Individual Records */}
             <div className="space-y-3">
-              {records.slice(0, 15).map((record) => (
+              {displayedRecords.map((record) => (
                 <div key={record.id} className="border rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
@@ -123,10 +126,29 @@ export function MathflatSection({ records }: MathflatSectionProps) {
                 </div>
               ))}
 
-              {records.length > 15 && (
-                <p className="text-center text-sm text-muted-foreground">
-                  외 {records.length - 15}개의 학습 기록
-                </p>
+              {records.length > showCount && (
+                <div className="text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCount(prev => prev + 12)}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    외 {records.length - showCount}개의 학습 기록 더보기
+                  </Button>
+                </div>
+              )}
+              {showCount > 12 && showCount >= records.length && (
+                <div className="text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCount(12)}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    접기
+                  </Button>
+                </div>
               )}
             </div>
           </div>
