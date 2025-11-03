@@ -17,6 +17,7 @@ interface StudentWithComment {
   school: string
   status: string
   className?: string
+  teacherName?: string
   hasComment: boolean
   comment?: LearningComment
 }
@@ -78,13 +79,33 @@ export function StudentManagementList({
     }
   }, [onRefresh])
 
-  // 고유한 반 목록
+  // 고유한 반 목록 (선생님별로 정렬)
   const classList = useMemo(() => {
-    const classes = new Set<string>()
+    // 반 이름과 선생님 이름을 함께 저장
+    const classMap = new Map<string, string>()
     students.forEach((s) => {
-      if (s.className) classes.add(s.className)
+      if (s.className && !classMap.has(s.className)) {
+        classMap.set(s.className, s.teacherName || "")
+      }
     })
-    return ["전체", ...Array.from(classes).sort()]
+
+    // 선생님별로 정렬 후, 같은 선생님 내에서는 반 이름으로 정렬
+    const sortedClasses = Array.from(classMap.entries())
+      .sort((a, b) => {
+        const [classNameA, teacherNameA] = a
+        const [classNameB, teacherNameB] = b
+
+        // 선생님 이름으로 먼저 정렬 (가나다순)
+        if (teacherNameA !== teacherNameB) {
+          return teacherNameA.localeCompare(teacherNameB, 'ko')
+        }
+
+        // 같은 선생님이면 반 이름으로 정렬
+        return classNameA.localeCompare(classNameB, 'ko')
+      })
+      .map(([className]) => className)
+
+    return ["전체", ...sortedClasses]
   }, [students])
 
   // 고유한 학년 목록
@@ -286,9 +307,9 @@ export function StudentManagementList({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredStudents.map((student) => (
+                filteredStudents.map((student, index) => (
                   <TableRow
-                    key={student.id}
+                    key={`${student.id}-${student.className || 'no-class'}-${index}`}
                     className={`cursor-pointer hover:bg-muted/50 ${
                       selectedStudentId === student.id ? "bg-muted" : ""
                     }`}

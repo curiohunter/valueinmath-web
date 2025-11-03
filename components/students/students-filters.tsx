@@ -40,21 +40,11 @@ export function StudentsFilters({ onNewStudent }: { onNewStudent: () => void }) 
     [searchParams],
   )
 
-  // Handle filter changes
+  // Handle filter changes - 즉시 검색 (학원비 이력과 동일)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchValue(e.target.value)
-  }
-
-  // 검색어 입력 후 엔터 키 처리
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      router.push(`${pathname}?${createQueryString("search", searchValue)}`)
-    }
-  }
-
-  // 검색 버튼 클릭 처리
-  const handleSearchClick = () => {
-    router.push(`${pathname}?${createQueryString("search", searchValue)}`)
+    const value = e.target.value
+    setSearchValue(value)
+    router.push(`${pathname}?${createQueryString("search", value)}`)
   }
 
   const handleDepartmentChange = (value: string) => {
@@ -81,12 +71,8 @@ export function StudentsFilters({ onNewStudent }: { onNewStudent: () => void }) 
             placeholder="이름, 학교, 연락처 검색..."
             value={searchValue}
             onChange={handleSearchChange}
-            onKeyDown={handleSearchKeyDown}
             className="max-w-sm"
           />
-          <Button onClick={handleSearchClick} className="shrink-0">
-            검색
-          </Button>
           <Button onClick={onNewStudent} className="shrink-0 bg-primary text-primary-foreground">
             + 신규 학생 등록
           </Button>

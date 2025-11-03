@@ -1,12 +1,10 @@
 import { createClient } from "@/lib/supabase/client"
-import { createServerClient } from "@/lib/auth/server"
 import {
   ConsultationRequest,
   ConsultationRequestFormData,
   ConsultationRequestFilter,
   ConsultationRequestStatus,
 } from "@/types/consultation-requests"
-import { createNotificationsForAllEmployees } from "./notifications"
 
 /**
  * 학부모용: 상담 요청 생성
@@ -40,18 +38,8 @@ export async function createConsultationRequest(
   if (error) throw error
   if (!request) throw new Error("상담 요청 생성에 실패했습니다.")
 
-  // 2. 전체 직원에게 알림 생성 (service role 필요)
-  try {
-    await createNotificationsForAllEmployees({
-      type: 'consultation_request',
-      title: '새로운 상담 요청',
-      content: `${(request.student as any)?.name || '학생'}님의 학부모가 ${data.type} 상담을 요청했습니다.`,
-      related_id: request.id,
-    })
-  } catch (notifError) {
-    console.error('알림 생성 실패:', notifError)
-    // 알림 실패는 치명적이지 않으므로 계속 진행
-  }
+  // TODO: 알림 생성은 API Route로 구현 예정
+  // 클라이언트에서 직접 호출할 수 없는 서버 전용 함수이므로 제거
 
   return {
     id: request.id,
@@ -81,14 +69,10 @@ export async function getConsultationRequests(
     .from("consultation_requests")
     .select(`
       *,
-      student:students!consultation_requests_student_id_fkey (
+      student:students (
         name
       ),
-      requester:profiles!consultation_requests_requester_id_fkey (
-        name,
-        role
-      ),
-      counselor:employees!consultation_requests_counselor_id_fkey (
+      counselor:employees (
         name
       )
     `)
@@ -112,24 +96,41 @@ export async function getConsultationRequests(
 
   const { data, error } = await query.order("created_at", { ascending: false })
 
-  if (error) throw error
+  if (error) {
+    console.error("Supabase getConsultationRequests error:", error)
+    throw error
+  }
 
-  return (data || []).map((request) => ({
-    id: request.id,
-    student_id: request.student_id,
-    requester_id: request.requester_id,
-    method: request.method,
-    type: request.type,
-    content: request.content,
-    counselor_id: request.counselor_id,
-    status: request.status,
-    created_at: request.created_at,
-    updated_at: request.updated_at,
-    student_name: (request.student as any)?.name || "알 수 없음",
-    requester_name: (request.requester as any)?.name || "알 수 없음",
-    requester_role: (request.requester as any)?.role || "parent",
-    counselor_name: (request.counselor as any)?.name || null,
-  }))
+  // requester 정보를 별도로 조회
+  const requestsWithRequester = await Promise.all(
+    (data || []).map(async (request) => {
+      // requester_id로 profiles에서 정보 조회
+      const { data: requesterProfile } = await supabase
+        .from("profiles")
+        .select("name, role")
+        .eq("id", request.requester_id)
+        .single()
+
+      return {
+        id: request.id,
+        student_id: request.student_id,
+        requester_id: request.requester_id,
+        method: request.method,
+        type: request.type,
+        content: request.content,
+        counselor_id: request.counselor_id,
+        status: request.status,
+        created_at: request.created_at,
+        updated_at: request.updated_at,
+        student_name: (request.student as any)?.name || "알 수 없음",
+        requester_name: requesterProfile?.name || "알 수 없음",
+        requester_role: requesterProfile?.role || "parent",
+        counselor_name: (request.counselor as any)?.name || null,
+      }
+    })
+  )
+
+  return requestsWithRequester
 }
 
 /**

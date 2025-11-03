@@ -84,11 +84,13 @@ export function MakeupTable({
 
       if (!tabMatch) return false;
 
-      // 검색어 필터링
+      // 검색어 필터링 (스냅샷 우선 사용)
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
-        const studentName = students.find(s => s.id === makeup.student_id)?.name || "";
-        const className = classes.find(c => c.id === makeup.class_id)?.name || "";
+        const studentName = makeup.student_name_snapshot ||
+          students.find(s => s.id === makeup.student_id)?.name || "";
+        const className = makeup.class_name_snapshot ||
+          (makeup.class_id ? classes.find(c => c.id === makeup.class_id)?.name || "" : "");
 
         return (
           studentName.toLowerCase().includes(query) ||
@@ -109,19 +111,19 @@ export function MakeupTable({
           
           if (dateA !== dateB) {
             // 결석일이 다르면 날짜로 정렬
-            return sortOrder === "desc" 
-              ? dateB.localeCompare(dateA) 
+            return sortOrder === "desc"
+              ? dateB.localeCompare(dateA)
               : dateA.localeCompare(dateB);
           } else {
-            // 같은 날짜면 학생 이름으로 정렬 (가나다순)
-            const nameA = students.find(s => s.id === a.student_id)?.name || "";
-            const nameB = students.find(s => s.id === b.student_id)?.name || "";
+            // 같은 날짜면 학생 이름으로 정렬 (가나다순, 스냅샷 우선)
+            const nameA = a.student_name_snapshot || students.find(s => s.id === a.student_id)?.name || "";
+            const nameB = b.student_name_snapshot || students.find(s => s.id === b.student_id)?.name || "";
             return nameA.localeCompare(nameB, 'ko');
           }
         } else {
-          // 학생 이름 기준 정렬
-          const nameA = students.find(s => s.id === a.student_id)?.name || "";
-          const nameB = students.find(s => s.id === b.student_id)?.name || "";
+          // 학생 이름 기준 정렬 (스냅샷 우선)
+          const nameA = a.student_name_snapshot || students.find(s => s.id === a.student_id)?.name || "";
+          const nameB = b.student_name_snapshot || students.find(s => s.id === b.student_id)?.name || "";
           
           const nameCompare = nameA.localeCompare(nameB, 'ko');
           if (nameCompare !== 0) {
@@ -148,13 +150,26 @@ export function MakeupTable({
     ? filteredAndSortedMakeups.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
     : filteredAndSortedMakeups;
 
-  // 학생/반 이름 찾기 헬퍼 함수
-  const getStudentName = (studentId: string) => {
-    return students.find(s => s.id === studentId)?.name || "알 수 없음";
+  // 학생/반 이름 찾기 헬퍼 함수 (스냅샷 우선)
+  const getStudentName = (makeup: MakeupClass) => {
+    // 1순위: 스냅샷 (학생 퇴원 시에도 이름 표시)
+    if (makeup.student_name_snapshot) {
+      return makeup.student_name_snapshot;
+    }
+    // 2순위: 현재 학생 테이블에서 조회
+    return students.find(s => s.id === makeup.student_id)?.name || "알 수 없음";
   };
 
-  const getClassName = (classId: string) => {
-    return classes.find(c => c.id === classId)?.name || "알 수 없음";
+  const getClassName = (makeup: MakeupClass) => {
+    // 1순위: 스냅샷 (반 삭제 시에도 이름 표시)
+    if (makeup.class_name_snapshot) {
+      return makeup.class_name_snapshot;
+    }
+    // 2순위: 현재 classes 테이블에서 조회
+    if (makeup.class_id) {
+      return classes.find(c => c.id === makeup.class_id)?.name || "알 수 없음";
+    }
+    return "알 수 없음";
   };
 
   // 결석 사유 한글 변환 및 색상
@@ -368,12 +383,12 @@ export function MakeupTable({
                       <TableCell className="font-medium py-3 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-1">
                           <User className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                          <span className="text-sm">{getStudentName(makeup.student_id)}</span>
+                          <span className="text-sm">{getStudentName(makeup)}</span>
                         </div>
                       </TableCell>
                       <TableCell className="py-3 px-3 whitespace-nowrap">
                         <Badge variant="outline" className="font-normal text-xs">
-                          {getClassName(makeup.class_id)}
+                          {getClassName(makeup)}
                         </Badge>
                       </TableCell>
                       <TableCell className="py-3 px-3 whitespace-nowrap">

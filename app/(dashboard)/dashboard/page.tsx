@@ -17,8 +17,7 @@ import { EntranceTestTable, type EntranceTestData as EntranceTestTableData } fro
 import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
-import { StudentManagementList } from "@/components/dashboard/student-management-list"
-import { PortalView } from "@/components/portal/portal-view"
+import { StudentManagementTab } from "@/components/dashboard/student-management-tab"
 // ConsultationModal removed - using StudentFormModal instead
 import type { Database } from "@/types/database"
 
@@ -65,6 +64,9 @@ interface DashboardStats {
   currentMonthUnpaidCount: number // 이번달 미납
   todosByAssignee: { [key: string]: number } // 담당자별 미완료 투두
   totalIncompleteTodos: number // 전체 미완료 투두 수
+  consultationRequestsUnassigned: number // 미배정 상담요청
+  consultationRequestsPending: number // 대기중 상담요청
+  consultationRequestsCompleted: number // 완료 상담요청
 }
 
 export default function DashboardPage() {
@@ -98,17 +100,14 @@ export default function DashboardPage() {
     currentMonthPaidCount: 0,
     currentMonthUnpaidCount: 0,
     todosByAssignee: {},
-    totalIncompleteTodos: 0
+    totalIncompleteTodos: 0,
+    consultationRequestsUnassigned: 0,
+    consultationRequestsPending: 0,
+    consultationRequestsCompleted: 0
   })
   const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
   const [editingTest, setEditingTest] = useState<EntranceTestData | null>(null)
-
-  // 학생관리 탭 상태
-  const [selectedStudentForComment, setSelectedStudentForComment] = useState<any>(null)
-  const [commentYear, setCommentYear] = useState(new Date().getFullYear())
-  const [commentMonth, setCommentMonth] = useState(new Date().getMonth() + 1)
-  const [commentListRefreshTrigger, setCommentListRefreshTrigger] = useState(0)
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   // 테이블로 변경되어 더 이상 필요하지 않음
@@ -392,27 +391,27 @@ export default function DashboardPage() {
         .select('*')
         .neq('status', 'completed')
         .not('assigned_to', 'is', null)
-      
+
       // 담당자별 미완료 건수 계산
       const todosByAssignee: Record<string, number> = {}
       let totalIncompleteTodos = 0
-      
+
       if (todosData && todosData.length > 0) {
         // 먼저 모든 고유한 assigned_to ID 수집
         const assigneeIds = [...new Set(todosData.map(t => t.assigned_to).filter(Boolean))]
-        
+
         // 직원 이름 가져오기
         const { data: employeesData } = await supabase
           .from('employees')
           .select('auth_id, name')
           .in('auth_id', assigneeIds)
           .eq('status', '재직')
-        
+
         const employeeMap: Record<string, string> = {}
         employeesData?.forEach(emp => {
           employeeMap[emp.auth_id] = emp.name
         })
-        
+
         // 담당자별 카운트
         todosData.forEach(todo => {
           if (todo.assigned_to) {
@@ -422,6 +421,23 @@ export default function DashboardPage() {
           }
         })
       }
+
+      // 상담요청 통계
+      const { data: consultationRequestsData } = await supabase
+        .from('consultation_requests')
+        .select('status, counselor_id')
+
+      const consultationRequestsUnassigned = consultationRequestsData?.filter(
+        r => r.status === '대기중' && r.counselor_id === null
+      ).length || 0
+
+      const consultationRequestsPending = consultationRequestsData?.filter(
+        r => r.status === '대기중'
+      ).length || 0
+
+      const consultationRequestsCompleted = consultationRequestsData?.filter(
+        r => r.status === '완료'
+      ).length || 0
 
       setStats({
         activeStudents: activeStudents?.length || 0,
@@ -446,7 +462,10 @@ export default function DashboardPage() {
         currentMonthPaidCount,
         currentMonthUnpaidCount,
         todosByAssignee,
-        totalIncompleteTodos
+        totalIncompleteTodos,
+        consultationRequestsUnassigned,
+        consultationRequestsPending,
+        consultationRequestsCompleted
       })
 
     } catch (error) {
@@ -1335,51 +1354,7 @@ export default function DashboardPage() {
         </TabsContent>
 
         <TabsContent value="students" className="mt-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 좌측: 학생 목록 (50%) */}
-            <div>
-              <StudentManagementList
-                selectedYear={commentYear}
-                selectedMonth={commentMonth}
-                selectedStudentId={selectedStudentForComment?.id}
-                onStudentSelect={(student) => {
-                  setSelectedStudentForComment(student)
-                }}
-                onYearMonthChange={(year, month) => {
-                  setCommentYear(year)
-                  setCommentMonth(month)
-                }}
-                onRefresh={() => {
-                  setCommentListRefreshTrigger(prev => prev + 1)
-                }}
-                refreshTrigger={commentListRefreshTrigger}
-              />
-            </div>
-
-            {/* 우측: 포털 뷰 (50%) */}
-            <div>
-              {selectedStudentForComment ? (
-                <PortalView
-                  studentId={selectedStudentForComment.id}
-                  viewerRole="employee"
-                  employeeId={employeeId || undefined}
-                  onRefresh={() => {
-                    // 목록 새로고침
-                    setCommentListRefreshTrigger(prev => prev + 1)
-                  }}
-                />
-              ) : (
-                <div className="flex items-center justify-center h-[60vh] border-2 border-dashed border-gray-300 rounded-lg">
-                  <div className="text-center space-y-2">
-                    <p className="text-muted-foreground">좌측에서 학생을 선택하세요</p>
-                    <p className="text-sm text-muted-foreground">
-                      학생의 전체 포털 뷰가 여기에 표시됩니다
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <StudentManagementTab employeeId={employeeId} />
         </TabsContent>
       </Tabs>
     </div>
