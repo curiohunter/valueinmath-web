@@ -236,8 +236,8 @@ export function MakeupModal({
           .from("makeup_classes")
           .update({
             makeup_type: makeupType,
-            absence_date: makeupType === "absence" && absenceDates.length > 0 
-              ? formatDateToKST(absenceDates[0]) 
+            absence_date: makeupType === "absence" && absenceDates.length > 0
+              ? formatDateToKST(absenceDates[0])
               : null,
             absence_reason: makeupType === "absence" ? absenceReason || null : null,
             makeup_date: makeupDate ? formatDateToKST(makeupDate) : null,
@@ -246,6 +246,8 @@ export function MakeupModal({
             content: content || null,
             notes: notes || null,
             status,
+            student_name_snapshot: studentInfo.studentName,
+            class_name_snapshot: studentInfo.className,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingMakeup.id)
@@ -428,6 +430,8 @@ export function MakeupModal({
               notes: notes || null,
               status,
               created_by: employee?.id || null,
+              student_name_snapshot: studentInfo.studentName,
+              class_name_snapshot: studentInfo.className,
             })
             .select()
             .single();

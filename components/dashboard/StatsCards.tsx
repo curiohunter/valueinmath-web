@@ -2,9 +2,9 @@
 
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
-  Users, Phone, GraduationCap, TrendingUp, AlertCircle, Clock, 
-  CreditCard, CheckSquare 
+import {
+  Users, Phone, GraduationCap, TrendingUp, MessageSquare, Clock,
+  CreditCard, CheckSquare
 } from "lucide-react"
 
 interface DashboardStats {
@@ -32,6 +32,9 @@ interface DashboardStats {
   currentMonthUnpaidCount: number // 이번달 미납
   todosByAssignee: { [key: string]: number } // 담당자별 미완료 투두
   totalIncompleteTodos: number // 전체 미완료 투두 수
+  consultationRequestsUnassigned: number // 미배정 상담요청
+  consultationRequestsPending: number // 대기중 상담요청
+  consultationRequestsCompleted: number // 완료 상담요청
 }
 
 interface TeacherGroup {
@@ -162,25 +165,32 @@ export function StatsCards({ stats, atRiskStudents }: StatsCardsProps) {
 
       {/* 추가 통계 카드 5개 - 새로운 섹션 */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {/* 관리 필요 학생 */}
+        {/* 재원생 상담 요청 */}
         <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">관리 필요 학생</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">재원생 상담 요청</CardTitle>
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {atRiskStudents.reduce((total, group) => total + group.students.length, 0)}명
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              상담/케어 필요
-            </p>
-            <div className="text-xs text-muted-foreground space-y-1 mt-1">
-              {atRiskStudents.slice(0, 3).map((group, index) => (
-                <div key={`${group.teacherName}-${index}`}>
-                  {group.teacherName}: {group.students.length}명
-                </div>
-              ))}
+            <div className="space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">미배정 요청</span>
+                <span className="text-sm font-semibold text-orange-600">
+                  {stats.consultationRequestsUnassigned}건
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">대기중</span>
+                <span className="text-sm font-semibold text-amber-600">
+                  {stats.consultationRequestsPending}건
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">완료</span>
+                <span className="text-sm font-semibold text-green-600">
+                  {stats.consultationRequestsCompleted}건
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

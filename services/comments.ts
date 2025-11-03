@@ -259,6 +259,7 @@ export async function getStudentsWithCommentStatus(
     school: string
     status: string
     className?: string
+    teacherName?: string
     hasComment: boolean
     comment?: LearningComment
   }>
@@ -278,7 +279,10 @@ export async function getStudentsWithCommentStatus(
         classes (
           id,
           name,
-          teacher_id
+          teacher_id,
+          teacher:employees!classes_teacher_id_fkey (
+            name
+          )
         )
       )
     `)
@@ -322,20 +326,56 @@ export async function getStudentsWithCommentStatus(
   })
 
   // 학생 목록에 코멘트 정보 추가
-  return filteredStudents.map((student) => {
+  // 한 학생이 여러 반에 속한 경우 각 반별로 별도의 행 생성
+  const result: Array<{
+    id: string
+    name: string
+    grade: string
+    school: string
+    status: string
+    className?: string
+    teacherName?: string
+    hasComment: boolean
+    comment?: LearningComment
+  }> = []
+
+  filteredStudents.forEach((student) => {
     const classStudents = student.class_students as any[]
-    const className = classStudents?.[0]?.classes?.name || ""
     const comment = commentsMap.get(student.id)
 
-    return {
-      id: student.id,
-      name: student.name,
-      grade: student.grade,
-      school: student.school,
-      status: student.status,
-      className,
-      hasComment: !!comment,
-      comment,
+    // 반 정보가 있는 경우
+    if (classStudents && classStudents.length > 0) {
+      // 각 반별로 별도의 행 생성
+      classStudents.forEach((cs) => {
+        if (cs.classes) {
+          result.push({
+            id: student.id,
+            name: student.name,
+            grade: student.grade,
+            school: student.school,
+            status: student.status,
+            className: cs.classes.name,
+            teacherName: cs.classes.teacher?.name || "",
+            hasComment: !!comment,
+            comment,
+          })
+        }
+      })
+    } else {
+      // 반 정보가 없는 경우 (반 미배정 학생)
+      result.push({
+        id: student.id,
+        name: student.name,
+        grade: student.grade,
+        school: student.school,
+        status: student.status,
+        className: "",
+        teacherName: "",
+        hasComment: !!comment,
+        comment,
+      })
     }
   })
+
+  return result
 }
