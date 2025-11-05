@@ -118,7 +118,7 @@ export default function LearningHistoryPage() {
     try {
       let query = supabase
         .from("study_logs")
-        .select("class_id,class_name_snapshot,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
+        .select("id,class_id,class_name_snapshot,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
       
       // 날짜 필터
       if (dateRange.from) {
@@ -195,7 +195,7 @@ export default function LearningHistoryPage() {
     try {
       let query = supabase
         .from("study_logs")
-        .select("class_id,class_name_snapshot,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
+        .select("id,class_id,class_name_snapshot,student_id,date,attendance_status,homework,focus,book1,book1log,book2,book2log,note");
       
       if (dateRange.from) query = query.gte("date", dateRange.from);
       if (dateRange.to) query = query.lte("date", dateRange.to);
@@ -318,7 +318,7 @@ export default function LearningHistoryPage() {
   async function handleSaveEdit(edited: any) {
     setIsSaving(true);
     try {
-      // 먼저 기존 학습 기록을 업데이트
+      // 먼저 기존 학습 기록을 업데이트 - id 기반으로 특정 레코드만 업데이트
       const { error: updateError } = await supabase
         .from("study_logs")
         .update({
@@ -333,10 +333,7 @@ export default function LearningHistoryPage() {
           note: edited.note,
           class_id: edited.class_id, // 클래스 ID 업데이트 추가
         })
-        .match({
-          student_id: edited.student_id,
-          date: edited.originalDate || edited.date
-        });
+        .eq('id', edited.id);
       if (updateError) throw updateError;
 
       // 클래스가 변경된 경우 class_students 테이블도 업데이트
@@ -391,10 +388,7 @@ export default function LearningHistoryPage() {
       const { error } = await supabase
         .from("study_logs")
         .delete()
-        .match({
-          student_id: row.student_id,
-          date: row.date
-        });
+        .eq('id', row.id);
       if (error) throw error;
       toast.success("기록이 성공적으로 삭제되었습니다.");
       setIsEditModalOpen(false);

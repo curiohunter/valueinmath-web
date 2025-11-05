@@ -363,7 +363,7 @@ export default function TestHistoryPage() {
   async function handleSaveEdit(edited: any) {
     setIsSaving(true);
     try {
-      // 먼저 기존 시험 기록을 업데이트
+      // 먼저 기존 시험 기록을 업데이트 - id 기반으로 특정 레코드만 업데이트
       const { error: updateError } = await supabase
         .from("test_logs")
         .update({
@@ -374,11 +374,7 @@ export default function TestHistoryPage() {
           note: edited.note,
           class_id: edited.class_id, // 클래스 ID 업데이트 추가
         })
-        .match({
-          student_id: edited.student_id,
-          date: edited.originalDate || edited.date,
-          test: edited.test
-        });
+        .eq('id', edited.id);
       if (updateError) throw updateError;
 
       // 클래스가 변경된 경우 class_students 테이블도 업데이트
