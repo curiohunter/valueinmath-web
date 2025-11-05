@@ -135,16 +135,9 @@ export function TuitionRow({
       
       {/* 학생명 */}
       <td className="min-w-[100px] w-[12%] px-3 py-3">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-slate-700 truncate" title={row.studentName}>
-            {row.studentName}
-          </span>
-          {row.isSibling && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-orange-50 text-orange-600 border-orange-200">
-              형제
-            </Badge>
-          )}
-        </div>
+        <span className="font-medium text-slate-700 truncate" title={row.studentName}>
+          {row.studentName}
+        </span>
       </td>
       
       {/* 연월 */}
