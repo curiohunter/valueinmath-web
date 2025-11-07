@@ -1,14 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, ClipboardList, TrendingDown, AlertTriangle } from "lucide-react";
+import { Users, ClipboardList, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ConsultationPageStats } from "@/types/at-risk";
+import type { ConsultationPageStats } from "@/types/consultation";
 
 interface ConsultationStatsProps {
   stats: ConsultationPageStats;
-  onAtRiskClick: () => void;
+  onRequestsClick: () => void;
 }
 
-export function ConsultationStats({ stats, onAtRiskClick }: ConsultationStatsProps) {
+export function ConsultationStats({ stats, onRequestsClick }: ConsultationStatsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       <Card>
@@ -106,28 +106,33 @@ export function ConsultationStats({ stats, onAtRiskClick }: ConsultationStatsPro
         </CardContent>
       </Card>
       
-      <Card 
+      <Card
         className="cursor-pointer transition-colors hover:bg-accent"
-        onClick={onAtRiskClick}
+        onClick={onRequestsClick}
       >
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-medium flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            관리 필요 학생
+            <MessageSquare className="h-4 w-4" />
+            상담요청 현황
           </CardTitle>
           <CardDescription className="text-xs">
-            고위험 + 중위험 학생
+            재원생 상담 요청 관리
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-orange-600">{stats.atRiskCount}</span>
-            <TrendingDown className="h-4 w-4 text-orange-600" />
-          </div>
-          <div className="text-xs text-muted-foreground space-y-1 mt-2">
-            {Object.entries(stats.atRiskByDept).map(([dept, count]) => (
-              <div key={dept}>{dept}: {count}명</div>
-            ))}
+          <div className="text-xs space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">전체 요청</span>
+              <span className="text-base font-bold">{stats.consultationRequestsTotal}건</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">대기중</span>
+              <span className="text-base font-bold text-orange-600">{stats.consultationRequestsPending}건</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">완료</span>
+              <span className="text-base font-bold text-green-600">{stats.consultationRequestsCompleted}건</span>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -89,3 +89,19 @@ export const formatDateTimeToKST = (date: Date, hour: string, minute: string): s
   const dateStr = formatDateToKST(date);
   return `${dateStr}T${hour}:${minute}:00`;
 };
+
+// 상담 페이지 통계 타입
+export interface ConsultationPageStats {
+  newStudentsThisMonth: number;           // 이번달 신규생
+  newStudentsByDept: Record<string, number>; // 부서별 신규생
+  newStudentsByDeptNames: Record<string, string[]>; // 부서별 신규생 이름 리스트
+  consultationsThisMonth: number;         // 이번달 신규상담 수
+  consultationsByDept: Record<string, number>; // 부서별 신규상담 수
+  testConversionByDept: Record<string, number>; // 부서별 입학테스트 전환율
+  testConversionTotal: { consultations: number; tests: number }; // 전체 상담 대비 테스트 수
+  enrollmentConversionByDept: Record<string, number>; // 부서별 신규등원 전환율
+  enrollmentConversionTotal: { consultations: number; enrollments: number }; // 전체 상담 대비 등원 수
+  consultationRequestsTotal: number;      // 상담요청 전체
+  consultationRequestsPending: number;    // 상담요청 대기중
+  consultationRequestsCompleted: number;  // 상담요청 완료
+}

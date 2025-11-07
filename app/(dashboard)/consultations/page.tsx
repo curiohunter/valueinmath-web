@@ -2,39 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Plus, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { ConsultationModal } from "@/components/consultations/ConsultationModal";
 import { ConsultationStats } from "@/components/consultations/ConsultationStats";
 import { StudentsTab } from "@/components/consultations/StudentsTab";
 import { ConsultationHistoryTab } from "@/components/consultations/ConsultationHistoryTab";
+import { ConsultationRequestsManagement } from "@/components/consultations/consultation-requests-management";
 import { calendarService } from "@/services/calendar";
+import { getConsultationRequests } from "@/services/consultation-requests";
 import type { Database } from "@/types/database";
-import type { Consultation } from "@/types/consultation";
-import type { ConsultationPageStats, TeacherGroup, AtRiskSnapshot } from "@/types/at-risk";
-import { atRiskSnapshotService } from "@/services/at-risk-snapshot-service";
-import AtRiskStudentsCard from "@/components/dashboard/AtRiskStudentsCard";
-import StudentDetailModal from "@/components/dashboard/StudentDetailModal";
-import type { AtRiskStudent } from "@/types/at-risk";
+import type { Consultation, ConsultationPageStats } from "@/types/consultation";
 
 type Student = Database['public']['Tables']['students']['Row'];
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -62,16 +40,9 @@ export default function ConsultationsPage() {
     enrollmentConversionTotal: { consultations: 0, enrollments: 0 },
     atRiskCount: 0,
     atRiskByDept: {},
-  });
-  
-  // State for at-risk students
-  const [atRiskStudents, setAtRiskStudents] = useState<TeacherGroup[]>([]);
-  const [selectedAtRiskStudent, setSelectedAtRiskStudent] = useState<AtRiskStudent | null>(null);
-  const [isStudentDetailModalOpen, setIsStudentDetailModalOpen] = useState(false);
-  const [historicalSnapshots, setHistoricalSnapshots] = useState<AtRiskSnapshot[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    consultationRequestsTotal: 0,
+    consultationRequestsPending: 0,
+    consultationRequestsCompleted: 0,
   });
   
   // Modal state
@@ -89,15 +60,7 @@ export default function ConsultationsPage() {
     loadConsultations();
     loadEmployees();
     loadStatistics();
-    loadAtRiskStudents();
   }, []);
-  
-  // Load historical snapshots when month changes
-  useEffect(() => {
-    if (selectedMonth && activeTab === 'atRisk') {
-      loadHistoricalSnapshots();
-    }
-  }, [selectedMonth, activeTab]);
   
   const loadStudents = async () => {
     const { data, error } = await supabase
@@ -243,43 +206,12 @@ export default function ConsultationsPage() {
           : 0;
       });
       
-      // 6. 위험 학생 수 계산
-      // 주의: calculateAtRiskStudents()는 선생님별 상위 3명만 반환합니다
-      const atRiskGroups = await atRiskSnapshotService.calculateAtRiskStudents();
-      
-      // 실제 화면에 표시되는 학생들과 동일하게 카운트
-      // 고위험, 중위험, 주의를 분리하여 카운트
-      const highRiskStudents = new Set<string>();
-      const mediumRiskStudents = new Set<string>();
-      const atRiskByDept: Record<string, number> = {};
-      const uniqueStudentsByDept = new Map<string, Set<string>>();
-      
-      atRiskGroups.forEach(group => {
-        group.students.forEach(student => {
-          if (student.riskLevel === 'high') {
-            highRiskStudents.add(student.studentId);
-          } else if (student.riskLevel === 'medium') {
-            mediumRiskStudents.add(student.studentId);
-          }
-          
-          // 고위험과 중위험만 통계에 포함
-          if (student.riskLevel === 'high' || student.riskLevel === 'medium') {
-            const dept = student.department || '미분류';
-            if (!uniqueStudentsByDept.has(dept)) {
-              uniqueStudentsByDept.set(dept, new Set());
-            }
-            uniqueStudentsByDept.get(dept)!.add(student.studentId);
-          }
-        });
-      });
-      
-      uniqueStudentsByDept.forEach((studentSet, dept) => {
-        atRiskByDept[dept] = studentSet.size;
-      });
-      
-      // 고위험 + 중위험 총합
-      const atRiskCount = highRiskStudents.size + mediumRiskStudents.size;
-      
+      // 6. 상담요청 통계
+      const consultationRequestsData = await getConsultationRequests();
+      const consultationRequestsTotal = consultationRequestsData.length;
+      const consultationRequestsPending = consultationRequestsData.filter(r => r.status === '대기중').length;
+      const consultationRequestsCompleted = consultationRequestsData.filter(r => r.status === '완료').length;
+
       setStats({
         newStudentsThisMonth: newStudents?.length || 0,
         newStudentsByDept,
@@ -290,8 +222,11 @@ export default function ConsultationsPage() {
         testConversionTotal: { consultations: totalConsultations, tests: totalTests },
         enrollmentConversionByDept,
         enrollmentConversionTotal: { consultations: totalConsultations, enrollments: totalEnrollments },
-        atRiskCount,
-        atRiskByDept,
+        atRiskCount: 0,
+        atRiskByDept: {},
+        consultationRequestsTotal,
+        consultationRequestsPending,
+        consultationRequestsCompleted,
       });
     } catch (error) {
       console.error("Error loading statistics:", error);
@@ -299,50 +234,6 @@ export default function ConsultationsPage() {
     }
   };
   
-  const loadAtRiskStudents = async () => {
-    try {
-      const groups = await atRiskSnapshotService.calculateAtRiskStudents();
-      setAtRiskStudents(groups);
-    } catch (error) {
-      console.error("Error loading at-risk students:", error);
-      toast.error("위험 학생 데이터를 불러오는데 실패했습니다.");
-    }
-  };
-  
-  const loadHistoricalSnapshots = async () => {
-    try {
-      const [year, month] = selectedMonth.split('-').map(Number);
-      const snapshots = await atRiskSnapshotService.getHistoricalSnapshots(year, month);
-      setHistoricalSnapshots(snapshots);
-      
-      // If no snapshots exist for this month, show info message
-      if (snapshots.length === 0) {
-        toast.info(`${year}년 ${month}월 스냅샷 데이터가 없습니다.`);
-      }
-    } catch (error) {
-      console.error("Error loading historical snapshots:", error instanceof Error ? error.message : error);
-      // Don't show error toast for empty results, it's handled above
-      if (error instanceof Error && !error.message.includes('No data')) {
-        toast.error("과거 스냅샷 데이터를 불러오는데 실패했습니다.");
-      }
-    }
-  };
-  
-  const handleSaveSnapshot = async () => {
-    if (!confirm("현재 위험 학생 데이터를 스냅샷으로 저장하시겠습니까?")) {
-      return;
-    }
-    
-    try {
-      await atRiskSnapshotService.saveMonthlySnapshot();
-      toast.success("위험 학생 스냅샷이 저장되었습니다.");
-      await loadHistoricalSnapshots();
-    } catch (error) {
-      console.error("Error saving snapshot:", error);
-      toast.error("스냅샷 저장에 실패했습니다.");
-    }
-  };
-
   const handleOpenConsultationModal = (student?: Student) => {
     // 먼저 이전 데이터 초기화
     setEditingConsultation(null);
@@ -424,9 +315,9 @@ export default function ConsultationsPage() {
       </div>
       
       {/* Statistics Cards */}
-      <ConsultationStats 
-        stats={stats} 
-        onAtRiskClick={() => setActiveTab('atRisk')} 
+      <ConsultationStats
+        stats={stats}
+        onRequestsClick={() => setActiveTab('requests')}
       />
       
       {/* Main Content Tabs */}
@@ -434,7 +325,7 @@ export default function ConsultationsPage() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="students">학생 목록</TabsTrigger>
           <TabsTrigger value="history">상담 이력</TabsTrigger>
-          <TabsTrigger value="atRisk">위험 학생 관리</TabsTrigger>
+          <TabsTrigger value="requests">상담 요청</TabsTrigger>
         </TabsList>
         
         {/* Students Tab */}
@@ -455,124 +346,9 @@ export default function ConsultationsPage() {
           />
         </TabsContent>
         
-        {/* At-Risk Students Tab */}
-        <TabsContent value="atRisk" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5" />
-                    위험 학생 관리
-                  </CardTitle>
-                  <CardDescription>출석, 숙제, 집중도, 시험 점수 기준 관리 필요 학생</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="월 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(() => {
-                        const months = [];
-                        const now = new Date();
-                        for (let i = 0; i < 6; i++) {
-                          const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                          const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                          const label = `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
-                          months.push({ value, label });
-                        }
-                        return months.map(m => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ));
-                      })()}
-                    </SelectContent>
-                  </Select>
-                  <Button 
-                    onClick={handleSaveSnapshot}
-                    variant="outline"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    스냅샷 저장
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="current" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="current">실시간 현황</TabsTrigger>
-                  <TabsTrigger value="history">과거 스냅샷</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="current" className="mt-4">
-                  <AtRiskStudentsCard 
-                    teacherGroups={atRiskStudents}
-                    loading={loading}
-                    onStudentClick={(student) => {
-                      setSelectedAtRiskStudent(student);
-                      setIsStudentDetailModalOpen(true);
-                    }}
-                  />
-                </TabsContent>
-                
-                <TabsContent value="history" className="mt-4">
-                  {historicalSnapshots.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="text-sm text-muted-foreground">
-                        {selectedMonth}월 스냅샷 ({historicalSnapshots.length}명)
-                      </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>학생명</TableHead>
-                            <TableHead>반</TableHead>
-                            <TableHead>담당 선생님</TableHead>
-                            <TableHead>위험도</TableHead>
-                            <TableHead>종합 점수</TableHead>
-                            <TableHead>출석</TableHead>
-                            <TableHead>숙제</TableHead>
-                            <TableHead>집중도</TableHead>
-                            <TableHead>시험 점수</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {historicalSnapshots.map((snapshot) => (
-                            <TableRow key={`${snapshot.student_id}_${snapshot.teacher_id}`}>
-                              <TableCell className="font-medium">{snapshot.student_name}</TableCell>
-                              <TableCell>{snapshot.class_names}</TableCell>
-                              <TableCell>{snapshot.teacher_name}</TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    snapshot.risk_level === 'high' ? 'destructive' :
-                                    snapshot.risk_level === 'medium' ? 'secondary' :
-                                    'outline'
-                                  }
-                                >
-                                  {snapshot.risk_level === 'high' ? '고위험' :
-                                   snapshot.risk_level === 'medium' ? '중위험' : '주의'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-bold">{snapshot.total_score.toFixed(2)}</TableCell>
-                              <TableCell>{snapshot.attendance_avg?.toFixed(1) || '-'}</TableCell>
-                              <TableCell>{snapshot.homework_avg?.toFixed(1) || '-'}</TableCell>
-                              <TableCell>{snapshot.focus_avg?.toFixed(1) || '-'}</TableCell>
-                              <TableCell>{snapshot.test_score?.toFixed(0) || '-'}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      선택한 월의 스냅샷 데이터가 없습니다.
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+        {/* Consultation Requests Tab */}
+        <TabsContent value="requests" className="space-y-4">
+          <ConsultationRequestsManagement />
         </TabsContent>
       </Tabs>
       
@@ -596,16 +372,6 @@ export default function ConsultationsPage() {
           loadConsultations();
           loadStatistics();
         }}
-      />
-      
-      {/* Student Detail Modal */}
-      <StudentDetailModal
-        isOpen={isStudentDetailModalOpen}
-        onClose={() => {
-          setIsStudentDetailModalOpen(false);
-          setSelectedAtRiskStudent(null);
-        }}
-        student={selectedAtRiskStudent}
       />
     </div>
   );
