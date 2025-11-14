@@ -117,13 +117,14 @@ export default function MakeupClassesPage() {
   const handleEditMakeup = (makeup: MakeupClass) => {
     const student = students.find(s => s.id === makeup.student_id);
     const classInfo = classes.find(c => c.id === makeup.class_id);
-    
-    if (student && classInfo) {
+
+    // 반이 삭제되었어도 스냅샷이 있으면 수정 가능
+    if (student && (classInfo || makeup.class_name_snapshot)) {
       setSelectedStudent({
         studentId: makeup.student_id,
-        classId: makeup.class_id,
+        classId: makeup.class_id || '', // null이면 빈 문자열
         studentName: student.name,
-        className: classInfo.name
+        className: classInfo?.name || makeup.class_name_snapshot || '알 수 없음'
       });
       setEditingMakeup(makeup);
       setIsModalOpen(true);
