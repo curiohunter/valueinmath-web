@@ -56,7 +56,7 @@ export function Footer() {
             <div className="space-y-2 text-gray-600 dark:text-gray-400">
               <p>📞 02-457-4933</p>
               <p>📍 서울시 광진구 아차산로 484, 6층 601호</p>
-              <p>🚇 광나루역, 구의역 인근</p>
+              <p>🚇 올림픽대교 북단사거리, 올리브영 건물 6층</p>
               <p>🕒 평일 15:00~22:00, 토 10:00~16:00</p>
             </div>
           </div>

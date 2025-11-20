@@ -1,7 +1,8 @@
 import { Metadata } from 'next'
 import { HeroSection } from '@/components/landing/hero-section'
 import { FeaturesSection } from '@/components/landing/features-section'
-import { StatsSection } from '@/components/landing/stats-section'
+import { ReviewsSection } from '@/components/landing/reviews-section'
+import { TeachersSection } from '@/components/landing/teachers-section'
 import { CTASection } from '@/components/landing/cta-section'
 import { Header } from '@/components/landing/header'
 import { Footer } from '@/components/landing/footer'
@@ -83,12 +84,13 @@ export default function LandingPage() {
           })
         }}
       />
-      
+
       <Header />
       <main>
         <HeroSection />
         <FeaturesSection />
-        <StatsSection />
+        <ReviewsSection />
+        <TeachersSection />
         <CTASection />
       </main>
       <Footer />

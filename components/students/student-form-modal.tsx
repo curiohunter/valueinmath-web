@@ -259,7 +259,7 @@ export function StudentFormModal({
       }
 
       if (student) {
-        // 기존 학생 정보 수정
+        // 기존 학생 정보 수정 - created_by_type은 수정하지 않음
         const { error } = await supabase
           .from("students")
           .update(baseFormattedValues)
@@ -268,10 +268,13 @@ export function StudentFormModal({
         if (error) throw error
         setSavedStudentId(student.id)
       } else {
-        // 새 학생 등록
+        // 새 학생 등록 - created_by_type 포함
         const { data, error } = await supabase
           .from("students")
-          .insert(baseFormattedValues)
+          .insert({
+            ...baseFormattedValues,
+            created_by_type: 'employee' as const,  // 직원이 등록 (신규 생성 시에만)
+          })
           .select()
           .single()
 
@@ -607,6 +610,7 @@ export function StudentFormModal({
                               <SelectItem value="문자메세지">문자메세지</SelectItem>
                               <SelectItem value="부원장">부원장</SelectItem>
                               <SelectItem value="맘까페">맘까페</SelectItem>
+                              <SelectItem value="홈페이지">홈페이지</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />

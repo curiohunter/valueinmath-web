@@ -193,6 +193,16 @@ export function StudentsTable() {
     신규상담: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
   }
 
+  // 신규상담 배지 색상 결정 함수 (학부모 작성 vs 직원 작성)
+  const getNewConsultationColor = (createdByType: string | undefined) => {
+    if (createdByType === 'self_service') {
+      // 학부모가 직접 작성한 경우 - 주황색으로 구분
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300 border border-orange-300 dark:border-orange-700"
+    }
+    // 직원이 작성한 경우 - 기본 파란색
+    return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
+  }
+
   // 담당관 배지 색상 매핑
   const departmentColorMap: Record<string, string> = {
     고등관: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
@@ -271,7 +281,18 @@ export function StudentsTable() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColorMap[student.status] || ""}>{student.status}</Badge>
+                    <Badge
+                      className={
+                        student.status === '신규상담'
+                          ? getNewConsultationColor(student.created_by_type)
+                          : (statusColorMap[student.status] || "")
+                      }
+                    >
+                      {student.status}
+                      {student.status === '신규상담' && student.created_by_type === 'self_service' && (
+                        <span className="ml-1 text-xs">(홈페이지)</span>
+                      )}
+                    </Badge>
                   </TableCell>
                   <TableCell>{student.student_phone || "-"}</TableCell>
                   <TableCell>

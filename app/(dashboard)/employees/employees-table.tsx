@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Edit, Trash2, FileText, Link, Link2Off } from "lucide-react"
+import { Edit, Trash2, FileText, Link, Link2Off, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -22,6 +22,7 @@ import { toast } from "@/components/ui/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmployeeFormModal } from "./employee-form-modal"
+import { EmployeePublicProfileSheet } from "./employee-public-profile-sheet"
 import { Pagination } from "@/components/ui/pagination"
 import type { Employee, EmployeeFilters } from "@/types/employee"
 import { useEmployees } from "@/hooks/use-employees"
@@ -82,6 +83,10 @@ export function EmployeesTable() {
   const [selectedUserId, setSelectedUserId] = useState<string>("")
   const [isLinking, setIsLinking] = useState(false)
   const [isLoadingUsers, setIsLoadingUsers] = useState(false)
+
+  // 공개 프로필 관련 상태
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false)
+  const [profileEmployee, setProfileEmployee] = useState<Employee | null>(null)
 
   // 사용자 목록 가져오기
   useEffect(() => {
@@ -202,22 +207,28 @@ export function EmployeesTable() {
     setLinkModalOpen(true)
   }
 
+  // 공개 프로필 시트 열기
+  const handleOpenProfileSheet = (employee: Employee) => {
+    setProfileEmployee(employee)
+    setProfileSheetOpen(true)
+  }
+
   // 드롭다운에는 연결되지 않은 계정만 표시
   const unlinkedUsers = useMemo(() => {
     // 이미 연결된 사용자 ID 목록 가져오기
     const connectedUserIds = employees
       .filter(emp => emp.auth_id)
       .map(emp => emp.auth_id)
-    
+
     // console.log('현재 연결된 사용자 ID:', connectedUserIds)
-    
+
     // 이미 연결된 사용자 제외 (현재 선택된 직원이 연결된 사용자는 포함)
-    const availableUsers = users.filter(user => 
+    const availableUsers = users.filter(user =>
       !connectedUserIds.includes(user.id) || user.id === linkingEmployee?.auth_id
     )
-    
+
     // console.log('사용 가능한 사용자:', availableUsers)
-    
+
     return availableUsers
   }, [users, employees, linkingEmployee?.auth_id])
 
@@ -314,6 +325,7 @@ export function EmployeesTable() {
               <TableHead className="w-[10%]">퇴사일</TableHead>
               <TableHead className="w-[15%]">연결된 계정</TableHead>
               <TableHead className="w-[7%] text-center">메모</TableHead>
+              <TableHead className="w-[7%] text-center">프로필</TableHead>
               <TableHead className="w-[8%] text-center">관리</TableHead>
             </TableRow>
           </TableHeader>
@@ -410,6 +422,17 @@ export function EmployeesTable() {
                       </Button>
                     </TableCell>
                     <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleOpenProfileSheet(employee)}
+                        className={`${employee.is_public ? "text-green-600" : "text-muted-foreground"}`}
+                      >
+                        <Globe className="h-4 w-4 mr-1" />
+                        {employee.is_public ? "공개" : "설정"}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-center">
                       <div className="flex justify-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)}>
                           <Edit className="h-4 w-4" />
@@ -464,6 +487,15 @@ export function EmployeesTable() {
         employee={editingEmployee}
         onSuccess={() => {
           setEditingEmployee(null)
+          mutate()
+        }}
+      />
+
+      <EmployeePublicProfileSheet
+        open={profileSheetOpen}
+        onOpenChange={setProfileSheetOpen}
+        employee={profileEmployee}
+        onSuccess={() => {
           mutate()
         }}
       />

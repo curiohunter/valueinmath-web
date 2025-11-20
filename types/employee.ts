@@ -12,6 +12,11 @@ export interface Employee {
   created_at: string | null
   updated_at: string | null
   auth_id: string | null
+  // Public Profile Fields
+  subjects: string[] | null
+  philosophy: string | null
+  experience: string | null
+  is_public: boolean | null
 }
 
 // Type-safe variants for specific use cases
