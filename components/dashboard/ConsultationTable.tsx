@@ -84,7 +84,14 @@ export function ConsultationTable({
         </TableHeader>
         <TableBody>
           {consultations.map((consultation) => (
-            <TableRow key={consultation.id} className="hover:bg-gray-50/50">
+            <TableRow
+              key={consultation.id}
+              className={
+                consultation.created_by_type === 'self_service'
+                  ? "bg-orange-50 hover:bg-orange-100/50 dark:bg-orange-950/20 dark:hover:bg-orange-950/30"
+                  : "hover:bg-gray-50/50"
+              }
+            >
               <TableCell className="font-medium text-sm">
                 {consultation.name}
               </TableCell>

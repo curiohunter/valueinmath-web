@@ -1,15 +1,17 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, Star } from 'lucide-react'
+import { InquiryFormModal } from './inquiry-form-modal'
 
 export function HeroSection() {
+  const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false)
   return (
     <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-black" />
-      
+
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-40">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-50 via-transparent to-purple-50 dark:from-blue-950/20 dark:via-transparent dark:to-purple-950/20" />
@@ -44,20 +46,13 @@ export function HeroSection() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="group bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-8 py-6 text-lg font-semibold"
+              onClick={() => setIsInquiryModalOpen(true)}
             >
               무료 상담 시작하기
               <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900 px-8 py-6 text-lg font-semibold"
-            >
-              입학테스트 신청
             </Button>
           </div>
 
@@ -68,7 +63,7 @@ export function HeroSection() {
               서울시 광진구 아차산로 484, 6층 601호 (구의동)
             </p>
             <p className="text-sm">
-              광나루역, 구의역 인근
+              올림픽대교 북단사거리, 올리브영 건물 6층
             </p>
           </div>
         </div>
@@ -76,6 +71,12 @@ export function HeroSection() {
 
       {/* Bottom blur */}
       <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white dark:from-black to-transparent" />
+
+      {/* Inquiry Modal */}
+      <InquiryFormModal
+        open={isInquiryModalOpen}
+        onOpenChange={setIsInquiryModalOpen}
+      />
     </section>
   )
 }

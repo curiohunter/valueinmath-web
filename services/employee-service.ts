@@ -24,6 +24,10 @@ function mapEmployeeRowToEmployee(row: EmployeeRow): Employee {
     created_at: row.created_at,
     updated_at: row.updated_at,
     auth_id: row.auth_id ?? null,
+    subjects: row.subjects ?? [],
+    philosophy: row.philosophy ?? "",
+    experience: row.experience ?? "",
+    is_public: row.is_public ?? false,
   } as Employee
 }
 
@@ -148,7 +152,12 @@ export async function updateEmployee(
       ...(employee.resign_date ? { resign_date: employee.resign_date } : {}),
       ...(employee.last_updated_date ? { last_updated_date: employee.last_updated_date } : {}),
       ...(employee.notes ? { notes: employee.notes } : {}),
+      ...(employee.notes ? { notes: employee.notes } : {}),
       ...(employee.auth_id ? { auth_id: employee.auth_id } : {}),
+      ...(employee.subjects ? { subjects: employee.subjects } : {}),
+      ...(employee.philosophy ? { philosophy: employee.philosophy } : {}),
+      ...(employee.experience ? { experience: employee.experience } : {}),
+      ...(employee.is_public !== undefined ? { is_public: employee.is_public } : {}),
     }
 
     const { data, error } = await supabase.from("employees").update(employeeData as EmployeeUpdate).eq("id", id as string).select().single()

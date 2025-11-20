@@ -14,6 +14,9 @@ export type LeadSource =
   | "문자메세지"
   | "부원장"
   | "맘까페"
+  | "홈페이지"
+
+export type CreatedByType = "employee" | "self_service" | "import"
 
 export interface Student {
   id: string
@@ -28,6 +31,7 @@ export interface Student {
   grade: number | null
   has_sibling: boolean
   lead_source: LeadSource | null
+  created_by_type: CreatedByType
   start_date: string | null
   end_date: string | null
   first_contact_date: string | null
