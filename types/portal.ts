@@ -70,6 +70,7 @@ export interface MakeupClassItem {
   class_name: string | null
   content: string | null
   notes: string | null
+  start_time: string | null
 }
 
 export interface ConsultationItem {
@@ -162,6 +163,19 @@ export interface MathflatStats {
   challenge_problems: number // 챌린지 문제 수
 }
 
+export interface TestScoreWithAvg {
+  id: string
+  date: string
+  test: string
+  test_type: string | null
+  test_score: number
+  class_id: string | null
+  class_name: string | null
+  note: string | null
+  class_avg: number | null
+  overall_avg: number | null
+}
+
 export interface MonthlyMathflatStats {
   year: number
   month: number
@@ -190,4 +204,5 @@ export interface PortalData {
   monthly_mathflat_stats: MonthlyMathflatStats[] // 월별 매쓰플랫 통계
   learning_comments: CommentCardData[] // 월별 학습 코멘트 (선생님)
   consultation_requests: ConsultationRequest[] // 학부모 상담 요청
+  test_scores_with_averages: TestScoreWithAvg[] // 평균 포함 테스트 점수
 }

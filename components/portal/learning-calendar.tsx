@@ -94,7 +94,7 @@ export function LearningCalendar({
     // Makeup classes
     ...makeup_classes.map((cls) => ({
       id: `makeup-${cls.id}`,
-      title: `🔄 ${cls.makeup_type === "결석보강" ? "결석보강" : "추가수업"}(${cls.class_name || "보강"})`,
+      title: `🔄 ${cls.makeup_type === "absence" ? "결석보강" : "추가보강"}(${cls.class_name || "보강"})`,
       date: cls.makeup_date || cls.absence_date || "",
       backgroundColor: "#8b5cf6", // violet-500
       borderColor: "#8b5cf6",
@@ -201,9 +201,9 @@ export function LearningCalendar({
           </div>
           <div>
             <span className="text-sm text-muted-foreground">유형:</span>
-            <p className="font-semibold">{cls.makeup_type}</p>
+            <p className="font-semibold">{cls.makeup_type === "absence" ? "결석보강" : "추가보강"}</p>
           </div>
-          {cls.makeup_type === "결석보강" && (
+          {cls.makeup_type === "absence" && (
             <>
               <div>
                 <span className="text-sm text-muted-foreground">결석일:</span>
@@ -211,7 +211,13 @@ export function LearningCalendar({
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">사유:</span>
-                <p>{cls.absence_reason || "-"}</p>
+                <p>{
+                  cls.absence_reason === 'sick' ? '병결' :
+                  cls.absence_reason === 'travel' ? '여행' :
+                  cls.absence_reason === 'event' ? '행사' :
+                  cls.absence_reason === 'other' ? '기타' :
+                  cls.absence_reason || "-"
+                }</p>
               </div>
             </>
           )}
