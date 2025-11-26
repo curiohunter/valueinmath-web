@@ -26,13 +26,20 @@ const ITEMS_PER_PAGE = 6
 export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProps) {
   const [currentPage, setCurrentPage] = useState(1)
 
-  // Get current month data
+  // Get current month data (multiple items possible)
   const now = new Date()
   const currentYear = now.getFullYear()
   const currentMonth = now.getMonth() + 1
-  const currentTuition = tuition_fees.find(
+  const currentTuitions = tuition_fees.filter(
     (fee) => fee.year === currentYear && fee.month === currentMonth
   )
+  const currentTuitionTotal = currentTuitions.reduce((sum, fee) => sum + fee.amount, 0)
+  // Overall status: 미납 if any unpaid, 일부납부 if any partial, else 완납
+  const currentOverallStatus = currentTuitions.some(t => t.payment_status === "미납")
+    ? "미납"
+    : currentTuitions.some(t => t.payment_status === "일부납부")
+    ? "일부납부"
+    : currentTuitions.length > 0 ? "완납" : null
 
   // Get unpaid items
   const unpaidItems = tuition_fees.filter((fee) => fee.payment_status === "미납")
@@ -82,18 +89,18 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
       <Card
         className={cn(
           "border-2",
-          currentTuition?.payment_status === "완납"
+          currentOverallStatus === "완납"
             ? "border-green-200 bg-green-50"
-            : currentTuition?.payment_status === "일부납부"
+            : currentOverallStatus === "일부납부"
             ? "border-yellow-200 bg-yellow-50"
             : "border-red-200 bg-red-50"
         )}
       >
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            {currentTuition?.payment_status === "완납" ? (
+            {currentOverallStatus === "완납" ? (
               <CheckCircle className="h-5 w-5 text-green-600" />
-            ) : currentTuition?.payment_status === "일부납부" ? (
+            ) : currentOverallStatus === "일부납부" ? (
               <Clock className="h-5 w-5 text-yellow-600" />
             ) : (
               <AlertCircle className="h-5 w-5 text-red-600" />
@@ -102,56 +109,62 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* 전체 상태 및 총액 */}
             <div className="flex items-baseline gap-3">
               <span className="text-sm text-gray-600">상태:</span>
               <span
                 className={cn(
                   "text-3xl font-bold",
-                  currentTuition?.payment_status === "완납"
+                  currentOverallStatus === "완납"
                     ? "text-green-600"
-                    : currentTuition?.payment_status === "일부납부"
+                    : currentOverallStatus === "일부납부"
                     ? "text-yellow-600"
                     : "text-red-600"
                 )}
               >
-                {currentTuition?.payment_status || "정보 없음"}
+                {currentOverallStatus || "정보 없음"}
               </span>
             </div>
-            {currentTuition && (
-              <div className="space-y-1 text-sm">
-                <div className="flex items-center gap-2">
+            {currentTuitions.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-600">년월:</span>
                   <span className="font-semibold">
-                    {currentTuition.year}.{String(currentTuition.month).padStart(2, "0")}
+                    {currentYear}.{String(currentMonth).padStart(2, "0")}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-600">금액:</span>
-                  <span className="font-semibold">
-                    {currentTuition.amount.toLocaleString()}원
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-600">총 금액:</span>
+                  <span className="font-semibold text-lg">
+                    {currentTuitionTotal.toLocaleString()}원
                   </span>
+                  <span className="text-gray-500">({currentTuitions.length}과목)</span>
                 </div>
-                {currentTuition.class_name && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-600">반명:</span>
-                    <span>{currentTuition.class_name}</span>
-                  </div>
-                )}
-                {(currentTuition.period_start_date || currentTuition.period_end_date) && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-600">기간:</span>
-                    <span>
-                      {currentTuition.period_start_date || "-"} ~ {currentTuition.period_end_date || "-"}
-                    </span>
-                  </div>
-                )}
-                {currentTuition.is_sibling && (
-                  <Badge variant="secondary" className="text-xs">
-                    형제할인 적용
-                  </Badge>
-                )}
-              </div>
+
+                {/* 과목별 상세 내역 */}
+                <div className="space-y-2 pt-2 border-t">
+                  {currentTuitions.map((fee) => (
+                    <div key={fee.id} className="bg-white/60 rounded-lg p-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{fee.class_name || "반 정보 없음"}</span>
+                        {getStatusBadge(fee.payment_status)}
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">
+                          {fee.period_start_date || "-"} ~ {fee.period_end_date || "-"}
+                        </span>
+                        <span className="font-semibold">{fee.amount.toLocaleString()}원</span>
+                      </div>
+                      {fee.is_sibling && (
+                        <Badge variant="secondary" className="text-xs">
+                          형제할인 적용
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </CardContent>

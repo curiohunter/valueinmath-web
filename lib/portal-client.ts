@@ -15,6 +15,7 @@ import {
   ClassSchedule,
   MathflatStats,
   MonthlyMathflatStats,
+  TestScoreWithAvg,
 } from "@/types/portal"
 import { getStudentComments } from "@/lib/comments-client"
 
@@ -33,6 +34,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     mathflatData,
     tuitionFeesData,
     consultationRequestsData,
+    testScoresWithAvgData,
   ] = await Promise.all([
     supabase.from("students").select("*").eq("id", studentId).single(),
     supabase
@@ -101,6 +103,8 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
       `)
       .eq("student_id", studentId)
       .order("created_at", { ascending: false }),
+    // RPC: 평균 포함 테스트 점수
+    supabase.rpc("get_test_scores_with_averages", { p_student_id: studentId }),
   ])
 
   if (studentData.error) throw studentData.error
@@ -113,6 +117,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   if (mathflatData.error) throw mathflatData.error
   if (tuitionFeesData.error) throw tuitionFeesData.error
   if (consultationRequestsData.error) throw consultationRequestsData.error
+  // RPC 에러는 무시 (데이터 없으면 빈 배열 반환)
 
   // Map classes data with teacher information and schedules
   const classes: ClassInfo[] = classesData.data
@@ -189,6 +194,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     class_name: cls.class_name_snapshot,
     content: cls.content,
     notes: cls.notes,
+    start_time: cls.start_time ? cls.start_time.substring(0, 5) : null, // HH:mm
   }))
 
   const consultations: ConsultationItem[] = consultationsData.data.map((consult) => ({
@@ -277,6 +283,20 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     stats: calculateMathflatStats(mathflatRecords, monthData.year, monthData.month),
   }))
 
+  // Map test scores with averages from RPC
+  const testScoresWithAvg: TestScoreWithAvg[] = (testScoresWithAvgData.data || []).map((score: any) => ({
+    id: score.id,
+    date: score.date,
+    test: score.test,
+    test_type: score.test_type,
+    test_score: score.test_score,
+    class_id: score.class_id,
+    class_name: score.class_name,
+    note: score.note,
+    class_avg: score.class_avg ? parseFloat(score.class_avg) : null,
+    overall_avg: score.overall_avg ? parseFloat(score.overall_avg) : null,
+  }))
+
   return {
     student: {
       id: studentData.data.id,
@@ -299,6 +319,7 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
     monthly_mathflat_stats,
     learning_comments: learningComments,
     consultation_requests: consultationRequests,
+    test_scores_with_averages: testScoresWithAvg,
   }
 }
 
