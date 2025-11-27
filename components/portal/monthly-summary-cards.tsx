@@ -123,145 +123,110 @@ export function MonthlySummaryCards({
         </div>
       </div>
 
-      {/* Mobile: Horizontal scroll */}
-      <div className="md:hidden flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
+      {/* Mobile: Vertical stack (2 columns) */}
+      <div className="md:hidden grid grid-cols-2 gap-3">
         {/* 1. 출석 카드 */}
-        <div className="snap-center shrink-0 w-[280px] first:ml-4 last:mr-4">
-          <Card className="h-full bg-blue-50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">출석</CardTitle>
-              <div className="rounded-full p-2 bg-blue-100">
-                <CalendarCheck className="h-5 w-5 text-blue-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {attendanceCounts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">데이터 없음</p>
-                ) : (
-                  attendanceCounts.map((item) => (
-                    <div key={item.score} className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">
-                        {item.score}: {item.label}
-                      </span>
-                      <span className="font-semibold">{item.count}회</span>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="mt-3 pt-3 border-t">
-                <p className="text-xs text-muted-foreground">
-                  총 {currentMonth.total_study_days}일 학습
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-blue-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 pt-3">
+            <CardTitle className="text-xs font-medium">출석</CardTitle>
+            <div className="rounded-full p-1.5 bg-blue-100">
+              <CalendarCheck className="h-4 w-4 text-blue-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className="space-y-1">
+              {attendanceCounts.length === 0 ? (
+                <p className="text-xs text-muted-foreground">데이터 없음</p>
+              ) : (
+                attendanceCounts.map((item) => (
+                  <div key={item.score} className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="font-semibold">{item.count}회</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-2 pt-2 border-t">
+              <p className="text-xs text-muted-foreground">
+                총 {currentMonth.total_study_days}일 학습
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 2. 숙제 카드 */}
-        <div className="snap-center shrink-0 w-[280px]">
-          <Card className="h-full bg-green-50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">숙제</CardTitle>
-              <div className="rounded-full p-2 bg-green-100">
-                <BookCheck className="h-5 w-5 text-green-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className={cn("text-3xl font-bold", scoreColor(homeworkAvg))}>
-                {homeworkAvg.toFixed(1)}
-                <span className="text-xl ml-1">점</span>
-              </div>
-              <div className="mt-3 pt-3 border-t space-y-1">
-                {getScoreRangeDescriptions("homework").map((item) => (
-                  <p
-                    key={item.range}
-                    className={cn(
-                      "text-xs",
-                      isInRange(homeworkAvg, item.minScore)
-                        ? "font-semibold text-green-700"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {item.range}: {item.description}
-                  </p>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-green-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 pt-3">
+            <CardTitle className="text-xs font-medium">숙제</CardTitle>
+            <div className="rounded-full p-1.5 bg-green-100">
+              <BookCheck className="h-4 w-4 text-green-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className={cn("text-2xl font-bold", scoreColor(homeworkAvg))}>
+              {homeworkAvg.toFixed(1)}
+              <span className="text-base ml-1">점</span>
+            </div>
+            <div className="mt-2 pt-2 border-t">
+              <p className={cn("text-xs", scoreColor(homeworkAvg))}>
+                {homeworkAvg >= 4 ? "매우 양호" : homeworkAvg >= 3 ? "추가 추적 필요" : homeworkAvg >= 2 ? "보강 필요" : "조치 필요"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 3. 집중도 카드 */}
-        <div className="snap-center shrink-0 w-[280px]">
-          <Card className="h-full bg-purple-50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">수업 집중도</CardTitle>
-              <div className="rounded-full p-2 bg-purple-100">
-                <Target className="h-5 w-5 text-purple-600" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className={cn("text-3xl font-bold", scoreColor(focusAvg))}>
-                {focusAvg.toFixed(1)}
-                <span className="text-xl ml-1">점</span>
-              </div>
-              <div className="mt-3 pt-3 border-t space-y-1">
-                {getScoreRangeDescriptions("focus").map((item) => (
-                  <p
-                    key={item.range}
-                    className={cn(
-                      "text-xs",
-                      isInRange(focusAvg, item.minScore)
-                        ? "font-semibold text-purple-700"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {item.range}: {item.description}
-                  </p>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-purple-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 pt-3">
+            <CardTitle className="text-xs font-medium">집중도</CardTitle>
+            <div className="rounded-full p-1.5 bg-purple-100">
+              <Target className="h-4 w-4 text-purple-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className={cn("text-2xl font-bold", scoreColor(focusAvg))}>
+              {focusAvg.toFixed(1)}
+              <span className="text-base ml-1">점</span>
+            </div>
+            <div className="mt-2 pt-2 border-t">
+              <p className={cn("text-xs", scoreColor(focusAvg))}>
+                {focusAvg >= 4 ? "매우 양호" : focusAvg >= 3 ? "보통" : focusAvg >= 2 ? "조치 필요" : "집중력 부족"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 4. 매쓰플랫 카드 */}
-        <div className="snap-center shrink-0 w-[280px] last:mr-4">
-          <Card className="h-full bg-orange-50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">매쓰플랫</CardTitle>
-              <div className="rounded-full p-2 bg-orange-100">
-                <TrendingUp className="h-5 w-5 text-orange-600" />
+        <Card className="bg-orange-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 pt-3">
+            <CardTitle className="text-xs font-medium">매쓰플랫</CardTitle>
+            <div className="rounded-full p-1.5 bg-orange-100">
+              <TrendingUp className="h-4 w-4 text-orange-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className="space-y-1">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">교재</span>
+                <span className="font-semibold text-orange-600">
+                  {currentMathflatStats.textbook_accuracy.toFixed(0)}%
+                </span>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">교재</span>
-                  <span className="font-semibold text-orange-600">
-                    {currentMathflatStats.textbook_accuracy.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">학습지</span>
-                  <span className="font-semibold text-orange-600">
-                    {currentMathflatStats.worksheet_accuracy.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">챌린지</span>
-                  <span className="font-semibold text-orange-600">
-                    {currentMathflatStats.challenge_accuracy.toFixed(1)}%
-                  </span>
-                </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">학습지</span>
+                <span className="font-semibold text-orange-600">
+                  {currentMathflatStats.worksheet_accuracy.toFixed(0)}%
+                </span>
               </div>
-              <div className="mt-3 pt-3 border-t">
-                <p className="text-xs text-muted-foreground">
-                  총 {currentMathflatStats.textbook_problems + currentMathflatStats.worksheet_problems + currentMathflatStats.challenge_problems}문제 풀이 (이번 달)
-                </p>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">챌린지</span>
+                <span className="font-semibold text-orange-600">
+                  {currentMathflatStats.challenge_accuracy.toFixed(0)}%
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tablet/Desktop: Grid layout */}
@@ -396,17 +361,6 @@ export function MonthlySummaryCards({
           </CardContent>
         </Card>
       </div>
-
-      {/* Custom scrollbar hide for mobile */}
-      <style jsx global>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
     </div>
   )
 }

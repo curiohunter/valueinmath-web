@@ -59,7 +59,7 @@ const homeworkLabels: Record<number, string> = {
 const focusLabels: Record<number, string> = {
   5: "매우 열의있음",
   4: "대체로 잘참여",
-  3: "산만하나 진행가능",
+  3: "보통",
   2: "조치필요",
   1: "결석"
 };
