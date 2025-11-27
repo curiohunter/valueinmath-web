@@ -74,12 +74,19 @@ export function ScoresSummaryCard({ scores, maxDisplay = 3 }: ScoresSummaryCardP
       <div className="space-y-3">
         {recentScores.map((score) => (
           <div key={score.id} className="space-y-1">
-            {/* 시험명과 날짜 */}
+            {/* 시험명, 유형, 날짜 */}
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 truncate max-w-[60%]">
-                {score.test}
-              </span>
-              <span className="text-xs text-gray-400">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-2">
+                <span className="text-sm font-medium text-gray-700 truncate">
+                  {score.test}
+                </span>
+                {score.test_type && (
+                  <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">
+                    {score.test_type}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-gray-400 flex-shrink-0">
                 {new Date(score.date).toLocaleDateString('ko-KR', {
                   month: 'short',
                   day: 'numeric'

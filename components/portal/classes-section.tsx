@@ -112,59 +112,50 @@ export function ClassesSection({ classes }: ClassesSectionProps) {
             ))}
           </div>
 
-          {/* Mobile: Horizontal scroll */}
-          <div className="md:hidden">
-            <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4">
-              {subjects.map(subject => (
-                <div key={subject} className="flex-shrink-0 w-72 space-y-3">
-                  {/* Column Header */}
-                  <Card className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                    <CardHeader className="py-3 px-4">
-                      <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                        <span>{subject}</span>
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {groupedClasses[subject].length}개
-                        </span>
-                      </CardTitle>
-                    </CardHeader>
-                  </Card>
+          {/* Mobile: Vertical stack */}
+          <div className="md:hidden space-y-4">
+            {subjects.map(subject => {
+              // 해당 과목에 반이 없으면 표시하지 않음
+              if (groupedClasses[subject].length === 0) return null
+
+              return (
+                <div key={subject} className="space-y-2">
+                  {/* Subject Header */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="font-semibold text-gray-700">{subject}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {groupedClasses[subject].length}개
+                    </span>
+                  </div>
 
                   {/* Class Cards */}
-                  {groupedClasses[subject].length === 0 ? (
-                    <Card className="bg-gray-50">
-                      <CardContent className="p-4 text-center text-xs text-muted-foreground">
-                        없음
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="space-y-3">
-                      {groupedClasses[subject].map(classInfo => (
-                        <Card key={classInfo.id} className="hover:shadow-md transition-shadow">
-                          <CardContent className="p-4 space-y-2">
-                            {/* Class Name */}
-                            <h3 className="font-semibold text-base">{classInfo.name}</h3>
+                  <div className="space-y-2">
+                    {groupedClasses[subject].map(classInfo => (
+                      <Card key={classInfo.id} className="hover:shadow-md transition-shadow">
+                        <CardContent className="p-4 space-y-2">
+                          {/* Class Name */}
+                          <h3 className="font-semibold text-base">{classInfo.name}</h3>
 
-                            {/* Teacher */}
-                            {classInfo.teacher_name && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <User className="w-3.5 h-3.5" />
-                                <span>{classInfo.teacher_name}</span>
-                              </div>
-                            )}
-
-                            {/* Schedule */}
-                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <Clock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                              <span className="break-words">{formatSchedule(classInfo.schedules)}</span>
+                          {/* Teacher */}
+                          {classInfo.teacher_name && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <User className="w-3.5 h-3.5" />
+                              <span>{classInfo.teacher_name}</span>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
+                          )}
+
+                          {/* Schedule */}
+                          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <Clock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                            <span className="break-words">{formatSchedule(classInfo.schedules)}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
         </>
       )}

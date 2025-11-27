@@ -11,11 +11,16 @@ import { StudyLogsSection } from "@/components/portal/study-logs-section"
 import { TestLogsSection } from "@/components/portal/test-logs-section"
 import { ExamScoresSection } from "@/components/portal/exam-scores-section"
 import { MakeupClassesSection } from "@/components/portal/makeup-classes-section"
-import { ConsultationsSection } from "@/components/portal/consultations-section"
 import { MathflatSection } from "@/components/portal/mathflat-section"
 import { ClassesSection } from "@/components/portal/classes-section"
 import { TuitionSection } from "@/components/portal/tuition-section"
-import { RefreshCw, GraduationCap, BookOpen, CreditCard, MessageCircle, Award } from "lucide-react"
+import { RefreshCw, GraduationCap, BookOpen, MessageCircle, Award } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { CommentsSection } from "@/components/portal/comments-section"
 import { ScoresSummaryCard } from "@/components/portal/scores-summary-card"
 import type { PortalTab } from "@/components/portal/mobile-bottom-nav"
@@ -38,6 +43,7 @@ export function PortalView({
   const [portalData, setPortalData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showCommentDialog, setShowCommentDialog] = useState(false)
 
   useEffect(() => {
     if (!studentId) {
@@ -134,16 +140,6 @@ export function PortalView({
 
   // 홈 탭 (대시보드) 렌더링
   const renderHomeTab = () => {
-    // 최근 숙제 정보 (최근 2일)
-    const uniqueDates = Array.from(
-      new Set(portalData.study_logs.map(log => log.date))
-    ).slice(0, 2)
-
-    const logsByDate = uniqueDates.map(date => ({
-      date,
-      logs: portalData.study_logs.filter(log => log.date === date)
-    }))
-
     // 예정된 보강 (7일 이내)
     const today = new Date()
     const sevenDaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -153,66 +149,112 @@ export function PortalView({
       return makeupDate >= today && makeupDate <= sevenDaysLater && m.status !== "완료"
     })
 
-    // 이번달 원비 상태 (학부모만)
-    const currentMonth = today.getMonth() + 1
-    const currentYear = today.getFullYear()
-    const currentTuition = portalData.tuition_fees.find(
-      t => t.year === currentYear && t.month === currentMonth
-    )
-
     // 최신 코멘트
     const latestComment = portalData.learning_comments?.[0]
+
+    // 출석 상태 라벨
+    const attendanceLabels: Record<number, { label: string; color: string }> = {
+      5: { label: "출석", color: "text-green-600" },
+      4: { label: "지각", color: "text-yellow-600" },
+      3: { label: "조퇴", color: "text-orange-600" },
+      2: { label: "보강", color: "text-blue-600" },
+      1: { label: "결석", color: "text-red-600" },
+    }
+
+    // 숙제 점수 라벨
+    const homeworkLabels: Record<number, { label: string; color: string }> = {
+      5: { label: "100% 마무리", color: "text-green-600" },
+      4: { label: "90% 이상", color: "text-blue-600" },
+      3: { label: "추가 추적 필요", color: "text-yellow-600" },
+      2: { label: "보강필요", color: "text-orange-600" },
+      1: { label: "결석", color: "text-red-600" },
+    }
+
+    // 집중도 라벨
+    const focusLabels: Record<number, { label: string; color: string }> = {
+      5: { label: "매우 열의있음", color: "text-green-600" },
+      4: { label: "대체로 잘참여", color: "text-blue-600" },
+      3: { label: "보통", color: "text-yellow-600" },
+      2: { label: "조치필요", color: "text-orange-600" },
+      1: { label: "결석", color: "text-red-600" },
+    }
+
+    // 최신 학습일지 (최근 3개)
+    const recentLogs = portalData.study_logs.slice(0, 3)
 
     return (
       <div className="space-y-4 md:space-y-6">
         {/* 학생 정보 */}
         <StudentHeader />
 
-        {/* 미납 원비 알림 (학부모만) */}
-        {viewerRole === "parent" && portalData.tuition_fees.some(t => t.payment_status === "미납") && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-red-600 font-semibold">미납 원비 알림</span>
-              <span className="text-red-700 font-bold">
-                {portalData.tuition_fees
-                  .filter(t => t.payment_status === "미납")
-                  .reduce((sum, t) => sum + t.amount, 0)
-                  .toLocaleString()}원
-              </span>
+        {/* 최신 학습일지 카드 */}
+        <div className="bg-white border rounded-lg p-4 shadow-sm">
+          <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-blue-500" />
+            최신 학습일지
+          </h3>
+          {recentLogs.length > 0 ? (
+            <div className="space-y-3">
+              {recentLogs.map((log) => (
+                <div key={log.id} className="border-l-2 border-blue-200 pl-3 py-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-500">
+                      {new Date(log.date).toLocaleDateString('ko-KR', {
+                        month: 'short', day: 'numeric', weekday: 'short'
+                      })}
+                    </span>
+                    {log.attendance_status && (
+                      <span className={`text-xs font-medium ${attendanceLabels[log.attendance_status]?.color || "text-gray-500"}`}>
+                        {attendanceLabels[log.attendance_status]?.label || "-"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm font-medium text-gray-800">{log.class_name || "반 정보 없음"}</div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mt-1">
+                    {log.homework !== null && homeworkLabels[log.homework] && (
+                      <span className="text-gray-500">
+                        숙제: <span className={`font-medium ${homeworkLabels[log.homework].color}`}>
+                          {homeworkLabels[log.homework].label}
+                        </span>
+                      </span>
+                    )}
+                    {log.focus !== null && focusLabels[log.focus] && (
+                      <span className="text-gray-500">
+                        집중: <span className={`font-medium ${focusLabels[log.focus].color}`}>
+                          {focusLabels[log.focus].label}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  {(log.book1 || log.book2) && (
+                    <div className="text-xs text-gray-600 mt-1 space-y-0.5">
+                      {log.book1 && (
+                        <div>
+                          진도: {log.book1}
+                          {log.book1log && <span className="text-gray-500"> ({log.book1log})</span>}
+                        </div>
+                      )}
+                      {log.book2 && (
+                        <div>
+                          숙제: {log.book2}
+                          {log.book2log && <span className="text-gray-500"> ({log.book2log})</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-gray-500">학습일지가 없습니다</p>
+          )}
+        </div>
+
+        {/* 최근 테스트 성적 */}
+        <ScoresSummaryCard scores={portalData.test_scores_with_averages} />
 
         {/* 요약 카드 그리드 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* 오늘 숙제 카드 */}
-          <div className="bg-white border rounded-lg p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-blue-500" />
-              최근 숙제
-            </h3>
-            {logsByDate.length > 0 ? (
-              <div className="space-y-2">
-                {logsByDate.slice(0, 1).map(({ date, logs }) => (
-                  <div key={date}>
-                    <div className="text-xs text-gray-500 mb-1">
-                      {new Date(date).toLocaleDateString('ko-KR', {
-                        month: 'long', day: 'numeric', weekday: 'short'
-                      })}
-                    </div>
-                    {logs.slice(0, 2).map((log, idx) => (
-                      <div key={idx} className="text-sm text-gray-700">
-                        {log.book2 && <span className="font-medium">{log.book2}</span>}
-                        {log.book2log && <span className="text-gray-600"> - {log.book2log}</span>}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">오늘 예정된 숙제가 없습니다</p>
-            )}
-          </div>
 
           {/* 보강 예정 카드 */}
           <div className="bg-white border rounded-lg p-4 shadow-sm">
@@ -244,38 +286,17 @@ export function PortalView({
             )}
           </div>
 
-          {/* 이번달 원비 (학부모만) */}
-          {viewerRole === "parent" && (
-            <div className="bg-white border rounded-lg p-4 shadow-sm">
-              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-green-500" />
-                이번달 원비
-              </h3>
-              {currentTuition ? (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${
-                      currentTuition.payment_status === "완납" ? "text-green-600" :
-                      currentTuition.payment_status === "미납" ? "text-red-600" : "text-yellow-600"
-                    }`}>
-                      {currentTuition.payment_status}
-                    </span>
-                    <span className="text-sm text-gray-600">
-                      {currentTuition.amount.toLocaleString()}원
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">원비 정보가 없습니다</p>
-              )}
-            </div>
-          )}
-
           {/* 최신 코멘트 카드 */}
-          <div className="bg-white border rounded-lg p-4 shadow-sm">
+          <div
+            className={`bg-white border rounded-lg p-4 shadow-sm ${latestComment ? "cursor-pointer hover:border-purple-300 transition-colors" : ""}`}
+            onClick={() => latestComment && setShowCommentDialog(true)}
+          >
             <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
               <MessageCircle className="h-4 w-4 text-purple-500" />
               최신 코멘트
+              {latestComment && (
+                <span className="text-xs text-gray-400 font-normal ml-auto">탭하여 전체보기</span>
+              )}
             </h3>
             {latestComment ? (
               <div className="space-y-1">
@@ -292,8 +313,20 @@ export function PortalView({
           </div>
         </div>
 
-        {/* 성적 요약 카드 */}
-        <ScoresSummaryCard scores={portalData.test_scores_with_averages} />
+        {/* 코멘트 전체보기 다이얼로그 */}
+        <Dialog open={showCommentDialog} onOpenChange={setShowCommentDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-purple-500" />
+                {latestComment?.year}년 {latestComment?.month}월 코멘트
+              </DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {latestComment?.content}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* 수강 중인 반 */}
         <ClassesSection classes={portalData.classes} />
@@ -320,7 +353,7 @@ export function PortalView({
         study_logs={portalData.study_logs}
         test_logs={portalData.test_logs}
         makeup_classes={portalData.makeup_classes}
-        consultations={portalData.consultations}
+        consultations={[]}
         mathflat_records={portalData.mathflat_records}
       />
 
@@ -331,7 +364,6 @@ export function PortalView({
         <StudyLogsSection logs={portalData.study_logs} />
         <TestLogsSection logs={portalData.test_logs} />
         <MakeupClassesSection classes={portalData.makeup_classes} />
-        <ConsultationsSection consultations={portalData.consultations} />
         <MathflatSection records={portalData.mathflat_records} />
       </div>
     </div>

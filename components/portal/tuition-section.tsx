@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download, AlertCircle, CheckCircle, Clock } from "lucide-react"
+import { AlertCircle, CheckCircle, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TuitionSectionProps {
@@ -75,12 +75,6 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
         미납
       </Badge>
     )
-  }
-
-  // Download Excel (placeholder function)
-  const handleDownloadExcel = () => {
-    // TODO: Implement Excel download
-    alert("Excel 다운로드 기능은 추후 구현 예정입니다.")
   }
 
   return (
@@ -231,13 +225,7 @@ export function TuitionSection({ tuition_fees, studentName }: TuitionSectionProp
       {/* Payment History Table */}
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="text-lg">납부 내역</CardTitle>
-            <Button variant="outline" size="sm" onClick={handleDownloadExcel}>
-              <Download className="h-4 w-4 mr-2" />
-              Excel 다운로드
-            </Button>
-          </div>
+          <CardTitle className="text-lg">납부 내역</CardTitle>
         </CardHeader>
         <CardContent>
           {tuition_fees.length === 0 ? (
