@@ -4,26 +4,26 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
+import { toast } from "sonner"
 
 interface ApprovedRegistration {
   id: string
   name: string
   email: string
   role: string
-  student_id: string | null
-  student_name: string | null
   created_at: string
   approval_status: string
-  student_grade: number | null
-  student_school: string | null
+  student_names: string[]
 }
 
 interface ApprovedRegistrationsTableProps {
   registrations: ApprovedRegistration[]
   loading: boolean
+  onEdit?: (registration: ApprovedRegistration) => void
+  onRefresh?: () => void
 }
 
 const ITEMS_PER_PAGE = 10
@@ -31,8 +31,43 @@ const ITEMS_PER_PAGE = 10
 export function ApprovedRegistrationsTable({
   registrations,
   loading,
+  onEdit,
+  onRefresh,
 }: ApprovedRegistrationsTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const handleDelete = async (registration: ApprovedRegistration) => {
+    if (!confirm(`정말 이 계정을 완전히 삭제하시겠습니까?\n\n이름: ${registration.name}\n이메일: ${registration.email}\n\n⚠️ 이 작업은 되돌릴 수 없습니다.\n- Auth 계정 삭제\n- 프로필 삭제\n- 학생 연결 정보 삭제`)) {
+      return
+    }
+
+    setDeleting(registration.id)
+    try {
+      // Call API to delete user completely (Auth + profile + profile_students)
+      const response = await fetch("/api/auth/delete-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId: registration.id }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "계정 삭제에 실패했습니다")
+      }
+
+      toast.success("계정이 완전히 삭제되었습니다")
+      onRefresh?.()
+    } catch (error: any) {
+      toast.error(error.message || "계정 삭제에 실패했습니다")
+      console.error("Delete error:", error)
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const totalPages = Math.ceil(registrations.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
@@ -72,11 +107,9 @@ export function ApprovedRegistrationsTable({
                   <tr className="border-b">
                     <th className="text-left py-3 px-4 font-medium text-sm">이름</th>
                     <th className="text-left py-3 px-4 font-medium text-sm">역할</th>
-                    <th className="text-left py-3 px-4 font-medium text-sm">학생명</th>
-                    <th className="text-left py-3 px-4 font-medium text-sm">학교</th>
-                    <th className="text-left py-3 px-4 font-medium text-sm">학년</th>
+                    <th className="text-left py-3 px-4 font-medium text-sm">연결된 학생</th>
                     <th className="text-left py-3 px-4 font-medium text-sm">가입일</th>
-                    <th className="text-left py-3 px-4 font-medium text-sm">승인일</th>
+                    <th className="text-right py-3 px-4 font-medium text-sm">관리</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -91,22 +124,51 @@ export function ApprovedRegistrationsTable({
                           {registration.role === "student" ? "학생" : "학부모"}
                         </Badge>
                       </td>
-                      <td className="py-3 px-4">{registration.student_name || "-"}</td>
                       <td className="py-3 px-4">
-                        {registration.student_school?.replace(/학교$/, "") || "-"}
-                      </td>
-                      <td className="py-3 px-4">
-                        {registration.student_grade ? `${registration.student_grade}학년` : "-"}
+                        {registration.student_names.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {registration.student_names.map((name, index) => (
+                              <Badge
+                                key={index}
+                                variant={index === 0 ? "default" : "outline"}
+                                className="text-xs"
+                              >
+                                {index === 0 && registration.student_names.length > 1 && (
+                                  <span className="mr-1 opacity-70">대표</span>
+                                )}
+                                {name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td className="py-3 px-4 text-sm text-muted-foreground">
                         {format(new Date(registration.created_at), "yyyy-MM-dd", { locale: ko })}
                       </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {registration.created_at
-                          ? format(new Date(registration.created_at), "yyyy-MM-dd HH:mm", {
-                              locale: ko,
-                            })
-                          : "-"}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onEdit?.(registration)}
+                            className="h-8"
+                          >
+                            <Pencil className="h-3 w-3 mr-1" />
+                            수정
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(registration)}
+                            disabled={deleting === registration.id}
+                            className="h-8"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            {deleting === registration.id ? "삭제 중..." : "삭제"}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

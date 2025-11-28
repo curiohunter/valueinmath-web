@@ -11,6 +11,7 @@ import { ko } from "date-fns/locale"
 import { toast } from "sonner"
 import { ParentStudentApprovalModal } from "./parent-student-approval-modal"
 import { ApprovedRegistrationsTable } from "./approved-registrations-table"
+import { EditStudentLinkModal } from "./edit-student-link-modal"
 
 interface PendingApproval {
   id: string
@@ -19,6 +20,7 @@ interface PendingApproval {
   name: string
   role: string
   student_name: string | null
+  student_names: string[] | null
   status: string | null
   created_at: string | null
   student_grade: number | null
@@ -30,12 +32,9 @@ interface ApprovedRegistration {
   name: string
   email: string
   role: string
-  student_id: string | null
   created_at: string
   approval_status: string
-  student_grade: number | null
-  student_school: string | null
-  student_name: string | null
+  student_names: string[]
 }
 
 export function ParentStudentApprovalSection() {
@@ -45,6 +44,8 @@ export function ParentStudentApprovalSection() {
   const [approvedLoading, setApprovedLoading] = useState(true)
   const [selectedApproval, setSelectedApproval] = useState<PendingApproval | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedEditProfile, setSelectedEditProfile] = useState<ApprovedRegistration | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   const loadPendingApprovals = async () => {
     setLoading(true)
@@ -62,24 +63,27 @@ export function ParentStudentApprovalSection() {
       toast.error("대기 중인 승인을 불러오는데 실패했습니다")
       setPendingApprovals([])
     } else {
-      // Get student info for each registration
+      // Get student info for each registration (use first student name for display)
       const approvalsWithStudentInfo = await Promise.all(
         (data || []).map(async (reg) => {
-          if (reg.student_name) {
+          const studentName = reg.student_names?.[0] || reg.student_name
+          if (studentName) {
             const { data: student } = await supabase
               .from("students")
               .select("grade, school")
-              .eq("name", reg.student_name)
+              .eq("name", studentName)
               .single()
 
             return {
               ...reg,
+              student_names: reg.student_names || (reg.student_name ? [reg.student_name] : null),
               student_grade: student?.grade || null,
               student_school: student?.school || null,
             }
           }
           return {
             ...reg,
+            student_names: reg.student_names || null,
             student_grade: null,
             student_school: null,
           }
@@ -99,52 +103,78 @@ export function ParentStudentApprovalSection() {
     setApprovedLoading(true)
     const supabase = createClient()
 
-    const { data, error } = await supabase
+    // Get approved profiles
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, name, email, role, student_id, created_at, approval_status")
+      .select("id, name, email, role, created_at, approval_status")
       .eq("approval_status", "approved")
       .in("role", ["student", "parent"])
-      .not("student_id", "is", null)
       .order("created_at", { ascending: false })
 
-    if (error) {
-      console.error("Failed to load approved registrations:", error)
+    if (profilesError) {
+      console.error("Failed to load approved registrations:", profilesError)
       toast.error("승인 내역을 불러오는데 실패했습니다")
       setApprovedRegistrations([])
-    } else {
-      // Get student info for each registration using student_id
-      const registrationsWithStudentInfo = await Promise.all(
-        (data || []).map(async (reg) => {
-          if (reg.student_id) {
-            const { data: student, error: studentError } = await supabase
-              .from("students")
-              .select("name, grade, school")
-              .eq("id", reg.student_id)
-              .maybeSingle()
-
-            if (studentError) {
-              console.error("Error fetching student info:", studentError, "for student_id:", reg.student_id)
-            }
-
-            return {
-              ...reg,
-              student_name: student?.name || null,
-              student_grade: student?.grade || null,
-              student_school: student?.school || null,
-            }
-          }
-          return {
-            ...reg,
-            student_name: null,
-            student_grade: null,
-            student_school: null,
-          }
-        })
-      )
-
-      console.log("Approved registrations with student info:", registrationsWithStudentInfo)
-      setApprovedRegistrations(registrationsWithStudentInfo)
+      setApprovedLoading(false)
+      return
     }
+
+    // Get student names for each profile via profile_students junction table
+    const registrationsWithStudentInfo = await Promise.all(
+      (profiles || []).map(async (profile) => {
+        // Query profile_students to get linked students
+        const { data: profileStudents, error: psError } = await supabase
+          .from("profile_students")
+          .select("student_id, is_primary")
+          .eq("profile_id", profile.id)
+          .order("is_primary", { ascending: false })
+
+        if (psError) {
+          console.error("Error fetching profile_students:", psError)
+          return {
+            ...profile,
+            student_names: [],
+          }
+        }
+
+        if (!profileStudents || profileStudents.length === 0) {
+          return {
+            ...profile,
+            student_names: [],
+          }
+        }
+
+        // Get student names
+        const studentIds = profileStudents.map(ps => ps.student_id)
+        const { data: students, error: studentsError } = await supabase
+          .from("students")
+          .select("id, name")
+          .in("id", studentIds)
+
+        if (studentsError) {
+          console.error("Error fetching students:", studentsError)
+          return {
+            ...profile,
+            student_names: [],
+          }
+        }
+
+        // Order student names by is_primary (primary first)
+        const orderedNames = profileStudents.map(ps => {
+          const student = students?.find(s => s.id === ps.student_id)
+          return student?.name || "알 수 없음"
+        })
+
+        return {
+          ...profile,
+          student_names: orderedNames,
+        }
+      })
+    )
+
+    // Filter to only show profiles with linked students
+    const filteredRegistrations = registrationsWithStudentInfo.filter(r => r.student_names.length > 0)
+    setApprovedRegistrations(filteredRegistrations)
     setApprovedLoading(false)
   }
 
@@ -222,6 +252,17 @@ export function ParentStudentApprovalSection() {
     loadApprovedRegistrations()
   }
 
+  const handleEditProfile = (registration: ApprovedRegistration) => {
+    setSelectedEditProfile(registration)
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditSuccess = () => {
+    setIsEditModalOpen(false)
+    setSelectedEditProfile(null)
+    loadApprovedRegistrations()
+  }
+
   if (loading) {
     return (
       <Card>
@@ -277,11 +318,11 @@ export function ParentStudentApprovalSection() {
                         <Mail className="h-3 w-3" />
                         {approval.email}
                       </div>
-                      {approval.student_name && (
+                      {(approval.student_names?.length || approval.student_name) && (
                         <div className="flex items-center gap-1">
                           학생: <span className="font-medium text-foreground">
-                            {approval.student_name}
-                            {approval.student_school && ` (${approval.student_school.replace(/학교$/, "")}${approval.student_grade || ""})`}
+                            {approval.student_names?.join(", ") || approval.student_name}
+                            {approval.student_names?.length === 1 && approval.student_school && ` (${approval.student_school.replace(/학교$/, "")}${approval.student_grade || ""})`}
                           </span>
                         </div>
                       )}
@@ -347,8 +388,23 @@ export function ParentStudentApprovalSection() {
         <ApprovedRegistrationsTable
           registrations={approvedRegistrations}
           loading={approvedLoading}
+          onEdit={handleEditProfile}
+          onRefresh={loadApprovedRegistrations}
         />
       </div>
+
+      {/* Edit Student Link Modal */}
+      {selectedEditProfile && (
+        <EditStudentLinkModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false)
+            setSelectedEditProfile(null)
+          }}
+          profile={selectedEditProfile}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </>
   )
 }

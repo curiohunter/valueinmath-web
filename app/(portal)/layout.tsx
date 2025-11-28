@@ -18,7 +18,7 @@ export default async function PortalLayout({
   // Check user role
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, student_id")
+    .select("role")
     .eq("id", user.id)
     .single()
 
@@ -27,7 +27,13 @@ export default async function PortalLayout({
     redirect("/dashboard")
   }
 
-  if (!profile.student_id) {
+  // profile_students 테이블에서 연결된 학생들 조회
+  const { data: profileStudents } = await supabase
+    .from("profile_students")
+    .select("student_id, is_primary")
+    .eq("profile_id", user.id)
+
+  if (!profileStudents || profileStudents.length === 0) {
     // No student linked, need admin to link
     return (
       <div className="flex min-h-screen items-center justify-center p-4">

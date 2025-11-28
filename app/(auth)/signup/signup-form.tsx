@@ -15,7 +15,7 @@ import { Chrome } from "lucide-react"
 // 회원가입 폼 스키마
 const signupSchema = z
   .object({
-    name: z.string().min(1, { message: "이름을 입력해주세요." }),
+    name: z.string().min(1, { message: "본인 이름을 입력해주세요." }),
     email: z.string().email({ message: "유효한 이메일 주소를 입력해주세요." }),
     password: z.string().min(6, { message: "비밀번호는 최소 6자 이상이어야 합니다." }),
     confirmPassword: z.string().min(6, { message: "비밀번호는 최소 6자 이상이어야 합니다." }),
@@ -152,9 +152,9 @@ export function SignupForm() {
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>이름</FormLabel>
+              <FormLabel>본인 이름</FormLabel>
               <FormControl>
-                <Input placeholder="홍길동" {...field} disabled={isLoading} />
+                <Input placeholder="학부모님/학생 본인 이름" {...field} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -9,19 +9,43 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createClient } from "@/lib/supabase/client"
 import { User } from "@supabase/supabase-js"
 import type { Database } from "@/types/database"
+import { Plus, X } from "lucide-react"
 
 interface RegistrationFormProps {
   user: User
 }
 
+const MAX_CHILDREN = 3
+
 export function RegistrationForm({ user }: RegistrationFormProps) {
   const [role, setRole] = useState<string>("")
   const [name, setName] = useState(user.user_metadata?.name || "")
-  const [studentName, setStudentName] = useState("")
+  const [studentNames, setStudentNames] = useState<string[]>([""])  // 다중 자녀 지원
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const supabase = createClient()
+
+  // 자녀 추가
+  const addStudent = () => {
+    if (studentNames.length < MAX_CHILDREN) {
+      setStudentNames([...studentNames, ""])
+    }
+  }
+
+  // 자녀 제거
+  const removeStudent = (index: number) => {
+    if (studentNames.length > 1) {
+      setStudentNames(studentNames.filter((_, i) => i !== index))
+    }
+  }
+
+  // 자녀 이름 업데이트
+  const updateStudentName = (index: number, value: string) => {
+    const newNames = [...studentNames]
+    newNames[index] = value
+    setStudentNames(newNames)
+  }
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -34,8 +58,12 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
       newErrors.name = "이름을 입력해주세요"
     }
 
-    if (role === "parent" && !studentName.trim()) {
-      newErrors.studentName = "학생 이름을 입력해주세요"
+    // 학부모인 경우 최소 1명의 자녀 이름 필요
+    if (role === "parent") {
+      const validNames = studentNames.filter(n => n.trim())
+      if (validNames.length === 0) {
+        newErrors.studentNames = "최소 1명의 자녀 이름을 입력해주세요"
+      }
     }
 
     setErrors(newErrors)
@@ -44,12 +72,17 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
 
     setIsSubmitting(true)
 
     try {
+      // 유효한 자녀 이름만 필터링
+      const validStudentNames = role === "parent"
+        ? studentNames.filter(n => n.trim()).map(n => n.trim())
+        : []
+
       const { error } = await supabase
         .from('pending_registrations')
         .insert({
@@ -57,7 +90,10 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
           email: user.email || "",
           name: name.trim(),
           role,
-          student_name: role === "parent" ? studentName.trim() : null
+          // 호환성을 위해 첫 번째 자녀 이름을 student_name에도 저장
+          student_name: validStudentNames[0] || null,
+          // 새 필드: 모든 자녀 이름 배열로 저장
+          student_names: validStudentNames.length > 0 ? validStudentNames : null
         })
 
       if (error) throw error
@@ -67,7 +103,7 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
     } catch (error: any) {
       console.error('등록 실패:', error)
       const errorMessage = error.message || '등록 중 오류가 발생했습니다.'
-      
+
       // Supabase 에러 메시지 한국어로 변환
       if (error.message?.includes('duplicate key')) {
         alert('이미 등록 신청이 완료되었습니다.')
@@ -142,17 +178,51 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
             {errors.name && <p className="text-sm text-red-600">{errors.name}</p>}
           </div>
 
-          {/* 학부모인 경우 학생 이름 입력 */}
+          {/* 학부모인 경우 자녀 이름 입력 (최대 3명) */}
           {role === "parent" && (
-            <div className="space-y-2">
-              <Label>학생 이름</Label>
-              <Input
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-                placeholder="학생 이름을 입력해주세요"
-                className={errors.studentName ? "border-red-500" : ""}
-              />
-              {errors.studentName && <p className="text-sm text-red-600">{errors.studentName}</p>}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>자녀 이름 (최대 {MAX_CHILDREN}명)</Label>
+                {studentNames.length < MAX_CHILDREN && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addStudent}
+                    className="h-8 text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    자녀 추가
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {studentNames.map((studentName, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      value={studentName}
+                      onChange={(e) => updateStudentName(index, e.target.value)}
+                      placeholder={`${index + 1}번째 자녀 이름`}
+                      className={errors.studentNames && !studentName.trim() ? "border-red-500" : ""}
+                    />
+                    {studentNames.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeStudent(index)}
+                        className="h-10 w-10 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {errors.studentNames && <p className="text-sm text-red-600">{errors.studentNames}</p>}
+              <p className="text-xs text-muted-foreground">
+                형제/자매가 있는 경우 "자녀 추가" 버튼을 눌러 추가해주세요.
+              </p>
             </div>
           )}
 

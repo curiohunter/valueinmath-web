@@ -16,6 +16,7 @@ interface Sibling {
   name: string
   grade: number | null
   school: string | null
+  school_type: string | null
   status: string
 }
 
@@ -48,7 +49,7 @@ export default function PortalPage() {
       // Get user profile to determine role
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, student_id")
+        .select("role")
         .eq("id", user.id)
         .single()
 
@@ -77,47 +78,56 @@ export default function PortalPage() {
         return
       }
 
-      // For students/parents, get student_id
-      if (!profile.student_id) {
+      // For students/parents: profile_students 테이블에서 연결된 학생들 조회
+      const { data: profileStudents } = await supabase
+        .from("profile_students")
+        .select("student_id, is_primary")
+        .eq("profile_id", user.id)
+
+      if (!profileStudents || profileStudents.length === 0) {
         setError("학생 정보가 연결되지 않았습니다.")
         return
       }
 
-      setStudentId(profile.student_id)
+      // 연결된 학생 ID들
+      const linkedStudentIds = profileStudents.map(ps => ps.student_id)
+      const primaryStudentId = profileStudents.find(ps => ps.is_primary)?.student_id || linkedStudentIds[0]
 
-      // 학부모인 경우: parent_phone 기반으로 형제(재원) 조회
-      if (profile.role === "parent") {
-        // 먼저 연결된 학생의 parent_phone 조회
-        const { data: mainStudent } = await supabase
-          .from("students")
-          .select("id, name, grade, school, status, parent_phone")
-          .eq("id", profile.student_id)
-          .single()
+      setStudentId(primaryStudentId)
 
-        if (mainStudent?.parent_phone) {
-          // 같은 parent_phone을 가진 재원 학생 모두 조회
-          const { data: siblingData } = await supabase
-            .from("students")
-            .select("id, name, grade, school, status")
-            .eq("parent_phone", mainStudent.parent_phone)
-            .eq("status", "재원")
-            .order("grade", { ascending: true })
+      // 연결된 학생들의 상세 정보 조회
+      const { data: linkedStudents } = await supabase
+        .from("students")
+        .select("id, name, grade, school, school_type, status")
+        .in("id", linkedStudentIds)
 
-          if (siblingData && siblingData.length > 0) {
-            setSiblings(siblingData)
-            // 기본 선택: profile에 연결된 학생 (재원이면), 아니면 첫 번째 재원 학생
-            const defaultStudent = siblingData.find(s => s.id === profile.student_id) || siblingData[0]
-            setSelectedStudentId(defaultStudent.id)
-          } else {
-            // 재원 형제가 없으면 연결된 학생 그대로 사용
-            setSelectedStudentId(profile.student_id)
+      if (linkedStudents && linkedStudents.length > 0) {
+        // 재원 학생만 필터링하여 siblings로 설정
+        const activeStudents = linkedStudents.filter(s => s.status === "재원")
+
+        if (activeStudents.length > 0) {
+          setSiblings(activeStudents)
+          // 기본 선택: 가장 나이가 많은 학생 (고 > 중 > 초, 같은 학교급이면 학년 높은 순)
+          const getSchoolTypeOrder = (schoolType: string | null): number => {
+            if (!schoolType) return 99
+            if (schoolType.includes("고등") || schoolType === "고등학교") return 1
+            if (schoolType.includes("중") || schoolType === "중학교") return 2
+            if (schoolType.includes("초등") || schoolType === "초등학교") return 3
+            return 99
           }
+          const sortedStudents = [...activeStudents].sort((a, b) => {
+            const orderA = getSchoolTypeOrder(a.school_type)
+            const orderB = getSchoolTypeOrder(b.school_type)
+            if (orderA !== orderB) return orderA - orderB
+            return (b.grade || 0) - (a.grade || 0)
+          })
+          setSelectedStudentId(sortedStudents[0].id)
         } else {
-          setSelectedStudentId(profile.student_id)
+          // 재원 학생이 없으면 primary 학생 사용 (퇴원 상태라도)
+          setSelectedStudentId(primaryStudentId)
         }
       } else {
-        // 학생 본인인 경우
-        setSelectedStudentId(profile.student_id)
+        setSelectedStudentId(primaryStudentId)
       }
     } catch (err: any) {
       console.error("Error loading user info:", err)
