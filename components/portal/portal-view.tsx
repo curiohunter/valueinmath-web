@@ -315,7 +315,7 @@ export function PortalView({
 
         {/* 코멘트 전체보기 다이얼로그 */}
         <Dialog open={showCommentDialog} onOpenChange={setShowCommentDialog}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-purple-500" />

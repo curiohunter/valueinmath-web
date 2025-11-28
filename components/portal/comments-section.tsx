@@ -369,6 +369,7 @@ export function CommentsSection({
             key={currentComment.id}
             comment={currentComment}
             onUpdate={handleCommentUpdate}
+            canEdit={canCreateComment && teacherId === currentComment.teacher_id}
           />
         </div>
       )}

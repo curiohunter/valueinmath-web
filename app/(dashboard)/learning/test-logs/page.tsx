@@ -456,19 +456,20 @@ export default function TestLogsPage() {
         if (classA !== classB) return classA.localeCompare(classB, "ko");
         return a.name.localeCompare(b.name, "ko");
       });
-    
+
     if (currentFilteredRows.length === 0) {
       alert("필터링된 학생이 없습니다.");
       return;
     }
-    
+
     const firstValue = currentFilteredRows[0][key];
-    
+
     if (key !== "testScore" && (!firstValue || (typeof firstValue === 'string' && firstValue.trim() === ""))) {
       alert("첫 번째 학생의 해당 항목이 비어있습니다.");
       return;
     }
-    
+
+    // rows 업데이트
     setRows(prev => {
       return prev.map(r => {
         if (filterClassId === "all" || r.classId === filterClassId) {
@@ -476,6 +477,26 @@ export default function TestLogsPage() {
         }
         return r;
       });
+    });
+
+    // 기존 레코드(id가 있는 행)들의 dirtyFields도 업데이트 (수정 시 저장되도록)
+    setDirtyFields(prev => {
+      const newMap = new Map(prev);
+      rows.forEach(row => {
+        // 필터 조건에 맞고, 기존 레코드인 경우만 (새로 추가된 행은 제외)
+        if ((filterClassId === "all" || row.classId === filterClassId) && row.id) {
+          const rowKey = String(row.id);
+          // 원본과 비교하여 실제로 변경되었는지 확인
+          const originalRow = originalRows.find(or => or.id === row.id);
+          if (originalRow && originalRow[key] !== firstValue) {
+            if (!newMap.has(rowKey)) {
+              newMap.set(rowKey, new Set());
+            }
+            newMap.get(rowKey)!.add(key);
+          }
+        }
+      });
+      return newMap;
     });
   };
 

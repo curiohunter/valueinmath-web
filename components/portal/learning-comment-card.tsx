@@ -3,20 +3,109 @@
 import { useState } from "react"
 import { CommentCardData, EmojiType } from "@/types/comments"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { toggleCommentReaction } from "@/lib/comments-client"
 import { useAuth } from "@/providers/auth-provider"
 import { toast } from "sonner"
+import { Pencil, Trash2, Save, X, User } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface LearningCommentCardProps {
   comment: CommentCardData
   onUpdate: () => void
+  canEdit?: boolean  // 수정/삭제 권한 (본인 코멘트만)
 }
 
 const EMOJI_LIST: EmojiType[] = ['👍', '❤️', '😊', '🎉', '👏', '🔥']
 
-export function LearningCommentCard({ comment, onUpdate }: LearningCommentCardProps) {
+export function LearningCommentCard({ comment, onUpdate, canEdit = false }: LearningCommentCardProps) {
   const { user } = useAuth()
   const [localReactions, setLocalReactions] = useState(comment.reaction_summary)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(comment.content)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Handle edit submit
+  const handleEditSubmit = async () => {
+    if (!editContent.trim()) {
+      toast.error("코멘트 내용을 입력해주세요.")
+      return
+    }
+
+    if (editContent.length > 2000) {
+      toast.error("코멘트 내용은 2000자 이내로 작성해주세요.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch("/api/learning-comments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: comment.id,
+          content: editContent,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "코멘트 수정에 실패했습니다.")
+      }
+
+      toast.success("코멘트가 수정되었습니다.")
+      setIsEditing(false)
+      onUpdate()
+    } catch (error: any) {
+      toast.error(error.message || "코멘트 수정에 실패했습니다.")
+      console.error("Edit comment error:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Handle delete
+  const handleDelete = async () => {
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(`/api/learning-comments?id=${comment.id}`, {
+        method: "DELETE",
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "코멘트 삭제에 실패했습니다.")
+      }
+
+      toast.success("코멘트가 삭제되었습니다.")
+      onUpdate()
+    } catch (error: any) {
+      toast.error(error.message || "코멘트 삭제에 실패했습니다.")
+      console.error("Delete comment error:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Cancel edit
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setEditContent(comment.content)
+  }
 
   // Handle emoji reaction click
   const handleReactionClick = async (emoji: EmojiType) => {
@@ -65,25 +154,105 @@ export function LearningCommentCard({ comment, onUpdate }: LearningCommentCardPr
       <CardHeader>
         <div className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-lg">
-              {comment.year}년 {comment.month}월 학습 코멘트
-            </CardTitle>
-            <CardDescription className="mt-1">
-              {comment.teacher_name} 선생님 • {new Date(comment.created_at).toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </CardDescription>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-lg">
+                {comment.year}년 {comment.month}월
+              </CardTitle>
+              <Badge variant="secondary" className="text-xs font-medium">
+                <User className="h-3 w-3 mr-1" />
+                {comment.teacher_name} 선생님
+              </Badge>
+            </div>
           </div>
+          {/* Edit/Delete Buttons */}
+          {canEdit && !isEditing && (
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                className="h-8 w-8 p-0"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>코멘트 삭제</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {comment.year}년 {comment.month}월 학습 코멘트를 삭제하시겠습니까?
+                      <br />
+                      이 작업은 되돌릴 수 없습니다.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>취소</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-red-600 hover:bg-red-700"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "삭제 중..." : "삭제"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Comment Content */}
-        <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-700">
-          {comment.content}
-        </div>
+        {/* Comment Content - Edit Mode or Display */}
+        {isEditing ? (
+          <div className="space-y-4">
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="코멘트 내용을 입력해주세요."
+              className="min-h-[200px] resize-none"
+              maxLength={2000}
+              disabled={isSubmitting}
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {editContent.length}/2000
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEdit}
+                  disabled={isSubmitting}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  취소
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleEditSubmit}
+                  disabled={isSubmitting}
+                >
+                  <Save className="h-4 w-4 mr-1" />
+                  {isSubmitting ? "저장 중..." : "저장"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-700">
+            {comment.content}
+          </div>
+        )}
 
         {/* Emoji Reactions Section */}
         <div className="pt-4 border-t">

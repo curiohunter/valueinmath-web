@@ -22,6 +22,9 @@ import { getStudentComments } from "@/lib/comments-client"
 export async function getPortalData(studentId: string): Promise<PortalData> {
   const supabase = createClient()
 
+  // 현재 로그인한 사용자 조회 (상담 요청 필터링용)
+  const { data: { user } } = await supabase.auth.getUser()
+
   // Fetch all data in parallel
   const [
     studentData,
@@ -94,15 +97,19 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
       .order("year", { ascending: false })
       .order("month", { ascending: false })
       .limit(12), // 최근 12개월
-    supabase
-      .from("consultation_requests")
-      .select(`
-        *,
-        student:students!consultation_requests_student_id_fkey (name),
-        counselor:employees!consultation_requests_counselor_id_fkey (name)
-      `)
-      .eq("student_id", studentId)
-      .order("created_at", { ascending: false }),
+    // 상담 요청은 본인이 신청한 것만 보이도록 필터링 (학부모/학생 각각)
+    user?.id
+      ? supabase
+          .from("consultation_requests")
+          .select(`
+            *,
+            student:students!consultation_requests_student_id_fkey (name),
+            counselor:employees!consultation_requests_counselor_id_fkey (name)
+          `)
+          .eq("student_id", studentId)
+          .eq("requester_id", user.id)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
     // RPC: 평균 포함 테스트 점수
     supabase.rpc("get_test_scores_with_averages", { p_student_id: studentId }),
   ])

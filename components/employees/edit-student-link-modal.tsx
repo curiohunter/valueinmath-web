@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Check, ChevronsUpDown, Users, Plus, X } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { ChevronsUpDown, Users, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface Student {
@@ -36,29 +35,28 @@ interface Student {
   parent_phone: string | null
 }
 
-interface ParentStudentApprovalModalProps {
+interface EditStudentLinkModalProps {
   isOpen: boolean
   onClose: () => void
-  approval: {
+  profile: {
     id: string
-    user_id: string | null
-    email: string
     name: string
+    email: string
     role: string
-    student_name: string | null
-    student_names?: string[] | null
+    student_names: string[]
   }
   onSuccess: () => void
 }
 
-export function ParentStudentApprovalModal({
+export function EditStudentLinkModal({
   isOpen,
   onClose,
-  approval,
+  profile,
   onSuccess,
-}: ParentStudentApprovalModalProps) {
+}: EditStudentLinkModalProps) {
   const [students, setStudents] = useState<Student[]>([])
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
+  const [originalStudentIds, setOriginalStudentIds] = useState<string[]>([])
   const [suggestedSiblings, setSuggestedSiblings] = useState<Student[]>([])
   const [isStudentSelectorOpen, setIsStudentSelectorOpen] = useState(false)
   const [studentSearchValue, setStudentSearchValue] = useState("")
@@ -68,25 +66,9 @@ export function ParentStudentApprovalModal({
   useEffect(() => {
     if (isOpen) {
       loadStudents()
-      setSelectedStudentIds([])
-      setSuggestedSiblings([])
+      loadCurrentLinks()
     }
-  }, [isOpen])
-
-  useEffect(() => {
-    // Pre-select students if student_names match
-    if (students.length > 0) {
-      const namesToMatch = approval.student_names || (approval.student_name ? [approval.student_name] : [])
-      if (namesToMatch.length > 0) {
-        const matchingIds = students
-          .filter(s => namesToMatch.includes(s.name))
-          .map(s => s.id)
-        if (matchingIds.length > 0) {
-          setSelectedStudentIds(matchingIds)
-        }
-      }
-    }
-  }, [approval.student_name, approval.student_names, students])
+  }, [isOpen, profile.id])
 
   // Auto-suggest siblings based on parent_phone when students are selected
   useEffect(() => {
@@ -134,6 +116,25 @@ export function ParentStudentApprovalModal({
     setStudentsLoading(false)
   }
 
+  const loadCurrentLinks = async () => {
+    const supabase = createClient()
+
+    const { data, error } = await supabase
+      .from("profile_students")
+      .select("student_id")
+      .eq("profile_id", profile.id)
+      .order("is_primary", { ascending: false })
+
+    if (error) {
+      console.error("Failed to load current links:", error)
+      return
+    }
+
+    const ids = (data || []).map(d => d.student_id)
+    setSelectedStudentIds(ids)
+    setOriginalStudentIds(ids)
+  }
+
   const toggleStudent = (studentId: string) => {
     setSelectedStudentIds(prev => {
       if (prev.includes(studentId)) {
@@ -155,9 +156,9 @@ export function ParentStudentApprovalModal({
     setSelectedStudentIds(prev => [...prev, studentId])
   }
 
-  const handleApprove = async () => {
+  const handleSave = async () => {
     if (selectedStudentIds.length === 0) {
-      toast.error("연결할 학생을 선택해주세요")
+      toast.error("최소 1명의 학생을 연결해야 합니다")
       return
     }
 
@@ -165,60 +166,44 @@ export function ParentStudentApprovalModal({
     const supabase = createClient()
 
     try {
-      // Update pending_registrations status
-      const { error: pendingError } = await supabase
-        .from("pending_registrations")
-        .update({ status: "approved" })
-        .eq("id", approval.id)
+      // Delete existing links
+      const { error: deleteError } = await supabase
+        .from("profile_students")
+        .delete()
+        .eq("profile_id", profile.id)
 
-      if (pendingError) {
-        throw pendingError
+      if (deleteError) {
+        throw deleteError
       }
 
-      // Update profiles with role and approval_status if user exists
-      if (approval.user_id) {
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({
-            approval_status: "approved",
-            role: approval.role,
-          })
-          .eq("id", approval.user_id)
+      // Insert new links
+      const profileStudentsData = selectedStudentIds.map((studentId, index) => ({
+        profile_id: profile.id,
+        student_id: studentId,
+        is_primary: index === 0,
+      }))
 
-        if (profileError) {
-          throw profileError
-        }
+      const { error: insertError } = await supabase
+        .from("profile_students")
+        .insert(profileStudentsData)
 
-        // Insert into profile_students (1:N relationship)
-        const profileStudentsData = selectedStudentIds.map((studentId, index) => ({
-          profile_id: approval.user_id,
-          student_id: studentId,
-          is_primary: index === 0, // First selected student is primary
-        }))
-
-        const { error: profileStudentsError } = await supabase
-          .from("profile_students")
-          .insert(profileStudentsData)
-
-        if (profileStudentsError) {
-          throw profileStudentsError
-        }
+      if (insertError) {
+        throw insertError
       }
 
-      const studentCount = selectedStudentIds.length
-      toast.success(`${approval.role === "student" ? "학생" : "학부모"} 계정이 승인되었습니다 (${studentCount}명 연결)`)
-      setLoading(false)
+      toast.success("학생 연결이 수정되었습니다")
       onSuccess()
     } catch (error: any) {
-      console.error("Approval failed:", error)
-      toast.error("승인에 실패했습니다: " + (error.message || ""))
+      console.error("Save failed:", error)
+      toast.error("저장에 실패했습니다: " + (error.message || ""))
+    } finally {
       setLoading(false)
     }
   }
 
   const selectedStudents = students.filter(s => selectedStudentIds.includes(s.id))
+  const hasChanges = JSON.stringify(selectedStudentIds.sort()) !== JSON.stringify(originalStudentIds.sort())
 
-  // Filter students (already sorted from DB query)
   const filteredStudents = students.filter((student) => {
     if (!studentSearchValue) return true
     return student.name.toLowerCase().includes(studentSearchValue.toLowerCase())
@@ -228,46 +213,38 @@ export function ParentStudentApprovalModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>학부모/학생 승인</DialogTitle>
+          <DialogTitle>학생 연결 수정</DialogTitle>
           <DialogDescription>
-            역할을 선택하고 연결할 학생을 지정해주세요
+            연결된 학생을 수정합니다 (최대 3명)
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* User Info */}
+          {/* Profile Info */}
           <div className="space-y-2">
             <div className="text-sm font-medium">계정 정보</div>
             <div className="text-sm space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">이름:</span>
-                <span className="font-medium">{approval.name}</span>
+                <span className="font-medium">{profile.name}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">이메일:</span>
-                <span>{approval.email}</span>
+                <span>{profile.email}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">역할:</span>
-                <Badge variant={approval.role === "student" ? "default" : "secondary"}>
-                  {approval.role === "student" ? "학생" : "학부모"}
+                <Badge variant={profile.role === "student" ? "default" : "secondary"}>
+                  {profile.role === "student" ? "학생" : "학부모"}
                 </Badge>
               </div>
-              {(approval.student_names?.length || approval.student_name) && (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">신청 학생:</span>
-                  <span className="font-medium text-primary">
-                    {approval.student_names?.join(", ") || approval.student_name}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
           {/* Student Selection */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>연결할 학생 * (최대 3명)</Label>
+              <Label>연결된 학생 (최대 3명)</Label>
               {selectedStudentIds.length > 0 && (
                 <Badge variant="secondary">{selectedStudentIds.length}명 선택</Badge>
               )}
@@ -301,7 +278,7 @@ export function ParentStudentApprovalModal({
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm text-blue-800">
                   <Users className="h-4 w-4" />
-                  <span className="font-medium">형제/자매 발견 (같은 학부모 연락처)</span>
+                  <span className="font-medium">형제/자매 발견</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {suggestedSiblings.map((sibling) => (
@@ -385,8 +362,11 @@ export function ParentStudentApprovalModal({
           <Button variant="outline" onClick={onClose} disabled={loading}>
             취소
           </Button>
-          <Button onClick={handleApprove} disabled={loading || selectedStudentIds.length === 0}>
-            {loading ? "처리 중..." : `승인 (${selectedStudentIds.length}명 연결)`}
+          <Button
+            onClick={handleSave}
+            disabled={loading || !hasChanges || selectedStudentIds.length === 0}
+          >
+            {loading ? "저장 중..." : "저장"}
           </Button>
         </DialogFooter>
       </DialogContent>
