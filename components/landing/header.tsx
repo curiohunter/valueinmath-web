@@ -41,14 +41,6 @@ export function Header() {
             >
               문의
             </Link>
-            <Link
-              href="https://half-neighbor-c34.notion.site/valueinmath-hr?source=copy_link"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-            >
-              인재채용
-            </Link>
             <div className="flex items-center space-x-3">
               <Button 
                 variant="ghost" 
