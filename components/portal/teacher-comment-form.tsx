@@ -64,16 +64,18 @@ export function TeacherCommentForm({ teacherId, onSuccess }: TeacherCommentFormP
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
 
-  const currentDate = new Date()
-  const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth() + 1
+  // 이전 월을 기본값으로 (1월이면 작년 12월)
+  const now = new Date()
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const defaultYear = prevMonthDate.getFullYear()
+  const defaultMonth = prevMonthDate.getMonth() + 1
 
   const form = useForm<CommentFormData>({
     resolver: zodResolver(commentFormSchema),
     defaultValues: {
       student_id: "",
-      year: currentYear,
-      month: currentMonth,
+      year: defaultYear,
+      month: defaultMonth,
       content: "",
     },
   })
