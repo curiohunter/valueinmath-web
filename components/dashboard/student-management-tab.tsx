@@ -13,8 +13,11 @@ interface StudentManagementTabProps {
 
 export function StudentManagementTab({ employeeId }: StudentManagementTabProps) {
   const [selectedStudentForComment, setSelectedStudentForComment] = useState<any>(null)
-  const [commentYear, setCommentYear] = useState(new Date().getFullYear())
-  const [commentMonth, setCommentMonth] = useState(new Date().getMonth() + 1)
+  // 이전 월을 기본값으로 (1월이면 작년 12월)
+  const now = new Date()
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const [commentYear, setCommentYear] = useState(prevMonthDate.getFullYear())
+  const [commentMonth, setCommentMonth] = useState(prevMonthDate.getMonth() + 1)
   const [commentListRefreshTrigger, setCommentListRefreshTrigger] = useState(0)
   const [activeTab, setActiveTab] = useState<PortalTab>("home")
 
