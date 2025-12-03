@@ -21,6 +21,20 @@ export const CLASS_TYPE_LABELS: Record<ClassType, string> = {
 export const PAYMENT_STATUS = ['미납', '완납', '부분납'] as const
 export type PaymentStatus = typeof PAYMENT_STATUS[number]
 
+// PaysSam 청구 상태
+export const PAYSSAM_REQUEST_STATUS = ['pending', 'sent', 'paid', 'failed', 'cancelled', 'destroyed'] as const
+export type PaysSamRequestStatus = typeof PAYSSAM_REQUEST_STATUS[number]
+
+// PaysSam 상태 라벨 (UI 표시용)
+export const PAYSSAM_STATUS_LABELS: Record<PaysSamRequestStatus, string> = {
+  pending: '청구 대기',
+  sent: '청구됨',
+  paid: '결제완료',
+  failed: '발송실패',
+  cancelled: '취소됨',
+  destroyed: '파기됨'
+}
+
 // 학원비 기본 인터페이스 (DB 테이블 기반)
 export interface TuitionFee {
   id: string
@@ -37,6 +51,20 @@ export interface TuitionFee {
   period_end_date: string | null
   created_at: string | null
   updated_at: string | null
+  // PaysSam 관련 필드
+  payssam_bill_id: string | null
+  payssam_request_status: PaysSamRequestStatus | null
+  payssam_sent_at: string | null
+  payssam_paid_at: string | null
+  payssam_payment_method: string | null
+  payssam_transaction_id: string | null
+  payssam_last_sync_at: string | null
+  payssam_cancelled_at: string | null
+  payssam_destroyed_at: string | null
+  payssam_short_url: string | null
+  // 분할 청구 관련
+  parent_tuition_fee_id: string | null
+  is_split_child: boolean | null
 }
 
 // UI에서 사용할 학원비 행 인터페이스 (조인된 데이터 포함)
@@ -55,6 +83,12 @@ export interface TuitionRow {
   paymentStatus: PaymentStatus
   periodStartDate?: string
   periodEndDate?: string
+  // PaysSam 관련 필드 (UI용)
+  paysSamBillId?: string | null
+  paysSamRequestStatus?: PaysSamRequestStatus | null
+  paysSamShortUrl?: string | null
+  paysSamSentAt?: string | null
+  paysSamPaidAt?: string | null
 }
 
 // 학원비 생성/수정을 위한 입력 인터페이스

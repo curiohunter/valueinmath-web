@@ -58,6 +58,8 @@ interface TuitionTableProps {
   onSearch?: () => void
   // 엑셀 내보내기 핸들러
   onExport?: () => void
+  // 데이터 새로고침 핸들러 (PaysSam 액션 후)
+  onRefresh?: () => void
 }
 
 export function TuitionTable({
@@ -98,7 +100,8 @@ export function TuitionTable({
   onStudentSelectionChange,
   teachers = [],
   onSearch,
-  onExport
+  onExport,
+  onRefresh
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -528,6 +531,11 @@ export function TuitionTable({
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     비고
                   </th>
+                  {isHistoryMode && (
+                    <th className="px-3 py-4 text-left font-semibold text-slate-700">
+                      청구 상태
+                    </th>
+                  )}
                   {!isReadOnly && (
                     <th className="px-3 py-4 text-center font-semibold text-slate-700">
                       {isHistoryMode ? "관리" : "삭제"}
@@ -546,6 +554,7 @@ export function TuitionTable({
                     onDelete={onRowDelete}
                     onSelect={onRowSelect}
                     onSave={onRowSave}
+                    onRefresh={onRefresh}
                     isReadOnly={isReadOnly}
                     isHistoryMode={isHistoryMode}
                   />

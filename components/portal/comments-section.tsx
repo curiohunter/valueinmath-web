@@ -169,8 +169,8 @@ export function CommentsSection({
       {/* Header with Consultation Request Button */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">월별 학습 코멘트</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h2 className="text-xl md:text-2xl font-bold">월별 학습 코멘트</h2>
+          <p className="text-sm text-muted-foreground mt-1 hidden md:block">
             {canCreateComment
               ? "학생의 월별 학습 코멘트를 작성하고 학부모 소통을 확인할 수 있습니다"
               : "선생님의 피드백과 학부모님의 소통 공간입니다"}
@@ -180,12 +180,12 @@ export function CommentsSection({
           <Button
             onClick={() => setShowConsultationModal(true)}
             className="gap-2"
-            size="lg"
+            size="sm"
           >
-            <MessageSquarePlus className="h-5 w-5" />
+            <MessageSquarePlus className="h-4 w-4" />
             상담 요청
             {pendingRequests > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+              <span className="ml-2 px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">
                 {pendingRequests}
               </span>
             )}
@@ -333,8 +333,6 @@ export function CommentsSection({
             <h3 className="text-lg font-semibold mb-2">아직 코멘트가 없습니다</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md">
               선생님이 월별 학습 코멘트를 작성하시면 이곳에 표시됩니다.
-              <br />
-              코멘트에 댓글을 남기고 이모티콘 반응을 해보세요!
             </p>
           </CardContent>
         </Card>
@@ -350,7 +348,7 @@ export function CommentsSection({
               className="gap-2"
             >
               <ChevronLeft className="h-4 w-4" />
-              이전 코멘트
+              <span className="hidden md:inline">이전 코멘트</span>
             </Button>
             <span className="text-sm font-medium text-muted-foreground">
               {currentCommentIndex + 1} / {totalComments}
@@ -362,7 +360,7 @@ export function CommentsSection({
               disabled={currentCommentIndex === totalComments - 1}
               className="gap-2"
             >
-              다음 코멘트
+              <span className="hidden md:inline">다음 코멘트</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -377,15 +375,6 @@ export function CommentsSection({
         </div>
       )}
 
-      {/* Floating Action Button for Mobile */}
-      <Button
-        onClick={() => setShowConsultationModal(true)}
-        className="fixed bottom-20 right-6 h-14 w-14 rounded-full shadow-lg md:hidden"
-        size="icon"
-      >
-        <MessageSquarePlus className="h-6 w-6" />
-      </Button>
-
       {/* Consultation Request Modal */}
       <ConsultationRequestModal
         open={showConsultationModal}
@@ -398,94 +387,130 @@ export function CommentsSection({
         }}
       />
 
-      {/* Consultation Requests History Table */}
+      {/* Consultation Requests History */}
       {consultationRequests.length > 0 && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg">
               <MessageCircle className="h-5 w-5" />
               상담 요청 이력
             </CardTitle>
-            <CardDescription>
-              학부모/학생이 요청한 상담 내역입니다
-            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[160px]">요청일</TableHead>
-                  <TableHead className="w-[80px]">방법</TableHead>
-                  <TableHead className="w-[100px]">유형</TableHead>
-                  <TableHead className="max-w-[300px]">내용</TableHead>
-                  <TableHead className="w-[100px]">담당자</TableHead>
-                  <TableHead className="w-[90px]">상태</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedConsultations.map((request) => (
-                  <TableRow key={request.id}>
-                    <TableCell className="text-sm">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-muted-foreground" />
-                        {new Date(request.created_at).toLocaleDateString('ko-KR', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit'
-                        })}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {request.method}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {request.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      <p className="text-sm line-clamp-2">{request.content}</p>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {request.counselor_name ? (
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          {request.counselor_name}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">미배정</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          request.status === '완료'
-                            ? 'default'
-                            : request.status === '처리중'
-                            ? 'secondary'
-                            : 'outline'
-                        }
-                        className={
-                          request.status === '완료'
-                            ? 'bg-green-100 text-green-800 border-green-200'
-                            : request.status === '처리중'
-                            ? 'bg-blue-100 text-blue-800 border-blue-200'
-                            : 'bg-orange-100 text-orange-800 border-orange-200'
-                        }
-                      >
-                        {request.status}
-                      </Badge>
-                    </TableCell>
+          <CardContent className="p-0 md:p-6">
+            {/* Mobile View: Stacked List */}
+            <div className="md:hidden divide-y">
+              {paginatedConsultations.map((request) => (
+                <div key={request.id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(request.created_at).toLocaleDateString('ko-KR', {
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </div>
+                    <Badge
+                      variant={
+                        request.status === '완료' ? 'default' :
+                          request.status === '처리중' ? 'secondary' : 'outline'
+                      }
+                      className={
+                        request.status === '완료' ? 'bg-green-100 text-green-800 border-green-200' :
+                          request.status === '처리중' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                            'bg-orange-100 text-orange-800 border-orange-200'
+                      }
+                    >
+                      {request.status}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className="text-xs h-fit shrink-0">
+                      {request.type}
+                    </Badge>
+                    <p className="text-sm line-clamp-1 flex-1 text-foreground/90">{request.content}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop View: Table */}
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[160px]">요청일</TableHead>
+                    <TableHead className="w-[80px]">방법</TableHead>
+                    <TableHead className="w-[100px]">유형</TableHead>
+                    <TableHead className="max-w-[300px]">내용</TableHead>
+                    <TableHead className="w-[100px]">담당자</TableHead>
+                    <TableHead className="w-[90px]">상태</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {paginatedConsultations.map((request) => (
+                    <TableRow key={request.id}>
+                      <TableCell className="text-sm">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          {new Date(request.created_at).toLocaleDateString('ko-KR', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit'
+                          })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {request.method}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {request.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[300px]">
+                        <p className="text-sm line-clamp-2">{request.content}</p>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {request.counselor_name ? (
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            {request.counselor_name}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">미배정</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            request.status === '완료'
+                              ? 'default'
+                              : request.status === '처리중'
+                                ? 'secondary'
+                                : 'outline'
+                          }
+                          className={
+                            request.status === '완료'
+                              ? 'bg-green-100 text-green-800 border-green-200'
+                              : request.status === '처리중'
+                                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                : 'bg-orange-100 text-orange-800 border-orange-200'
+                          }
+                        >
+                          {request.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
 
             {/* Consultations Pagination */}
             {totalConsultationsPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-4">
+              <div className="flex items-center justify-center gap-2 mt-4 p-4 md:p-0">
                 <Button
                   variant="outline"
                   size="sm"
