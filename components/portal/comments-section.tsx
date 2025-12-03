@@ -64,9 +64,12 @@ export function CommentsSection({
   const [currentCommentIndex, setCurrentCommentIndex] = useState(0)
   const [consultationsPage, setConsultationsPage] = useState(1)
 
-  const currentDate = new Date()
-  const currentYear = currentDate.getFullYear()
-  const currentMonth = currentDate.getMonth() + 1
+  // 이전 월을 기본값으로 (1월이면 작년 12월)
+  const now = new Date()
+  const currentYear = now.getFullYear()  // 연도 선택 옵션용
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const defaultYear = prevMonthDate.getFullYear()
+  const defaultMonth = prevMonthDate.getMonth() + 1
 
   // Pagination constants (only for consultations)
   const ITEMS_PER_PAGE = 12
@@ -74,8 +77,8 @@ export function CommentsSection({
   const form = useForm<CommentFormData>({
     resolver: zodResolver(commentFormSchema),
     defaultValues: {
-      year: currentYear,
-      month: currentMonth,
+      year: defaultYear,
+      month: defaultMonth,
       content: "",
     },
   })
