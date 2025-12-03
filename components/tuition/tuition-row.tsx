@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Trash2, Calendar, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CLASS_TYPES, CLASS_TYPE_LABELS, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus } from "@/types/tuition"
+import { PaymentStatusBadge, InvoiceActions } from "@/components/payssam"
 
 interface TuitionRowProps {
   row: TuitionRowType
@@ -19,6 +20,7 @@ interface TuitionRowProps {
   onDelete?: (index: number) => void
   onSelect?: (index: number, selected: boolean) => void
   onSave?: (index: number) => void // 개별 저장 핸들러
+  onRefresh?: () => void // 데이터 새로고침 핸들러
   isReadOnly?: boolean
   isHistoryMode?: boolean // 이력 모드 여부
 }
@@ -31,6 +33,7 @@ export function TuitionRow({
   onDelete,
   onSelect,
   onSave,
+  onRefresh,
   isReadOnly = false,
   isHistoryMode = false
 }: TuitionRowProps) {
@@ -275,7 +278,7 @@ export function TuitionRow({
       </td>
       
       {/* 비고 */}
-      <td className="min-w-[150px] w-[20%] px-3 py-3">
+      <td className="min-w-[150px] w-[18%] px-3 py-3">
         <Input
           type="text"
           value={row.note || ''}
@@ -284,7 +287,20 @@ export function TuitionRow({
           placeholder="비고사항을 입력하세요"
         />
       </td>
-      
+
+      {/* 청구 상태 (PaysSam) - 이력 모드에서만 표시 */}
+      {isHistoryMode && (
+        <td className="min-w-[100px] w-[10%] px-3 py-3">
+          <div className="flex items-center gap-2">
+            <PaymentStatusBadge
+              status={row.paysSamRequestStatus || null}
+              size="sm"
+              showIcon={true}
+            />
+          </div>
+        </td>
+      )}
+
       {/* 액션 버튼 */}
       {!isReadOnly && (
         <td className="min-w-[80px] w-[10%] px-3 py-3 text-center">
@@ -299,6 +315,15 @@ export function TuitionRow({
               >
                 ✅
               </Button>
+            )}
+            {isHistoryMode && (
+              <InvoiceActions
+                tuitionFeeId={row.id}
+                paysSamStatus={row.paysSamRequestStatus || null}
+                paysSamBillId={row.paysSamBillId || null}
+                shortUrl={row.paysSamShortUrl || null}
+                onActionComplete={onRefresh}
+              />
             )}
             <Button
               size="sm"

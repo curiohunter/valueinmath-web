@@ -10,10 +10,11 @@ import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { TuitionTable } from "@/components/tuition/tuition-table";
-import { Save, Trash2, Download, Filter, Calendar } from "lucide-react";
+import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput } from "@/types/tuition";
 import { exportTuitionToExcelWithPhone } from "@/lib/excel-export";
+import { SendInvoiceModal, PointBalance } from "@/components/payssam";
 
 // 금액 포맷팅 함수
 const formatAmount = (amount: number) => {
@@ -75,6 +76,10 @@ export default function TuitionHistoryPage() {
   // 변경사항 추적
   const [originalData, setOriginalData] = useState<TuitionRow[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // PaysSam 관련 상태
+  const [showSendInvoiceModal, setShowSendInvoiceModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // 반 이름 매핑 및 선생님 정보 fetch (초기 로드)
   useEffect(() => {
@@ -190,6 +195,11 @@ export default function TuitionHistoryPage() {
           payment_status,
           period_start_date,
           period_end_date,
+          payssam_bill_id,
+          payssam_request_status,
+          payssam_short_url,
+          payssam_sent_at,
+          payssam_paid_at,
           classes!left(name),
           students!left(name, status)
         `);
@@ -274,7 +284,13 @@ export default function TuitionHistoryPage() {
           note: item.note || '',
           paymentStatus: item.payment_status,
           periodStartDate: item.period_start_date || undefined,
-          periodEndDate: item.period_end_date || undefined
+          periodEndDate: item.period_end_date || undefined,
+          // PaysSam 필드
+          paysSamBillId: item.payssam_bill_id || null,
+          paysSamRequestStatus: item.payssam_request_status || null,
+          paysSamShortUrl: item.payssam_short_url || null,
+          paysSamSentAt: item.payssam_sent_at || null,
+          paysSamPaidAt: item.payssam_paid_at || null,
         };
       });
 
@@ -617,6 +633,51 @@ export default function TuitionHistoryPage() {
     }
   };
 
+  // PaysSam 일괄 상태 동기화 핸들러
+  const handleBulkSync = async () => {
+    // 발송된 청구서만 동기화 대상
+    const syncTargets = filteredData.filter(
+      row => row.paysSamRequestStatus === 'sent' || row.paysSamRequestStatus === 'paid'
+    );
+
+    if (syncTargets.length === 0) {
+      toast.info("동기화할 청구서가 없습니다.");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const response = await fetch("/api/payssam/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tuitionFeeIds: syncTargets.map(row => row.id)
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(data.message || `${data.data?.success || 0}건 동기화 완료`);
+        fetchTuitionHistoryWithFilters(false); // 데이터 새로고침
+      } else {
+        toast.error(data.error || "동기화 중 오류가 발생했습니다.");
+      }
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast.error("동기화 중 오류가 발생했습니다.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 선택된 행들의 TuitionRow 데이터 가져오기
+  const getSelectedFeesForInvoice = (): TuitionRow[] => {
+    return selectedRows
+      .map(index => filteredData[index])
+      .filter(Boolean);
+  };
+
   // 초기 데이터 로드 - 날짜 범위가 설정되면 한 번만 로드
   useEffect(() => {
     if (dateRange.from && dateRange.to) {
@@ -647,7 +708,33 @@ export default function TuitionHistoryPage() {
   return (
     <div className="space-y-6">
       <StudentClassTabs />
-      
+
+      {/* PaysSam 관리 영역 */}
+      <div className="flex items-center justify-between">
+        <PointBalance compact />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBulkSync}
+            disabled={isSyncing}
+            className="text-blue-600 border-blue-200 hover:bg-blue-50"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? '동기화 중...' : '상태 동기화'}
+          </Button>
+          <Button
+            onClick={() => setShowSendInvoiceModal(true)}
+            disabled={selectedRows.length === 0}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Send className="w-4 h-4 mr-2" />
+            청구서 발송 ({selectedRows.length})
+          </Button>
+        </div>
+      </div>
+
       {/* 통계 카드 */}
       {filteredData.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
@@ -764,6 +851,7 @@ export default function TuitionHistoryPage() {
             teachers={teachers}
             onSearch={handleSearch}
             onExport={handleExport}
+            onRefresh={() => fetchTuitionHistoryWithFilters(false)}
           />
           
         </div>
@@ -823,10 +911,10 @@ export default function TuitionHistoryPage() {
                 </Button>
               </>
             )}
-            <Button 
+            <Button
               variant="outline"
               size="sm"
-              onClick={() => setPage(p => Math.min(totalPages, p+1))} 
+              onClick={() => setPage(p => Math.min(totalPages, p+1))}
               disabled={page === totalPages}
             >
               다음
@@ -834,6 +922,17 @@ export default function TuitionHistoryPage() {
           </div>
         </div>
       )}
+
+      {/* 청구서 발송 모달 */}
+      <SendInvoiceModal
+        open={showSendInvoiceModal}
+        onOpenChange={setShowSendInvoiceModal}
+        selectedFees={getSelectedFeesForInvoice()}
+        onSuccess={() => {
+          setSelectedRows([]);
+          fetchTuitionHistoryWithFilters(false);
+        }}
+      />
     </div>
   );
 }
