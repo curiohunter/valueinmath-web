@@ -1,12 +1,19 @@
 /**
- * 청구서 발송 API
- * POST /api/payssam/send
+ * 청구서 생성 API (PaysSam API 호출)
+ * POST /api/payssam/create
+ *
+ * 1단계 워크플로우:
+ * - PaysSam /if/bill/send API 호출
+ * - 결제선생 앱에 청구서 등록 + 카카오톡 발송
+ * - 상태: pending → sent
+ *
+ * PaysSam에서 "발송"이 곧 "등록"입니다.
+ * 발송 후 결제선생 앱에서 현장결제 가능.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/auth/server'
-import { sendInvoice, sendInvoicesBulk } from '@/services/payssam-service'
-import { validateConfig } from '@/lib/payssam-client'
+import { createInvoice, createInvoicesBulk } from '@/services/payssam-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,28 +43,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // PaysSam 설정 확인
-    const config = validateConfig()
-    if (!config.valid) {
-      return NextResponse.json(
-        { success: false, error: `PaysSam 설정 오류: ${config.missing.join(', ')}` },
-        { status: 500 }
-      )
-    }
-
     const body = await request.json()
 
-    // 일괄 발송
+    // 일괄 생성
     if (body.tuitionFeeIds && Array.isArray(body.tuitionFeeIds)) {
-      const result = await sendInvoicesBulk(body.tuitionFeeIds)
+      const result = await createInvoicesBulk(body.tuitionFeeIds)
       return NextResponse.json({
         success: true,
         data: result,
-        message: `${result.success}건 발송 완료, ${result.failed}건 실패`,
+        message: `${result.success}건 생성 완료, ${result.failed}건 실패`,
       })
     }
 
-    // 단건 발송
+    // 단건 생성
     if (body.tuitionFeeId) {
       // 청구 대상 조회
       const { data: fee, error: feeError } = await supabase
@@ -89,7 +87,7 @@ export async function POST(request: NextRequest) {
 
       if (fee.payssam_bill_id) {
         return NextResponse.json(
-          { success: false, error: '이미 청구서가 발송되었습니다.' },
+          { success: false, error: '이미 청구서가 존재합니다.' },
           { status: 400 }
         )
       }
@@ -104,7 +102,7 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const result = await sendInvoice({
+      const result = await createInvoice({
         tuitionFeeId: fee.id,
         studentName: fee.student_name_snapshot || student.name,
         parentPhone: phone,
@@ -117,8 +115,11 @@ export async function POST(request: NextRequest) {
       if (result.success) {
         return NextResponse.json({
           success: true,
-          data: { billId: result.billId },
-          message: '청구서가 발송되었습니다.',
+          data: {
+            billId: result.billId,
+            shortURL: result.shortURL,
+          },
+          message: '청구서가 발송되었습니다. 결제선생 앱에서 현장결제 가능합니다.',
         })
       }
 
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
-    console.error('PaysSam Send Error:', error)
+    console.error('PaysSam Create Error:', error)
     return NextResponse.json(
       { success: false, error: '서버 오류가 발생했습니다.' },
       { status: 500 }

@@ -22,12 +22,14 @@ export const PAYMENT_STATUS = ['미납', '완납', '부분납'] as const
 export type PaymentStatus = typeof PAYMENT_STATUS[number]
 
 // PaysSam 청구 상태
-export const PAYSSAM_REQUEST_STATUS = ['pending', 'sent', 'paid', 'failed', 'cancelled', 'destroyed'] as const
+// 참고: 'created'는 레거시 상태. 1단계 워크플로우 적용으로 pending → sent로 직접 전환됨.
+export const PAYSSAM_REQUEST_STATUS = ['pending', 'created', 'sent', 'paid', 'failed', 'cancelled', 'destroyed'] as const
 export type PaysSamRequestStatus = typeof PAYSSAM_REQUEST_STATUS[number]
 
 // PaysSam 상태 라벨 (UI 표시용)
 export const PAYSSAM_STATUS_LABELS: Record<PaysSamRequestStatus, string> = {
   pending: '청구 대기',
+  created: '생성됨',
   sent: '청구됨',
   paid: '결제완료',
   failed: '발송실패',

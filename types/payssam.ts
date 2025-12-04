@@ -176,6 +176,7 @@ export interface PaysSamResendRequest {
 // ============================================
 
 export type PaysSamEventType =
+  | 'invoice_created'
   | 'invoice_sent'
   | 'payment_completed'
   | 'cancelled'

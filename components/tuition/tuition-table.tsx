@@ -14,6 +14,7 @@ import type { TuitionRow } from "@/types/tuition"
 interface TuitionTableProps {
   rows: TuitionRow[]
   originalRows?: TuitionRow[]
+  totalFilteredCount?: number // 전체 필터된 데이터 건수 (페이지네이션 전)
   onRowChange?: (index: number, field: keyof TuitionRow, value: any) => void
   onRowDelete?: (index: number) => void
   onRowSave?: (index: number) => void // 개별 저장 핸들러
@@ -23,8 +24,10 @@ interface TuitionTableProps {
   onSave?: () => void
   isSaving?: boolean
   selectedRows?: number[]
+  totalSelectedCount?: number // 전체 선택된 건수 (페이지네이션 무관)
   onRowSelect?: (index: number, selected: boolean) => void
   onSelectAll?: (selected: boolean) => void
+  onSelectAllFiltered?: () => void // 필터된 전체 데이터 선택
   searchTerm?: string
   onSearchChange?: (value: string) => void
   paymentStatusFilter?: string
@@ -65,6 +68,7 @@ interface TuitionTableProps {
 export function TuitionTable({
   rows,
   originalRows = [],
+  totalFilteredCount,
   onRowChange,
   onRowDelete,
   onRowSave,
@@ -74,8 +78,10 @@ export function TuitionTable({
   onSave,
   isSaving = false,
   selectedRows = [],
+  totalSelectedCount,
   onRowSelect,
   onSelectAll,
+  onSelectAllFiltered,
   searchTerm = "",
   onSearchChange,
   paymentStatusFilter = "all",
@@ -106,6 +112,10 @@ export function TuitionTable({
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
   const [studentSearchTerm, setStudentSearchTerm] = useState("")
+  const [selectMenuOpen, setSelectMenuOpen] = useState(false)
+
+  // 전체 필터된 데이터 건수 (페이지네이션 전)
+  const filteredCount = totalFilteredCount ?? originalRows.length
 
   return (
     <div className="flex-1">
@@ -427,15 +437,83 @@ export function TuitionTable({
                 <tr className="bg-gradient-to-r from-slate-50 via-blue-50 to-indigo-50 border-b border-slate-200">
                   {!isReadOnly && onRowSelect && (
                     <th className="w-12 px-3 py-4 text-center">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        ref={(el) => {
-                          if (el) el.indeterminate = someSelected
-                        }}
-                        onChange={(e) => onSelectAll?.(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                      />
+                      <Popover open={selectMenuOpen} onOpenChange={setSelectMenuOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="relative flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={allSelected || ((totalSelectedCount ?? selectedRows.length) > 0 && (totalSelectedCount ?? selectedRows.length) >= filteredCount)}
+                              ref={(el) => {
+                                if (el) {
+                                  const totalSelected = totalSelectedCount ?? selectedRows.length;
+                                  el.indeterminate = (someSelected && totalSelected < filteredCount) || (totalSelected > 0 && totalSelected < filteredCount && !allSelected);
+                                }
+                              }}
+                              readOnly
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 pointer-events-none"
+                            />
+                            <ChevronDown className="absolute -right-2 -bottom-1 w-3 h-3 text-gray-400" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-1" align="start">
+                          <div className="space-y-1">
+                            {/* 이 페이지 선택/해제 */}
+                            <button
+                              onClick={() => {
+                                if (allSelected) {
+                                  onSelectAll?.(false)
+                                } else {
+                                  onSelectAll?.(true)
+                                }
+                                setSelectMenuOpen(false)
+                              }}
+                              className="w-full flex items-center justify-between px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                            >
+                              <span>{allSelected ? '이 페이지 해제' : '이 페이지 선택'}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {rows.length}건
+                              </Badge>
+                            </button>
+
+                            {/* 전체 선택 (페이지네이션 전체) */}
+                            {onSelectAllFiltered && filteredCount > rows.length && (
+                              <button
+                                onClick={() => {
+                                  onSelectAllFiltered()
+                                  setSelectMenuOpen(false)
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-sm rounded hover:bg-blue-50 text-blue-600 transition-colors"
+                              >
+                                <span>전체 선택</span>
+                                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                                  {filteredCount}건
+                                </Badge>
+                              </button>
+                            )}
+
+                            {/* 선택 해제 */}
+                            {(totalSelectedCount ?? selectedRows.length) > 0 && (
+                              <>
+                                <div className="border-t my-1" />
+                                <button
+                                  onClick={() => {
+                                    onSelectAll?.(false)
+                                    setSelectMenuOpen(false)
+                                  }}
+                                  className="w-full flex items-center justify-between px-3 py-2 text-sm rounded hover:bg-red-50 text-red-600 transition-colors"
+                                >
+                                  <span>선택 해제</span>
+                                  <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">
+                                    {totalSelectedCount ?? selectedRows.length}건
+                                  </Badge>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </th>
                   )}
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
@@ -602,9 +680,9 @@ export function TuitionTable({
                     </div>
                   </>
                 )}
-                {selectedRows.length > 0 && (
+                {(totalSelectedCount ?? selectedRows.length) > 0 && (
                   <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                    {selectedRows.length}개 선택됨
+                    {totalSelectedCount ?? selectedRows.length}개 선택됨
                   </Badge>
                 )}
               </div>
