@@ -120,10 +120,10 @@ export function CommentsSection({
 
       toast.success("학습 코멘트가 작성되었습니다.")
 
-      // Reset form
+      // Reset form (기본값을 이전 월로 유지)
       form.reset({
-        year: currentYear,
-        month: currentMonth,
+        year: defaultYear,
+        month: defaultMonth,
         content: "",
       })
 
