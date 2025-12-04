@@ -62,6 +62,11 @@ export function generateBillId(): string {
 
 /**
  * PaysSam API 공통 요청 함수
+ *
+ * API 규격서 v1.2.4 기준:
+ * - 대부분의 API: apikey + member + merchant 필요
+ * - /if/read/remain_count (쌤포인트 잔액조회): apikey만 필요
+ * - /if/read/merchant (가맹점 정보 조회): apikey만 필요
  */
 export async function paysamRequest<T = any>(
   endpoint: string,
@@ -69,12 +74,32 @@ export async function paysamRequest<T = any>(
 ): Promise<{ success: boolean; data?: T; error?: string; code?: string }> {
   const config = getConfig()
 
-  const requestBody = {
-    apikey: config.apiKey,
-    member: config.member,
-    merchant: config.merchant,
-    ...body,
-  }
+  // API별로 필요한 파라미터가 다름
+  // /if/read/remain_count, /if/read/merchant는 apikey만 필요
+  const apiKeyOnlyEndpoints = ['/if/read/remain_count', '/if/read/merchant']
+  const needsMemberMerchant = !apiKeyOnlyEndpoints.includes(endpoint)
+
+  const requestBody = needsMemberMerchant
+    ? {
+        apikey: config.apiKey,
+        member: config.member,
+        merchant: config.merchant,
+        ...body,
+      }
+    : {
+        apikey: config.apiKey,
+        ...body,
+      }
+
+  // 디버깅용 로그 (민감 정보 마스킹)
+  console.log('[PaysSam API Request]', {
+    endpoint,
+    url: `${config.apiUrl}${endpoint}`,
+    apikey: config.apiKey ? `${config.apiKey.substring(0, 8)}...` : '(empty)',
+    member: config.member || '(empty)',
+    merchant: config.merchant || '(empty)',
+    bodyKeys: Object.keys(body),
+  })
 
   try {
     const response = await fetch(`${config.apiUrl}${endpoint}`, {
@@ -85,27 +110,58 @@ export async function paysamRequest<T = any>(
       body: JSON.stringify(requestBody),
     })
 
+    // 응답 텍스트를 먼저 읽기 (파싱 실패 대비)
+    const responseText = await response.text()
+    console.log('[PaysSam API Response]', {
+      endpoint,
+      status: response.status,
+      statusText: response.statusText,
+      body: responseText.substring(0, 500), // 처음 500자만 로그
+    })
+
     if (!response.ok) {
+      console.error('[PaysSam API Error] HTTP Error:', {
+        endpoint,
+        status: response.status,
+        body: responseText,
+      })
       return {
         success: false,
-        error: `HTTP ${response.status}: ${response.statusText}`,
+        error: `HTTP ${response.status}: ${response.statusText} - ${responseText}`,
         code: response.status.toString(),
       }
     }
 
-    const data = await response.json() as PaysSamApiResponse<T>
+    // JSON 파싱
+    let data: PaysSamApiResponse<T>
+    try {
+      data = JSON.parse(responseText) as PaysSamApiResponse<T>
+    } catch (parseError) {
+      console.error('[PaysSam API Error] JSON Parse Error:', responseText)
+      return {
+        success: false,
+        error: `JSON 파싱 실패: ${responseText}`,
+        code: 'PARSE_ERROR',
+      }
+    }
 
     if (data.code === '0000') {
+      console.log('[PaysSam API Success]', { endpoint, code: data.code })
       return { success: true, data: data as T, code: data.code }
     }
 
+    console.error('[PaysSam API Error] Business Error:', {
+      endpoint,
+      code: data.code,
+      msg: data.msg,
+    })
     return {
       success: false,
       error: data.msg || '알 수 없는 오류',
       code: data.code,
     }
   } catch (error) {
-    console.error('PaysSam API Error:', error)
+    console.error('[PaysSam API Error] Network/Exception:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : '네트워크 오류',
