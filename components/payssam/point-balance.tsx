@@ -55,25 +55,54 @@ export function PointBalance({
     fetchBalance()
   }, [])
 
+  // 테스트 환경에서 에러가 나면 "테스트 모드" 표시
   if (error) {
+    if (compact) {
+      return (
+        <div className={cn("flex items-center gap-2", className)}>
+          <Badge
+            variant="outline"
+            className="font-medium bg-blue-50 text-blue-600 border-blue-200"
+          >
+            <Coins className="w-3 h-3 mr-1" />
+            테스트 모드
+          </Badge>
+        </div>
+      )
+    }
+
     return (
       <div
         className={cn(
-          "flex items-center gap-2 text-red-600",
-          compact ? "text-xs" : "text-sm",
+          "flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200",
           className
         )}
       >
-        <AlertCircle className={cn(compact ? "w-3 h-3" : "w-4 h-4")} />
-        <span>{error}</span>
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-100 rounded-full">
+            <Coins className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <div className="text-xs text-blue-600 font-medium">쌤포인트</div>
+            <div className="text-lg font-bold text-blue-800">테스트 모드</div>
+          </div>
+        </div>
+        <div className="flex-1" />
+        <div className="text-right text-xs text-blue-600">
+          <div>개발 환경에서는 잔액 조회 불가</div>
+          <Badge variant="outline" className="text-xs py-0 mt-1 bg-blue-50 text-blue-600 border-blue-200">
+            개발
+          </Badge>
+        </div>
         {showRefresh && (
           <Button
             variant="ghost"
             size="sm"
             onClick={fetchBalance}
-            className="h-6 w-6 p-0"
+            disabled={isLoading}
+            className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
           >
-            <RefreshCw className="w-3 h-3" />
+            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
           </Button>
         )}
       </div>

@@ -129,7 +129,7 @@ export function normalizePhone(phone: string): string {
  * 만료일 계산 (해당 월 말일)
  * @param year - 연도
  * @param month - 월
- * @returns YYYYMMDD 형식
+ * @returns YYYY-MM-DD 형식 (API 규격서 v1.2.4 기준)
  */
 export function getExpireDate(year?: number, month?: number): string {
   const now = new Date()
@@ -143,7 +143,7 @@ export function getExpireDate(year?: number, month?: number): string {
   const mm = targetMonth.toString().padStart(2, '0')
   const dd = lastDay.toString().padStart(2, '0')
 
-  return `${yyyy}${mm}${dd}`
+  return `${yyyy}-${mm}-${dd}`
 }
 
 /**
