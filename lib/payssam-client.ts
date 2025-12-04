@@ -99,6 +99,8 @@ export async function paysamRequest<T = any>(
     member: config.member || '(empty)',
     merchant: config.merchant || '(empty)',
     bodyKeys: Object.keys(body),
+    // 🔍 DEBUG: bill 객체 안의 callbackURL 확인
+    billCallbackURL: body.bill?.callbackURL || '(not set)',
   })
 
   try {
