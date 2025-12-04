@@ -71,7 +71,9 @@ export function SendInvoiceModal({
     setResults([])
 
     try {
-      const response = await fetch("/api/payssam/send", {
+      // /api/payssam/create 사용 - PaysSam에 청구서 등록 + 카카오톡 발송
+      // (PaysSam에서 "발송"이 곧 "등록"임)
+      const response = await fetch("/api/payssam/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

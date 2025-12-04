@@ -3,7 +3,7 @@
  * 청구서 발송, 결제 상태 관리, 동기화 로직
  */
 
-import { createClient } from '@/lib/supabase/client'
+import { createServerClient } from '@/lib/auth/server'
 import {
   paysamRequest,
   generateHash,
@@ -81,18 +81,37 @@ export async function createInvoice(params: CreateInvoiceParams) {
     },
   })
 
+  console.log('[createInvoice] PaysSam API 호출 결과:', {
+    success: result.success,
+    error: result.error,
+    code: result.code,
+    billId,
+    tuitionFeeId,
+  })
+
   if (result.success) {
     // DB 업데이트 (sent 상태로)
-    const supabase = createClient()
+    const supabase = await createServerClient()
     const now = new Date().toISOString()
 
-    await supabase.from('tuition_fees').update({
+    console.log('[createInvoice] Supabase 업데이트 시작:', {
+      tuitionFeeId,
+      billId,
+      status: 'sent',
+    })
+
+    const { data: updateData, error: updateError } = await supabase.from('tuition_fees').update({
       payssam_bill_id: billId,
       payssam_request_status: 'sent',
       payssam_sent_at: now,
       payssam_short_url: result.data?.shortURL || null,
       payssam_last_sync_at: now,
-    }).eq('id', tuitionFeeId)
+    }).eq('id', tuitionFeeId).select('id, payssam_bill_id, payssam_request_status')
+
+    console.log('[createInvoice] Supabase 업데이트 결과:', {
+      updateData,
+      updateError: updateError?.message,
+    })
 
     // 이벤트 로그
     await logPaysamEvent(tuitionFeeId, 'invoice_sent', {
@@ -153,7 +172,9 @@ interface BulkCreateResult {
 export async function createInvoicesBulk(
   tuitionFeeIds: string[]
 ): Promise<BulkCreateResult> {
-  const supabase = createClient()
+  console.log('[createInvoicesBulk] 시작:', { tuitionFeeIds, count: tuitionFeeIds.length })
+
+  const supabase = await createServerClient()
 
   // 청구 대상 조회 (학생 정보 포함)
   const { data: fees, error } = await supabase
@@ -176,7 +197,20 @@ export async function createInvoicesBulk(
     `)
     .in('id', tuitionFeeIds)
 
+  console.log('[createInvoicesBulk] 조회 결과:', {
+    feesCount: fees?.length || 0,
+    error: error?.message,
+    fees: fees?.map(f => ({
+      id: f.id,
+      billId: f.payssam_bill_id,
+      amount: f.amount,
+      studentName: f.student_name_snapshot,
+      phone: (f.students as any)?.payment_phone || (f.students as any)?.parent_phone,
+    })),
+  })
+
   if (error || !fees) {
+    console.error('[createInvoicesBulk] 조회 실패:', error)
     return { success: 0, failed: tuitionFeeIds.length, results: [] }
   }
 
@@ -309,18 +343,37 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     },
   })
 
+  console.log('[sendInvoice] PaysSam API 호출 결과:', {
+    success: result.success,
+    error: result.error,
+    code: result.code,
+    billId,
+    tuitionFeeId,
+  })
+
   if (result.success) {
     // DB 업데이트
-    const supabase = createClient()
+    const supabase = await createServerClient()
     const now = new Date().toISOString()
 
-    await supabase.from('tuition_fees').update({
+    console.log('[sendInvoice] Supabase 업데이트 시작:', {
+      tuitionFeeId,
+      billId,
+      status: 'sent',
+    })
+
+    const { data: updateData, error: updateError } = await supabase.from('tuition_fees').update({
       payssam_bill_id: billId,
       payssam_request_status: 'sent',
       payssam_sent_at: now,
       payssam_short_url: result.data?.shortURL || null,
       payssam_last_sync_at: now,
-    }).eq('id', tuitionFeeId)
+    }).eq('id', tuitionFeeId).select('id, payssam_bill_id, payssam_request_status')
+
+    console.log('[sendInvoice] Supabase 업데이트 결과:', {
+      updateData,
+      updateError: updateError?.message,
+    })
 
     // 이벤트 로그
     await logPaysamEvent(tuitionFeeId, 'invoice_sent', {
@@ -363,7 +416,9 @@ interface BulkSendResult {
 export async function sendInvoicesBulk(
   tuitionFeeIds: string[]
 ): Promise<BulkSendResult> {
-  const supabase = createClient()
+  const supabase = await createServerClient()
+
+  console.log('[sendInvoicesBulk] 시작:', { tuitionFeeIds })
 
   // 청구 대상 조회 (학생 정보 포함) - pending 또는 created 상태만
   const { data: fees, error } = await supabase
@@ -388,7 +443,23 @@ export async function sendInvoicesBulk(
     .in('id', tuitionFeeIds)
     .in('payssam_request_status', ['pending', 'created', null])
 
+  console.log('[sendInvoicesBulk] 조회 결과:', {
+    feesCount: fees?.length || 0,
+    error: error?.message,
+    fees: fees?.map(f => ({
+      id: f.id,
+      status: f.payssam_request_status,
+      billId: f.payssam_bill_id,
+    })),
+  })
+
   if (error || !fees) {
+    console.error('[sendInvoicesBulk] 조회 실패:', error)
+    return { success: 0, failed: tuitionFeeIds.length, results: [] }
+  }
+
+  if (fees.length === 0) {
+    console.warn('[sendInvoicesBulk] 발송 가능한 항목 없음 (payssam_request_status가 pending/created/null이 아님)')
     return { success: 0, failed: tuitionFeeIds.length, results: [] }
   }
 
@@ -466,7 +537,7 @@ export async function getPaymentStatus(billId: string) {
  * 특정 청구서의 결제 상태 동기화
  */
 export async function syncPaymentStatus(tuitionFeeId: string) {
-  const supabase = createClient()
+  const supabase = await createServerClient()
 
   const { data: fee, error } = await supabase
     .from('tuition_fees')
@@ -503,7 +574,7 @@ export async function syncPaymentStatus(tuitionFeeId: string) {
 // ============================================
 
 export async function cancelPayment(tuitionFeeId: string) {
-  const supabase = createClient()
+  const supabase = await createServerClient()
 
   const { data: fee, error } = await supabase
     .from('tuition_fees')
@@ -548,7 +619,7 @@ export async function cancelPayment(tuitionFeeId: string) {
 // ============================================
 
 export async function destroyInvoice(tuitionFeeId: string) {
-  const supabase = createClient()
+  const supabase = await createServerClient()
 
   const { data: fee, error } = await supabase
     .from('tuition_fees')
@@ -592,7 +663,7 @@ export async function destroyInvoice(tuitionFeeId: string) {
 // ============================================
 
 export async function resendInvoice(tuitionFeeId: string) {
-  const supabase = createClient()
+  const supabase = await createServerClient()
 
   const { data: fee, error } = await supabase
     .from('tuition_fees')
@@ -643,7 +714,7 @@ const STATUS_MAP: Record<PaysSamApprState, {
 }
 
 export async function processWebhookPayload(payload: PaysSamWebhookPayload) {
-  const supabase = createClient()
+  const supabase = await createServerClient()
 
   // bill_id로 tuition_fee 조회
   const { data: fee, error } = await supabase
@@ -715,7 +786,7 @@ export async function logPaysamEvent(
   eventType: PaysSamEventType,
   eventData: Record<string, any>
 ) {
-  const supabase = createClient()
+  const supabase = await createServerClient()
 
   await supabase.from('payssam_logs').insert({
     tuition_fee_id: tuitionFeeId,
