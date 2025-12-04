@@ -10,7 +10,7 @@ import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { TuitionTable } from "@/components/tuition/tuition-table";
-import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw } from "lucide-react";
+import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput } from "@/types/tuition";
 import { exportTuitionToExcelWithPhone } from "@/lib/excel-export";
@@ -80,6 +80,9 @@ export default function TuitionHistoryPage() {
   // PaysSam 관련 상태
   const [showSendInvoiceModal, setShowSendInvoiceModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  // isCreatingInvoices는 1단계 워크플로우 통합으로 제거됨 (isSendingInvoices로 대체)
+  const [isSendingInvoices, setIsSendingInvoices] = useState(false);
+  const [isProcessingOfflinePayment, setIsProcessingOfflinePayment] = useState(false);
 
   // 반 이름 매핑 및 선생님 정보 fetch (초기 로드)
   useEffect(() => {
@@ -487,16 +490,23 @@ export default function TuitionHistoryPage() {
     }
   };
 
-  // 전체 선택 핸들러
+  // 이 페이지 전체 선택 핸들러
   const handleSelectAll = (selected: boolean) => {
     if (selected) {
-      const pageIndices = paginatedData.map((_, index) => (page - 1) * pageSize + index);
-      setSelectedRows([...new Set([...selectedRows, ...pageIndices])]);
+      // 이 페이지의 모든 행을 선택 (global index 기준)
+      const pageGlobalIndices = paginatedData.map(row => data.findIndex(item => item.id === row.id)).filter(i => i !== -1);
+      setSelectedRows([...new Set([...selectedRows, ...pageGlobalIndices])]);
     } else {
-      const pageStart = (page - 1) * pageSize;
-      const pageEnd = pageStart + pageSize;
-      setSelectedRows(selectedRows.filter(i => i < pageStart || i >= pageEnd));
+      // 모든 선택 해제
+      setSelectedRows([]);
     }
+  };
+
+  // 필터된 전체 데이터 선택 핸들러
+  const handleSelectAllFiltered = () => {
+    // filteredData의 모든 행을 선택 (global index 기준)
+    const allFilteredIndices = filteredData.map(row => data.findIndex(item => item.id === row.id)).filter(i => i !== -1);
+    setSelectedRows([...new Set(allFilteredIndices)]);
   };
 
   // 선택 삭제 핸들러
@@ -513,8 +523,9 @@ export default function TuitionHistoryPage() {
     setIsSaving(true);
     try {
       // 선택된 행들의 ID 수집
+      // selectedRows는 data 배열의 global index를 저장하므로 data[index]로 접근
       const idsToDelete = selectedRows
-        .map(index => filteredData[index]?.id)
+        .map(index => data[index]?.id)
         .filter(id => id);
 
       if (idsToDelete.length === 0) {
@@ -671,10 +682,132 @@ export default function TuitionHistoryPage() {
     }
   };
 
+  // 청구서 일괄 발송 핸들러 (1단계 워크플로우: 결제선생 등록 + 카카오톡 발송)
+  // PaysSam에서 "발송"이 곧 "등록"이므로 create API를 사용
+  const handleBulkSendInvoices = async () => {
+    // selectedRows는 data 배열의 global index를 저장하므로 data[index]로 접근
+    const selectedFees = selectedRows
+      .map(index => data[index])
+      .filter(Boolean)
+      .filter(row => !row.paysSamBillId && row.paymentStatus !== '완납'); // 미발송 & 미완납만
+
+    if (selectedFees.length === 0) {
+      toast.error("발송할 수 있는 청구서가 없습니다.\n(미발송 & 미완납 상태만 가능)");
+      return;
+    }
+
+    const confirmSend = window.confirm(
+      `선택한 ${selectedFees.length}건의 청구서를 발송하시겠습니까?\n\n` +
+      `※ 카카오톡으로 청구서가 발송됩니다.\n` +
+      `※ 쌤포인트가 차감됩니다.\n` +
+      `※ 결제선생 앱에서 현장결제가 가능해집니다.`
+    );
+
+    if (!confirmSend) return;
+
+    setIsSendingInvoices(true);
+    try {
+      const response = await fetch("/api/payssam/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tuitionFeeIds: selectedFees.map(fee => fee.id)
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(data.message || `${data.data?.success || 0}건 발송 완료`);
+        setSelectedRows([]);
+        fetchTuitionHistoryWithFilters(false);
+      } else {
+        toast.error(data.error || "청구서 발송 중 오류가 발생했습니다.");
+      }
+    } catch (error) {
+      console.error("Send invoice error:", error);
+      toast.error("청구서 발송 중 오류가 발생했습니다.");
+    } finally {
+      setIsSendingInvoices(false);
+    }
+  };
+
+  // 현장결제 완료 처리 핸들러 (DB만 업데이트)
+  const handleOfflinePaymentComplete = async () => {
+    // selectedRows는 data 배열의 global index를 저장하므로 data[index]로 접근
+    const selectedFees = selectedRows
+      .map(index => data[index])
+      .filter(Boolean)
+      .filter(row =>
+        row.paysSamRequestStatus === 'created' ||
+        row.paysSamRequestStatus === 'sent'
+      ); // created 또는 sent 상태만
+
+    if (selectedFees.length === 0) {
+      toast.error("현장결제 처리할 수 있는 항목이 없습니다.\n(생성됨 또는 청구됨 상태만 가능)");
+      return;
+    }
+
+    const confirmPayment = window.confirm(
+      `선택한 ${selectedFees.length}건을 현장결제 완료로 처리하시겠습니까?\n\n` +
+      `※ PaysSam 앱에서 실제 결제를 먼저 진행해주세요.\n` +
+      `※ DB에서 완납 처리만 됩니다 (PaysSam API 호출 없음).`
+    );
+
+    if (!confirmPayment) return;
+
+    setIsProcessingOfflinePayment(true);
+    try {
+      const response = await fetch("/api/payssam/offline-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tuitionFeeIds: selectedFees.map(fee => fee.id)
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(data.message || `${data.data?.success || 0}건 완료 처리`);
+        setSelectedRows([]);
+        fetchTuitionHistoryWithFilters(false);
+      } else {
+        toast.error(data.error || "현장결제 처리 중 오류가 발생했습니다.");
+      }
+    } catch (error) {
+      console.error("Offline payment error:", error);
+      toast.error("현장결제 처리 중 오류가 발생했습니다.");
+    } finally {
+      setIsProcessingOfflinePayment(false);
+    }
+  };
+
+  // 선택된 항목 중 발송/현장결제 가능한 건수 계산
+  // PaysSam에서는 "발송"이 곧 "등록"이므로 1단계 워크플로우로 통합
+  const getInvoiceActionCounts = () => {
+    // selectedRows는 data 배열의 global index를 저장하고 있으므로
+    // data[index]로 접근해야 함 (filteredData[index]가 아님)
+    const selectedFees = selectedRows.map(index => data[index]).filter(Boolean);
+
+    // 발송 가능: 청구서가 없고 완납이 아닌 건
+    const sendableCount = selectedFees.filter(
+      row => !row.paysSamBillId && row.paymentStatus !== '완납'
+    ).length;
+
+    // 현장결제 가능: 청구서가 발송된 상태 (sent)
+    const offlinePayableCount = selectedFees.filter(
+      row => row.paysSamRequestStatus === 'sent'
+    ).length;
+
+    return { sendableCount, offlinePayableCount };
+  };
+
   // 선택된 행들의 TuitionRow 데이터 가져오기
   const getSelectedFeesForInvoice = (): TuitionRow[] => {
+    // selectedRows는 data 배열의 global index를 저장하므로 data[index]로 접근
     return selectedRows
-      .map(index => filteredData[index])
+      .map(index => data[index])
       .filter(Boolean);
   };
 
@@ -723,14 +856,28 @@ export default function TuitionHistoryPage() {
             <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
             {isSyncing ? '동기화 중...' : '상태 동기화'}
           </Button>
+
+          {/* 청구서 발송 (1단계 워크플로우: 결제선생 등록 + 카카오톡 발송) */}
           <Button
-            onClick={() => setShowSendInvoiceModal(true)}
-            disabled={selectedRows.length === 0}
             size="sm"
+            onClick={handleBulkSendInvoices}
+            disabled={selectedRows.length === 0 || isSendingInvoices}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            <Send className="w-4 h-4 mr-2" />
-            청구서 발송 ({selectedRows.length})
+            <Send className={`w-4 h-4 mr-2 ${isSendingInvoices ? 'animate-pulse' : ''}`} />
+            {isSendingInvoices ? '발송 중...' : `청구서 발송 (${getInvoiceActionCounts().sendableCount})`}
+          </Button>
+
+          {/* 현장결제 완료 */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOfflinePaymentComplete}
+            disabled={selectedRows.length === 0 || isProcessingOfflinePayment}
+            className="text-green-600 border-green-200 hover:bg-green-50"
+          >
+            <CreditCard className={`w-4 h-4 mr-2 ${isProcessingOfflinePayment ? 'animate-pulse' : ''}`} />
+            {isProcessingOfflinePayment ? '처리 중...' : `현장결제 완료 (${getInvoiceActionCounts().offlinePayableCount})`}
           </Button>
         </div>
       </div>
@@ -818,6 +965,7 @@ export default function TuitionHistoryPage() {
           <TuitionTable
             rows={paginatedData}
             originalRows={filteredData}
+            totalFilteredCount={filteredData.length}
             onRowChange={handleRowChange}
             onRowDelete={handleRowDelete}
             onRowSave={handleRowSave}
@@ -827,8 +975,10 @@ export default function TuitionHistoryPage() {
               const globalIndex = data.findIndex(item => item.id === row.id);
               return selectedRows.includes(globalIndex) ? idx : -1;
             }).filter(i => i !== -1)}
+            totalSelectedCount={selectedRows.length}
             onRowSelect={handleRowSelect}
             onSelectAll={handleSelectAll}
+            onSelectAllFiltered={handleSelectAllFiltered}
             onBulkDelete={handleBulkDelete}
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}

@@ -2,15 +2,16 @@
 "use client"
 
 import React from "react"
+import { useRouter } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Save } from "lucide-react"
+import { Trash2, Calendar, Save, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CLASS_TYPES, CLASS_TYPE_LABELS, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus } from "@/types/tuition"
-import { PaymentStatusBadge, InvoiceActions } from "@/components/payssam"
+import { PaymentStatusBadge } from "@/components/payssam"
 
 interface TuitionRowProps {
   row: TuitionRowType
@@ -37,6 +38,12 @@ export function TuitionRow({
   isReadOnly = false,
   isHistoryMode = false
 }: TuitionRowProps) {
+  const router = useRouter()
+
+  // 상세 페이지로 이동
+  const handleNavigateToDetail = () => {
+    router.push(`/students/tuition-history/${row.id}`)
+  }
   // 납부상태별 스타일링
   const getPaymentStatusStyle = (status: PaymentStatus): string => {
     switch (status) {
@@ -291,13 +298,18 @@ export function TuitionRow({
       {/* 청구 상태 (PaysSam) - 이력 모드에서만 표시 */}
       {isHistoryMode && (
         <td className="min-w-[100px] w-[10%] px-3 py-3">
-          <div className="flex items-center gap-2">
+          <button
+            onClick={handleNavigateToDetail}
+            className="flex items-center gap-1.5 group/badge cursor-pointer hover:opacity-80 transition-opacity"
+            title="상세 보기"
+          >
             <PaymentStatusBadge
               status={row.paysSamRequestStatus || null}
               size="sm"
               showIcon={true}
             />
-          </div>
+            <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover/badge:opacity-100 transition-opacity" />
+          </button>
         </td>
       )}
 
@@ -315,15 +327,6 @@ export function TuitionRow({
               >
                 ✅
               </Button>
-            )}
-            {isHistoryMode && (
-              <InvoiceActions
-                tuitionFeeId={row.id}
-                paysSamStatus={row.paysSamRequestStatus || null}
-                paysSamBillId={row.paysSamBillId || null}
-                shortUrl={row.paysSamShortUrl || null}
-                onActionComplete={onRefresh}
-              />
             )}
             <Button
               size="sm"

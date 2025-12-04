@@ -6,6 +6,7 @@ import type { PaysSamRequestStatus } from "@/types/tuition"
 import { PAYSSAM_STATUS_LABELS } from "@/types/tuition"
 import {
   Clock,
+  FileText,
   Send,
   CheckCircle2,
   XCircle,
@@ -36,6 +37,13 @@ const STATUS_CONFIG: Record<
     bgColor: "bg-slate-50",
     borderColor: "border-slate-200",
     icon: Clock,
+  },
+  created: {
+    label: PAYSSAM_STATUS_LABELS.created,
+    color: "text-yellow-600",
+    bgColor: "bg-yellow-50",
+    borderColor: "border-yellow-200",
+    icon: FileText,
   },
   sent: {
     label: PAYSSAM_STATUS_LABELS.sent,
