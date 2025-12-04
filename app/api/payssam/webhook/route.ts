@@ -30,11 +30,15 @@ const STATUS_MAP: Record<PaysSamApprState, {
 }
 
 export async function POST(request: NextRequest) {
+  // 🔍 DEBUG: 웹훅 요청 도착 확인
+  console.log('🚨 [PaysSam Webhook] ===== WEBHOOK RECEIVED =====')
+  console.log('[PaysSam Webhook] Request headers:', Object.fromEntries(request.headers))
+
   try {
     const body = await request.json() as PaysSamWebhookPayload
 
     // 로그 기록 (디버깅용)
-    console.log('[PaysSam Webhook] Received:', JSON.stringify(body, null, 2))
+    console.log('[PaysSam Webhook] 📥 Payload:', JSON.stringify(body, null, 2))
 
     // 필수값 검증
     if (!body.bill_id || !body.appr_state) {

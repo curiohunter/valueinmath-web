@@ -66,6 +66,16 @@ export async function createInvoice(params: CreateInvoiceParams) {
   const expireDt = getExpireDate(expireYear, expireMonth)
   const callbackURL = `${process.env.NEXT_PUBLIC_SITE_URL}/api/payssam/webhook`
 
+  // 🔍 DEBUG: callbackURL 확인 (웹훅이 안 들어오는 문제 디버깅)
+  console.log('[createInvoice] 📌 callbackURL 확인:', {
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    callbackURL,
+    billId,
+    phone,
+    price,
+    expireDt,
+  })
+
   // PaysSam API 호출 (청구서 등록 + 카카오톡 발송)
   const result = await paysamRequest<PaysSamSendResponse>('/if/bill/send', {
     bill: {
