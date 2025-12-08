@@ -124,9 +124,17 @@ export function PointBalance({
           <Coins className="w-3 h-3 mr-1" />
           {isLoading ? "로딩..." : `${Number(balance?.balance || 0).toLocaleString()}P`}
         </Badge>
-        {balance?.config?.environment === "개발" && (
-          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200">
-            개발
+        {balance?.config?.environment && (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-xs",
+              balance.config.environment === "운영"
+                ? "bg-green-50 text-green-600 border-green-200"
+                : "bg-blue-50 text-blue-600 border-blue-200"
+            )}
+          >
+            {balance.config.environment}
           </Badge>
         )}
       </div>
