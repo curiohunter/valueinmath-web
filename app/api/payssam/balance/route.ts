@@ -49,10 +49,12 @@ export async function GET(request: NextRequest) {
 
     if (result.success) {
       const configInfo = getConfigInfo()
+      // 운영: info.remain_count, 테스트: remain_count
+      const balance = result.data?.info?.remain_count || result.data?.remain_count || '0'
       return NextResponse.json({
         success: true,
         data: {
-          balance: result.data?.remain_count || '0',
+          balance: String(balance),
           config: {
             environment: configInfo.isProduction ? '운영' : '개발',
             member: configInfo.member,

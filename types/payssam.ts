@@ -157,7 +157,10 @@ export interface PaysSamReadResponse {
 export interface PaysSamBalanceResponse {
   code: string
   msg: string
-  remain_count?: string       // 잔여 포인트
+  remain_count?: string | number  // 테스트 환경: 최상위
+  info?: {                        // 운영 환경: info 하위
+    remain_count?: string | number
+  }
 }
 
 // ============================================
