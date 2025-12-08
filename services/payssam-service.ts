@@ -36,6 +36,11 @@ interface CreateInvoiceParams {
   message?: string
   expireYear?: number
   expireMonth?: number
+  // 새 템플릿용 필드
+  className?: string
+  periodStartDate?: string | null
+  periodEndDate?: string | null
+  note?: string | null
 }
 
 /**
@@ -47,6 +52,46 @@ interface CreateInvoiceParams {
  * 참고: PaysSam에서 "발송"이 곧 "등록"임.
  * 발송 후 결제선생 앱에서 현장결제 가능.
  */
+/**
+ * 청구서 메시지 생성 (템플릿 B)
+ * 형식:
+ * ■ 수업: {반이름}
+ * ■ 기간: {시작일} ~ {종료일}
+ * ■ 금액: {금액}원
+ *
+ * [안내] {비고}
+ */
+function buildInvoiceMessage(params: {
+  className?: string
+  periodStartDate?: string | null
+  periodEndDate?: string | null
+  amount: number
+  note?: string | null
+}): string {
+  const { className, periodStartDate, periodEndDate, amount, note } = params
+
+  const lines: string[] = []
+
+  if (className) {
+    lines.push(`■ 수업: ${className}`)
+  }
+
+  if (periodStartDate && periodEndDate) {
+    // 날짜 포맷: YYYY-MM-DD → YYYY.MM.DD
+    const formatDate = (d: string) => d.replace(/-/g, '.')
+    lines.push(`■ 기간: ${formatDate(periodStartDate)} ~ ${formatDate(periodEndDate)}`)
+  }
+
+  lines.push(`■ 금액: ${amount.toLocaleString()}원`)
+
+  if (note && note.trim()) {
+    lines.push('')
+    lines.push(`[안내] ${note.trim()}`)
+  }
+
+  return lines.join('\n')
+}
+
 export async function createInvoice(params: CreateInvoiceParams) {
   const {
     tuitionFeeId,
@@ -54,10 +99,23 @@ export async function createInvoice(params: CreateInvoiceParams) {
     parentPhone,
     amount,
     productName,
-    message = '밸류인수학 학원비 청구서입니다.',
+    message,
     expireYear,
     expireMonth,
+    className,
+    periodStartDate,
+    periodEndDate,
+    note,
   } = params
+
+  // 메시지 생성: 커스텀 메시지 > 템플릿 생성 > 기본값
+  const finalMessage = message || buildInvoiceMessage({
+    className,
+    periodStartDate,
+    periodEndDate,
+    amount,
+    note,
+  }) || '밸류인수학 학원비 청구서입니다.'
 
   const billId = generateBillId()
   const phone = normalizePhone(parentPhone)
@@ -81,7 +139,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
     bill: {
       bill_id: billId,
       product_nm: productName,
-      message,
+      message: finalMessage,
       member_nm: studentName,
       phone,
       price,
@@ -198,6 +256,9 @@ export async function createInvoicesBulk(
       student_name_snapshot,
       class_name_snapshot,
       payssam_bill_id,
+      period_start_date,
+      period_end_date,
+      note,
       students!inner(
         id,
         name,
@@ -258,7 +319,8 @@ export async function createInvoicesBulk(
       continue
     }
 
-    const productName = `${fee.class_name_snapshot || '수업료'} (${fee.year}년 ${fee.month}월)`
+    // 제목: 밸류인수학 {연도}년 {월}월 학원비
+    const productName = `밸류인수학 ${fee.year}년 ${fee.month}월 학원비`
 
     const result = await createInvoice({
       tuitionFeeId: fee.id,
@@ -268,6 +330,11 @@ export async function createInvoicesBulk(
       productName,
       expireYear: fee.year,
       expireMonth: fee.month,
+      // 템플릿용 필드
+      className: fee.class_name_snapshot || undefined,
+      periodStartDate: fee.period_start_date,
+      periodEndDate: fee.period_end_date,
+      note: fee.note,
     })
 
     if (result.success) {
@@ -309,6 +376,11 @@ interface SendInvoiceParams {
   message?: string
   expireYear?: number
   expireMonth?: number
+  // 새 템플릿용 필드
+  className?: string
+  periodStartDate?: string | null
+  periodEndDate?: string | null
+  note?: string | null
 }
 
 /**
@@ -325,11 +397,24 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     parentPhone,
     amount,
     productName,
-    message = '밸류인수학 학원비 청구서입니다.',
+    message,
     expireYear,
     expireMonth,
     existingBillId,
+    className,
+    periodStartDate,
+    periodEndDate,
+    note,
   } = params
+
+  // 메시지 생성: 커스텀 메시지 > 템플릿 생성 > 기본값
+  const finalMessage = message || buildInvoiceMessage({
+    className,
+    periodStartDate,
+    periodEndDate,
+    amount,
+    note,
+  }) || '밸류인수학 학원비 청구서입니다.'
 
   // 이미 생성된 청구서가 있으면 사용, 없으면 새로 생성
   const billId = existingBillId || generateBillId()
@@ -343,7 +428,7 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     bill: {
       bill_id: billId,
       product_nm: productName,
-      message,
+      message: finalMessage,
       member_nm: studentName,
       phone,
       price,
@@ -443,6 +528,9 @@ export async function sendInvoicesBulk(
       class_name_snapshot,
       payssam_bill_id,
       payssam_request_status,
+      period_start_date,
+      period_end_date,
+      note,
       students!inner(
         id,
         name,
@@ -494,7 +582,8 @@ export async function sendInvoicesBulk(
       continue
     }
 
-    const productName = `${fee.class_name_snapshot || '수업료'} (${fee.year}년 ${fee.month}월)`
+    // 제목: 밸류인수학 {연도}년 {월}월 학원비
+    const productName = `밸류인수학 ${fee.year}년 ${fee.month}월 학원비`
 
     const result = await sendInvoice({
       tuitionFeeId: fee.id,
@@ -506,6 +595,11 @@ export async function sendInvoicesBulk(
       expireMonth: fee.month,
       // created 상태면 기존 bill_id 사용
       existingBillId: fee.payssam_request_status === 'created' ? fee.payssam_bill_id : undefined,
+      // 템플릿용 필드
+      className: fee.class_name_snapshot || undefined,
+      periodStartDate: fee.period_start_date,
+      periodEndDate: fee.period_end_date,
+      note: fee.note,
     })
 
     if (result.success) {
