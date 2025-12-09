@@ -6,8 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Search, CheckCircle2, XCircle, Eye, EyeOff } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Search, CheckCircle2, XCircle, Eye, EyeOff, Loader2 } from "lucide-react"
 import { getStudentsWithCommentStatus } from "@/services/comments"
+import { toast } from "sonner"
 import type { LearningComment } from "@/types/comments"
 
 interface StudentWithComment {
@@ -50,6 +53,10 @@ export function StudentManagementList({
   const [filterGrade, setFilterGrade] = useState<string>("전체")
   const [filterStatus, setFilterStatus] = useState<string>("전체")
 
+  // 다중 선택을 위한 상태
+  const [selectedCommentIds, setSelectedCommentIds] = useState<Set<string>>(new Set())
+  const [isUpdating, setIsUpdating] = useState(false)
+
   // 학생 목록 로드
   const loadStudents = async () => {
     setLoading(true)
@@ -60,6 +67,8 @@ export function StudentManagementList({
         teacherId
       )
       setStudents(data)
+      // 새로고침 시 선택 초기화
+      setSelectedCommentIds(new Set())
     } catch (error) {
       console.error("학생 목록 로딩 오류:", error)
     } finally {
@@ -147,6 +156,11 @@ export function StudentManagementList({
     })
   }, [students, searchQuery, filterClass, filterGrade, filterStatus])
 
+  // 코멘트가 있는 학생만 필터링 (선택 가능한 학생)
+  const studentsWithComments = useMemo(() => {
+    return filteredStudents.filter((s) => s.hasComment && s.comment?.id)
+  }, [filteredStudents])
+
   // 통계
   const stats = useMemo(() => {
     const total = filteredStudents.length
@@ -159,6 +173,76 @@ export function StudentManagementList({
   const currentYear = new Date().getFullYear()
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
   const monthOptions = Array.from({ length: 12 }, (_, i) => i + 1)
+
+  // 전체 선택 핸들러
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(studentsWithComments.map((s) => s.comment!.id))
+      setSelectedCommentIds(allIds)
+    } else {
+      setSelectedCommentIds(new Set())
+    }
+  }
+
+  // 개별 선택 핸들러
+  const handleSelectOne = (commentId: string, checked: boolean) => {
+    const newSet = new Set(selectedCommentIds)
+    if (checked) {
+      newSet.add(commentId)
+    } else {
+      newSet.delete(commentId)
+    }
+    setSelectedCommentIds(newSet)
+  }
+
+  // 전체 선택 여부
+  const isAllSelected = studentsWithComments.length > 0 &&
+    studentsWithComments.every((s) => selectedCommentIds.has(s.comment!.id))
+
+  // 일부 선택 여부
+  const isPartiallySelected = selectedCommentIds.size > 0 && !isAllSelected
+
+  // 일괄 공개/비공개 설정
+  const handleBatchVisibility = async (isPublic: boolean) => {
+    if (selectedCommentIds.size === 0) {
+      toast.error("선택된 코멘트가 없습니다.")
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      const response = await fetch("/api/learning-comments/batch-visibility", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comment_ids: Array.from(selectedCommentIds),
+          is_public: isPublic,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "공개 설정 변경에 실패했습니다.")
+      }
+
+      toast.success(result.message)
+
+      // 데이터 새로고침
+      await loadStudents()
+      setSelectedCommentIds(new Set())
+
+      // 부모 컴포넌트 새로고침 (우측 패널용)
+      if (onRefresh) {
+        onRefresh()
+      }
+    } catch (error: any) {
+      console.error("Batch visibility error:", error)
+      toast.error(error.message || "공개 설정 변경에 실패했습니다.")
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   return (
     <Card>
@@ -281,68 +365,133 @@ export function StudentManagementList({
           </Select>
         </div>
 
+        {/* 일괄 공개/비공개 버튼 */}
+        {selectedCommentIds.size > 0 && (
+          <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+            <span className="text-sm font-medium">
+              {selectedCommentIds.size}개 선택됨
+            </span>
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBatchVisibility(true)}
+              disabled={isUpdating}
+              className="gap-1"
+            >
+              {isUpdating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Eye className="h-3 w-3" />
+              )}
+              공개로 변경
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleBatchVisibility(false)}
+              disabled={isUpdating}
+              className="gap-1"
+            >
+              {isUpdating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <EyeOff className="h-3 w-3" />
+              )}
+              비공개로 변경
+            </Button>
+          </div>
+        )}
+
         {/* 학생 테이블 */}
         <div className="border rounded-md">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[120px]">이름</TableHead>
-                <TableHead className="w-[80px]">학년</TableHead>
-                <TableHead className="w-[90px]">반</TableHead>
-                <TableHead className="w-[110px]">학교</TableHead>
+                <TableHead className="w-[40px]">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="전체 선택"
+                    disabled={studentsWithComments.length === 0}
+                    className={isPartiallySelected ? "data-[state=checked]:bg-primary/50" : ""}
+                  />
+                </TableHead>
+                <TableHead className="w-[100px]">이름</TableHead>
+                <TableHead className="w-[60px]">학년</TableHead>
+                <TableHead className="w-[80px]">반</TableHead>
+                <TableHead className="w-[90px]">학교</TableHead>
                 <TableHead className="text-center w-[120px]">작성상태</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     로딩 중...
                   </TableCell>
                 </TableRow>
               ) : filteredStudents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     학생이 없습니다.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredStudents.map((student, index) => (
-                  <TableRow
-                    key={`${student.id}-${student.className || 'no-class'}-${index}`}
-                    className={`cursor-pointer hover:bg-muted/50 ${
-                      selectedStudentId === student.id ? "bg-muted" : ""
-                    }`}
-                    onClick={() => onStudentSelect(student)}
-                  >
-                    <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell className="text-sm">{student.grade}학년</TableCell>
-                    <TableCell className="text-sm">{student.className || "-"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground truncate">
-                      {student.school}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {student.hasComment ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            작성완료
+                filteredStudents.map((student, index) => {
+                  const hasComment = student.hasComment && student.comment?.id
+                  const isSelected = hasComment && selectedCommentIds.has(student.comment!.id)
+
+                  return (
+                    <TableRow
+                      key={`${student.id}-${student.className || 'no-class'}-${index}`}
+                      className={`cursor-pointer hover:bg-muted/50 ${
+                        selectedStudentId === student.id ? "bg-muted" : ""
+                      }`}
+                      onClick={() => onStudentSelect(student)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {hasComment ? (
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) =>
+                              handleSelectOne(student.comment!.id, checked as boolean)
+                            }
+                            aria-label={`${student.name} 선택`}
+                          />
+                        ) : (
+                          <div className="w-4 h-4" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{student.name}</TableCell>
+                      <TableCell className="text-sm">{student.grade}학년</TableCell>
+                      <TableCell className="text-sm">{student.className || "-"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground truncate">
+                        {student.school}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {student.hasComment ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              작성완료
+                            </Badge>
+                            {student.comment?.is_public ? (
+                              <Eye className="h-3 w-3 text-green-600" title="공개" />
+                            ) : (
+                              <EyeOff className="h-3 w-3 text-gray-400" title="비공개" />
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            미작성
                           </Badge>
-                          {student.comment?.is_public ? (
-                            <Eye className="h-3 w-3 text-green-600" title="공개" />
-                          ) : (
-                            <EyeOff className="h-3 w-3 text-gray-400" title="비공개" />
-                          )}
-                        </div>
-                      ) : (
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          미작성
-                        </Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>

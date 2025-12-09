@@ -19,7 +19,7 @@ import {
 } from "@/types/portal"
 import { getStudentComments } from "@/lib/comments-client"
 
-export async function getPortalData(studentId: string): Promise<PortalData> {
+export async function getPortalData(studentId: string, isTeacher: boolean = false): Promise<PortalData> {
   const supabase = createClient()
 
   // 현재 로그인한 사용자 조회 (상담 요청 필터링용)
@@ -240,7 +240,8 @@ export async function getPortalData(studentId: string): Promise<PortalData> {
   }))
 
   // Get learning comments with replies and reactions
-  const learningComments = await getStudentComments(studentId)
+  // 선생님은 모든 코멘트 조회, 학부모/학생은 공개된 코멘트만 조회
+  const learningComments = await getStudentComments(studentId, isTeacher)
 
   // Map consultation requests
   const consultationRequests = consultationRequestsData.data.map((req: any) => ({
