@@ -7,7 +7,7 @@ import * as z from "zod"
 import { CommentCardData } from "@/types/comments"
 import { ConsultationRequest } from "@/types/consultation-requests"
 import { Button } from "@/components/ui/button"
-import { MessageSquarePlus, MessageCircle, Save, Calendar, User, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react"
+import { MessageSquarePlus, MessageCircle, Save, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LearningCommentCard } from "./learning-comment-card"
 import { ConsultationRequestModal } from "./consultation-request-modal"
@@ -28,8 +28,6 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { toast } from "sonner"
 
@@ -40,7 +38,6 @@ const commentFormSchema = z.object({
     .string()
     .min(10, "코멘트 내용을 10자 이상 입력해주세요.")
     .max(2000, "코멘트 내용은 2000자 이내로 작성해주세요."),
-  is_public: z.boolean().default(false),
 })
 
 type CommentFormData = z.infer<typeof commentFormSchema>
@@ -83,7 +80,6 @@ export function CommentsSection({
       year: defaultYear,
       month: defaultMonth,
       content: "",
-      is_public: false,
     },
   })
 
@@ -113,7 +109,7 @@ export function CommentsSection({
           year: data.year,
           month: data.month,
           content: data.content,
-          is_public: data.is_public,
+          is_public: false, // 새 코멘트는 기본 비공개, 왼쪽 테이블에서 공개 설정
         }),
       })
 
@@ -130,7 +126,6 @@ export function CommentsSection({
         year: defaultYear,
         month: defaultMonth,
         content: "",
-        is_public: false,
       })
 
       // Trigger parent refresh
@@ -211,6 +206,8 @@ export function CommentsSection({
             </CardTitle>
             <CardDescription>
               선택된 학생의 월별 학습 코멘트를 작성할 수 있습니다.
+              <br />
+              <span className="text-xs">작성된 코멘트의 공개/비공개는 왼쪽 학생 목록에서 설정합니다.</span>
             </CardDescription>
           </CardHeader>
 
@@ -297,37 +294,6 @@ export function CommentsSection({
                           {contentLength}/2000
                         </span>
                       </div>
-                    </FormItem>
-                  )}
-                />
-
-                {/* Public/Private Toggle */}
-                <FormField
-                  control={form.control}
-                  name="is_public"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="flex items-center gap-2">
-                          {field.value ? (
-                            <Eye className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <EyeOff className="h-4 w-4 text-gray-400" />
-                          )}
-                          학부모에게 공개
-                        </FormLabel>
-                        <p className="text-xs text-muted-foreground">
-                          {field.value
-                            ? "이 코멘트는 학부모 포털에 표시됩니다"
-                            : "이 코멘트는 학부모에게 공개되지 않습니다"}
-                        </p>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
                     </FormItem>
                   )}
                 />

@@ -61,7 +61,8 @@ export function PortalView({
     setError(null)
 
     try {
-      const data = await getPortalData(studentId)
+      const isTeacher = viewerRole === "employee"
+      const data = await getPortalData(studentId, isTeacher)
       setPortalData(data)
     } catch (err: any) {
       console.error("Error loading portal data:", err)
