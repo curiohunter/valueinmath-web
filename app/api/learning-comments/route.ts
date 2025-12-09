@@ -30,7 +30,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { id, content } = body
+    const { id, content, is_public } = body
 
     if (!id || !content) {
       return NextResponse.json(
@@ -68,9 +68,17 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update comment
+    const updateData: { content: string; updated_at: string; is_public?: boolean } = {
+      content,
+      updated_at: new Date().toISOString(),
+    }
+    if (typeof is_public === 'boolean') {
+      updateData.is_public = is_public
+    }
+
     const { data: comment, error: updateError } = await supabase
       .from("learning_comments")
-      .update({ content, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single()
@@ -208,7 +216,7 @@ export async function POST(request: NextRequest) {
 
     // Get request body
     const body = await request.json()
-    const { student_id, year, month, content } = body
+    const { student_id, year, month, content, is_public = false } = body
 
     // Validate required fields
     if (!student_id || !year || !month || !content) {
@@ -268,6 +276,7 @@ export async function POST(request: NextRequest) {
         year,
         month,
         content,
+        is_public,
       })
       .select()
       .single()

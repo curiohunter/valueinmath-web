@@ -8,12 +8,17 @@ import {
 /**
  * 학생의 월별 학습 코멘트 목록 조회 (포털용)
  * RLS: 해당 학생/학부모만 조회 가능
+ * @param studentId 학생 ID
+ * @param isTeacher 선생님 여부 (true면 비공개 코멘트도 조회)
  */
-export async function getStudentComments(studentId: string): Promise<CommentCardData[]> {
+export async function getStudentComments(
+  studentId: string,
+  isTeacher: boolean = false
+): Promise<CommentCardData[]> {
   const supabase = createClient()
 
   // 1. 코멘트 조회 (선생님 이름 포함)
-  const { data: comments, error: commentsError } = await supabase
+  let query = supabase
     .from("learning_comments")
     .select(`
       *,
@@ -22,6 +27,13 @@ export async function getStudentComments(studentId: string): Promise<CommentCard
       )
     `)
     .eq("student_id", studentId)
+
+  // 학부모/학생은 공개된 코멘트만 조회
+  if (!isTeacher) {
+    query = query.eq("is_public", true)
+  }
+
+  const { data: comments, error: commentsError } = await query
     .order("year", { ascending: false })
     .order("month", { ascending: false })
 
@@ -66,6 +78,7 @@ export async function getStudentComments(studentId: string): Promise<CommentCard
       year: comment.year,
       month: comment.month,
       content: comment.content,
+      is_public: comment.is_public ?? false,
       created_at: comment.created_at,
       updated_at: comment.updated_at,
       teacher_name: (comment.teacher as any)?.name || "알 수 없음",

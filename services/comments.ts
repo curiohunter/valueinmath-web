@@ -32,6 +32,7 @@ export async function getCommentsByTeacher(teacherId: string): Promise<LearningC
     year: comment.year,
     month: comment.month,
     content: comment.content,
+    is_public: comment.is_public ?? false,
     created_at: comment.created_at,
     updated_at: comment.updated_at,
     student_name: (comment.student as any)?.name || "알 수 없음",
@@ -66,6 +67,7 @@ export async function getCommentsByStudent(studentId: string): Promise<LearningC
     year: comment.year,
     month: comment.month,
     content: comment.content,
+    is_public: comment.is_public ?? false,
     created_at: comment.created_at,
     updated_at: comment.updated_at,
     teacher_name: (comment.teacher as any)?.name || "알 수 없음",
@@ -103,6 +105,7 @@ export async function createLearningComment(
       year: data.year,
       month: data.month,
       content: data.content,
+      is_public: data.is_public ?? false,
     })
     .select()
     .single()
@@ -117,6 +120,7 @@ export async function createLearningComment(
     year: comment.year,
     month: comment.month,
     content: comment.content,
+    is_public: comment.is_public ?? false,
     created_at: comment.created_at,
     updated_at: comment.updated_at,
   }
@@ -238,6 +242,7 @@ export async function getStudentCommentStatus(
       year: comment.year,
       month: comment.month,
       content: comment.content,
+      is_public: comment.is_public ?? false,
       created_at: comment.created_at,
       updated_at: comment.updated_at,
     },
@@ -320,6 +325,7 @@ export async function getStudentsWithCommentStatus(
       year: comment.year,
       month: comment.month,
       content: comment.content,
+      is_public: comment.is_public ?? false,
       created_at: comment.created_at,
       updated_at: comment.updated_at,
     })
