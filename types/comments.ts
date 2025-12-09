@@ -10,6 +10,7 @@ export interface LearningComment {
   year: number
   month: number
   content: string
+  is_public: boolean  // 학부모 포털 공개 여부
   created_at: string
   updated_at: string
 
@@ -45,4 +46,5 @@ export interface LearningCommentFormData {
   year: number
   month: number
   content: string
+  is_public?: boolean
 }

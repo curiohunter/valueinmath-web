@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Search, CheckCircle2, XCircle } from "lucide-react"
+import { Search, CheckCircle2, XCircle, Eye, EyeOff } from "lucide-react"
 import { getStudentsWithCommentStatus } from "@/services/comments"
 import type { LearningComment } from "@/types/comments"
 
@@ -323,10 +323,17 @@ export function StudentManagementList({
                     </TableCell>
                     <TableCell className="text-center">
                       {student.hasComment ? (
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          작성완료
-                        </Badge>
+                        <div className="flex items-center justify-center gap-1">
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            작성완료
+                          </Badge>
+                          {student.comment?.is_public ? (
+                            <Eye className="h-3 w-3 text-green-600" title="공개" />
+                          ) : (
+                            <EyeOff className="h-3 w-3 text-gray-400" title="비공개" />
+                          )}
+                        </div>
                       ) : (
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
                           <XCircle className="h-3 w-3 mr-1" />
