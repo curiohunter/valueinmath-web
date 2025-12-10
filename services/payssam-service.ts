@@ -36,7 +36,8 @@ interface CreateInvoiceParams {
   message?: string
   expireYear?: number
   expireMonth?: number
-  // 새 템플릿용 필드
+  // 템플릿용 필드
+  classType?: string // '정규' | '특강' | '입학테스트비'
   className?: string
   periodStartDate?: string | null
   periodEndDate?: string | null
@@ -53,37 +54,49 @@ interface CreateInvoiceParams {
  * 발송 후 결제선생 앱에서 현장결제 가능.
  */
 /**
- * 청구서 메시지 생성 (템플릿 B)
- * 형식:
+ * 청구서 메시지 생성 (수업 타입별 템플릿)
+ *
+ * 정규/특강:
  * ■ 수업: {반이름}
  * ■ 기간: {시작일} ~ {종료일}
  * ■ 금액: {금액}원
+ * [안내] {비고}
  *
+ * 입학테스트비:
+ * ■ 기간: {시작일} ~ {종료일}
+ * ■ 금액: {금액}원
  * [안내] {비고}
  */
 function buildInvoiceMessage(params: {
+  classType?: string // '정규' | '특강' | '입학테스트비'
   className?: string
   periodStartDate?: string | null
   periodEndDate?: string | null
   amount: number
   note?: string | null
 }): string {
-  const { className, periodStartDate, periodEndDate, amount, note } = params
+  const { classType, className, periodStartDate, periodEndDate, amount, note } = params
 
   const lines: string[] = []
 
-  if (className) {
+  // 수업 타입별 레이블 (입학테스트비는 반 정보 없음)
+  if (classType === '입학테스트비') {
+    // 입학테스트비는 반 정보 표시 안함
+  } else if (className) {
+    // 정규, 특강은 반 정보 표시
     lines.push(`■ 수업: ${className}`)
   }
 
+  // 기간 (모든 타입 공통)
   if (periodStartDate && periodEndDate) {
-    // 날짜 포맷: YYYY-MM-DD → YYYY.MM.DD
     const formatDate = (d: string) => d.replace(/-/g, '.')
     lines.push(`■ 기간: ${formatDate(periodStartDate)} ~ ${formatDate(periodEndDate)}`)
   }
 
+  // 금액 (모든 타입 공통)
   lines.push(`■ 금액: ${amount.toLocaleString()}원`)
 
+  // 안내/비고 (모든 타입 공통)
   if (note && note.trim()) {
     lines.push('')
     lines.push(`[안내] ${note.trim()}`)
@@ -102,6 +115,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
     message,
     expireYear,
     expireMonth,
+    classType,
     className,
     periodStartDate,
     periodEndDate,
@@ -110,6 +124,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
 
   // 메시지 생성: 커스텀 메시지 > 템플릿 생성 > 기본값
   const finalMessage = message || buildInvoiceMessage({
+    classType,
     className,
     periodStartDate,
     periodEndDate,
@@ -331,6 +346,7 @@ export async function createInvoicesBulk(
       expireYear: fee.year,
       expireMonth: fee.month,
       // 템플릿용 필드
+      classType: fee.class_type || undefined,
       className: fee.class_name_snapshot || undefined,
       periodStartDate: fee.period_start_date,
       periodEndDate: fee.period_end_date,
@@ -376,7 +392,8 @@ interface SendInvoiceParams {
   message?: string
   expireYear?: number
   expireMonth?: number
-  // 새 템플릿용 필드
+  // 템플릿용 필드
+  classType?: string // '정규' | '특강' | '입학테스트비'
   className?: string
   periodStartDate?: string | null
   periodEndDate?: string | null
@@ -401,6 +418,7 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     expireYear,
     expireMonth,
     existingBillId,
+    classType,
     className,
     periodStartDate,
     periodEndDate,
@@ -409,6 +427,7 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
 
   // 메시지 생성: 커스텀 메시지 > 템플릿 생성 > 기본값
   const finalMessage = message || buildInvoiceMessage({
+    classType,
     className,
     periodStartDate,
     periodEndDate,
@@ -596,6 +615,7 @@ export async function sendInvoicesBulk(
       // created 상태면 기존 bill_id 사용
       existingBillId: fee.payssam_request_status === 'created' ? fee.payssam_bill_id : undefined,
       // 템플릿용 필드
+      classType: fee.class_type || undefined,
       className: fee.class_name_snapshot || undefined,
       periodStartDate: fee.period_start_date,
       periodEndDate: fee.period_end_date,
