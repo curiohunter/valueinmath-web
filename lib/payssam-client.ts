@@ -152,6 +152,16 @@ export async function paysamRequest<T = any>(
       return { success: true, data: data as T, code: data.code }
     }
 
+    // /if/bill/read API 특수 케이스: code 없이 appr_state 필드가 있으면 유효한 응답
+    // 청구서 조회 시 삭제(D), 대기(W), 완료(F), 취소(C) 등의 상태로 응답
+    if (endpoint === '/if/bill/read' && 'appr_state' in data) {
+      console.log('[PaysSam API Success] Bill read response with appr_state:', {
+        endpoint,
+        appr_state: (data as any).appr_state,
+      })
+      return { success: true, data: data as T, code: '0000' }
+    }
+
     console.error('[PaysSam API Error] Business Error:', {
       endpoint,
       code: data.code,
