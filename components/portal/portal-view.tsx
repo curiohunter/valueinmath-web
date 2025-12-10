@@ -56,6 +56,19 @@ export function PortalView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showCommentDialog, setShowCommentDialog] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined)
+
+  // 현재 로그인한 사용자 ID 가져오기
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+    }
+    fetchCurrentUser()
+  }, [])
 
   useEffect(() => {
     if (!studentId) {
@@ -449,6 +462,8 @@ export function PortalView({
         onRefresh={handleRefresh}
         canCreateComment={viewerRole === "employee"}
         teacherId={employeeId}
+        currentUserId={currentUserId}
+        viewerRole={viewerRole}
       />
     </div>
   )

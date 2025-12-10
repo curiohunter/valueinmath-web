@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { CommentCardData } from "@/types/comments"
 import { ConsultationRequest } from "@/types/consultation-requests"
 import { Button } from "@/components/ui/button"
-import { MessageSquarePlus, MessageCircle, Save, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react"
+import { MessageSquarePlus, MessageCircle, Save, Calendar, User, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Pencil, Trash2, MoreVertical, HelpCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LearningCommentCard } from "./learning-comment-card"
 import { ConsultationRequestModal } from "./consultation-request-modal"
@@ -29,6 +29,28 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { toast } from "sonner"
 
 const commentFormSchema = z.object({
@@ -42,6 +64,13 @@ const commentFormSchema = z.object({
 
 type CommentFormData = z.infer<typeof commentFormSchema>
 
+// 상태별 툴팁 설명
+const statusTooltips: Record<string, string> = {
+  "대기중": "선생님이 아직 확인하지 않음",
+  "처리중": "선생님이 확인했지만 답변 작성 중",
+  "완료": "선생님이 답변 완료",
+}
+
 interface CommentsSectionProps {
   studentId: string
   comments: CommentCardData[]
@@ -49,20 +78,37 @@ interface CommentsSectionProps {
   onRefresh?: () => void
   canCreateComment?: boolean  // 코멘트 작성 권한 (선생님만)
   teacherId?: string  // 선생님 ID (코멘트 작성용)
+  currentUserId?: string  // 현재 로그인한 사용자 ID
+  viewerRole?: "employee" | "student" | "parent"  // 현재 사용자 역할
 }
 
 export function CommentsSection({
   studentId,
   comments,
-  consultationRequests,
+  consultationRequests: initialConsultationRequests,
   onRefresh,
   canCreateComment = false,
   teacherId,
+  currentUserId,
+  viewerRole,
 }: CommentsSectionProps) {
   const [showConsultationModal, setShowConsultationModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentCommentIndex, setCurrentCommentIndex] = useState(0)
-  const [consultationsPage, setConsultationsPage] = useState(1)
+
+  // 상담 요청 로컬 상태 (수정/취소 시 페이지 이동 없이 업데이트)
+  const [consultationRequests, setConsultationRequests] = useState<ConsultationRequest[]>(initialConsultationRequests)
+
+  // props 변경 시 로컬 상태 동기화 (다른 학생 선택 시)
+  useEffect(() => {
+    setConsultationRequests(initialConsultationRequests)
+  }, [initialConsultationRequests])
+
+  // 수정/취소 모달 상태
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editTargetRequest, setEditTargetRequest] = useState<ConsultationRequest | null>(null)
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null)
+  const [isCancelling, setIsCancelling] = useState(false)
 
   // 이전 월을 기본값으로 (1월이면 작년 12월)
   const now = new Date()
@@ -71,8 +117,9 @@ export function CommentsSection({
   const defaultYear = prevMonthDate.getFullYear()
   const defaultMonth = prevMonthDate.getMonth() + 1
 
-  // Pagination constants (only for consultations)
-  const ITEMS_PER_PAGE = 12
+  // 상담 요청 표시 설정
+  const INITIAL_DISPLAY_COUNT = 3  // 기본 표시 개수
+  const [showAllConsultations, setShowAllConsultations] = useState(false)
 
   const form = useForm<CommentFormData>({
     resolver: zodResolver(commentFormSchema),
@@ -88,6 +135,55 @@ export function CommentsSection({
     if (onRefresh) {
       onRefresh()
     }
+  }
+
+  // 수정 가능 여부 체크 (대기중 상태 + 본인 요청)
+  const canModifyRequest = (request: ConsultationRequest) => {
+    return (
+      request.status === "대기중" &&
+      currentUserId &&
+      request.requester_id === currentUserId &&
+      viewerRole !== "employee"  // 선생님은 수정/취소 불가
+    )
+  }
+
+  // 수정 버튼 클릭
+  const handleEdit = (request: ConsultationRequest) => {
+    setEditTargetRequest(request)
+    setEditModalOpen(true)
+  }
+
+  // 취소 확인 후 실행 (소프트 삭제) - 로컬 상태만 업데이트하여 페이지 이동 방지
+  const handleCancel = async (id: string) => {
+    setIsCancelling(true)
+    try {
+      const response = await fetch(`/api/consultation-requests/${id}`, {
+        method: "PATCH",
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "상담 요청 취소에 실패했습니다.")
+      }
+
+      toast.success("상담 요청이 취소되었습니다.")
+
+      // 로컬 상태에서 해당 요청 제거 (취소된 요청은 목록에서 사라짐)
+      setConsultationRequests(prev => prev.filter(req => req.id !== id))
+    } catch (error: any) {
+      toast.error(error.message || "상담 요청 취소에 실패했습니다.")
+      console.error("Cancel consultation request error:", error)
+    } finally {
+      setIsCancelling(false)
+      setCancelTargetId(null)
+    }
+  }
+
+  // 수정됨 여부 체크
+  const isModified = (request: ConsultationRequest) => {
+    if (!request.updated_at || !request.created_at) return false
+    return new Date(request.updated_at).getTime() > new Date(request.created_at).getTime() + 1000
   }
 
   const onSubmit = async (data: CommentFormData) => {
@@ -153,12 +249,11 @@ export function CommentsSection({
   const currentComment = sortedComments[currentCommentIndex]
   const totalComments = sortedComments.length
 
-  // Pagination for consultation requests only
-  const totalConsultationsPages = Math.ceil(consultationRequests.length / ITEMS_PER_PAGE)
-  const paginatedConsultations = consultationRequests.slice(
-    (consultationsPage - 1) * ITEMS_PER_PAGE,
-    consultationsPage * ITEMS_PER_PAGE
-  )
+  // 표시할 상담 요청 목록
+  const displayedConsultations = showAllConsultations
+    ? consultationRequests
+    : consultationRequests.slice(0, INITIAL_DISPLAY_COUNT)
+  const hasMoreConsultations = consultationRequests.length > INITIAL_DISPLAY_COUNT
 
   // Count pending consultation requests
   const pendingRequests = consultationRequests.filter(
@@ -311,23 +406,6 @@ export function CommentsSection({
         </Card>
       )}
 
-      {/* Pending Consultation Requests Alert */}
-      {pendingRequests > 0 && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-orange-900 flex items-center gap-2">
-              <MessageCircle className="h-4 w-4" />
-              진행 중인 상담 요청
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-orange-800">
-              {pendingRequests}건의 상담 요청이 처리 중입니다.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Comments Carousel */}
       {sortedComments.length === 0 ? (
         <Card className="border-dashed">
@@ -400,37 +478,74 @@ export function CommentsSection({
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 md:p-6">
-            {/* Mobile View: Stacked List */}
-            <div className="md:hidden divide-y">
-              {paginatedConsultations.map((request) => (
-                <div key={request.id} className="p-4 space-y-2">
+            {/* Mobile View: Card Style */}
+            <div className="md:hidden p-3 space-y-3">
+              {displayedConsultations.map((request) => (
+                <div
+                  key={request.id}
+                  className="bg-gray-50 rounded-lg p-3 space-y-2"
+                >
+                  {/* 상단: 날짜, 상태, 액션 */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(request.created_at).toLocaleDateString('ko-KR', {
-                        month: 'long',
-                        day: 'numeric'
-                      })}
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${
+                          request.status === '완료'
+                            ? 'bg-green-100 text-green-700 border-green-200'
+                            : request.status === '처리중'
+                              ? 'bg-blue-100 text-blue-700 border-blue-200'
+                              : 'bg-orange-100 text-orange-700 border-orange-200'
+                        }`}
+                      >
+                        {request.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(request.created_at).toLocaleDateString('ko-KR', {
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                        {isModified(request) && " (수정됨)"}
+                      </span>
                     </div>
-                    <Badge
-                      variant={
-                        request.status === '완료' ? 'default' :
-                          request.status === '처리중' ? 'secondary' : 'outline'
-                      }
-                      className={
-                        request.status === '완료' ? 'bg-green-100 text-green-800 border-green-200' :
-                          request.status === '처리중' ? 'bg-blue-100 text-blue-800 border-blue-200' :
-                            'bg-orange-100 text-orange-800 border-orange-200'
-                      }
-                    >
-                      {request.status}
-                    </Badge>
+                    {/* 액션 버튼 */}
+                    {canModifyRequest(request) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-7 px-2">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(request)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            수정
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setCancelTargetId(request.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            취소
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
-                  <div className="flex gap-2">
-                    <Badge variant="outline" className="text-xs h-fit shrink-0">
-                      {request.type}
-                    </Badge>
-                    <p className="text-sm line-clamp-1 flex-1 text-foreground/90">{request.content}</p>
+
+                  {/* 내용 */}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {request.method}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {request.type}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed">
+                      {request.content}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -447,10 +562,13 @@ export function CommentsSection({
                     <TableHead className="max-w-[300px]">내용</TableHead>
                     <TableHead className="w-[100px]">담당자</TableHead>
                     <TableHead className="w-[90px]">상태</TableHead>
+                    {viewerRole !== "employee" && (
+                      <TableHead className="w-[80px]">액션</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedConsultations.map((request) => (
+                  {displayedConsultations.map((request) => (
                     <TableRow key={request.id}>
                       <TableCell className="text-sm">
                         <div className="flex items-center gap-1">
@@ -460,6 +578,9 @@ export function CommentsSection({
                             month: '2-digit',
                             day: '2-digit'
                           })}
+                          {isModified(request) && (
+                            <span className="text-xs text-muted-foreground ml-1">(수정됨)</span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -486,58 +607,138 @@ export function CommentsSection({
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            request.status === '완료'
-                              ? 'default'
-                              : request.status === '처리중'
-                                ? 'secondary'
-                                : 'outline'
-                          }
-                          className={
-                            request.status === '완료'
-                              ? 'bg-green-100 text-green-800 border-green-200'
-                              : request.status === '처리중'
-                                ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                : 'bg-orange-100 text-orange-800 border-orange-200'
-                          }
-                        >
-                          {request.status}
-                        </Badge>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant={
+                                  request.status === '완료'
+                                    ? 'default'
+                                    : request.status === '처리중'
+                                      ? 'secondary'
+                                      : 'outline'
+                                }
+                                className={`flex items-center gap-1 cursor-help ${
+                                  request.status === '완료'
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : request.status === '처리중'
+                                      ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                      : 'bg-orange-100 text-orange-800 border-orange-200'
+                                }`}
+                              >
+                                {request.status}
+                                <HelpCircle className="h-3 w-3" />
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {statusTooltips[request.status] || request.status}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
+                      {viewerRole !== "employee" && (
+                        <TableCell>
+                          {canModifyRequest(request) ? (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => handleEdit(request)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => setCancelTargetId(request.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">-</span>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
 
-            {/* Consultations Pagination */}
-            {totalConsultationsPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-4 p-4 md:p-0">
+            {/* 더보기/접기 버튼 */}
+            {hasMoreConsultations && (
+              <div className="flex justify-center py-3 md:pt-4">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  onClick={() => setConsultationsPage(p => Math.max(1, p - 1))}
-                  disabled={consultationsPage === 1}
+                  onClick={() => setShowAllConsultations(!showAllConsultations)}
+                  className="text-muted-foreground hover:text-foreground"
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {consultationsPage} / {totalConsultationsPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConsultationsPage(p => Math.min(totalConsultationsPages, p + 1))}
-                  disabled={consultationsPage === totalConsultationsPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
+                  {showAllConsultations ? (
+                    <>
+                      <ChevronUp className="h-4 w-4 mr-1" />
+                      접기
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4 mr-1" />
+                      {consultationRequests.length - INITIAL_DISPLAY_COUNT}개 더보기
+                    </>
+                  )}
                 </Button>
               </div>
             )}
           </CardContent>
         </Card>
       )}
+
+      {/* 수정 모달 */}
+      {editTargetRequest && (
+        <ConsultationRequestModal
+          open={editModalOpen}
+          onOpenChange={(open) => {
+            setEditModalOpen(open)
+            if (!open) setEditTargetRequest(null)
+          }}
+          studentId={studentId}
+          mode="edit"
+          editData={editTargetRequest}
+          onSuccess={(updatedData) => {
+            setEditModalOpen(false)
+            setEditTargetRequest(null)
+            // 로컬 상태 업데이트 (페이지 이동 없이)
+            if (updatedData) {
+              setConsultationRequests(prev =>
+                prev.map(req => req.id === updatedData.id ? { ...req, ...updatedData } : req)
+              )
+            }
+          }}
+        />
+      )}
+
+      {/* 취소 확인 다이얼로그 */}
+      <AlertDialog open={!!cancelTargetId} onOpenChange={() => setCancelTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>상담 요청 취소</AlertDialogTitle>
+            <AlertDialogDescription>
+              이 상담 요청을 취소하시겠습니까?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancelling}>아니오</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelTargetId && handleCancel(cancelTargetId)}
+              disabled={isCancelling}
+            >
+              {isCancelling ? "취소 중..." : "취소하기"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
