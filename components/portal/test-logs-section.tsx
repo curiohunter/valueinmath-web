@@ -2,10 +2,8 @@
 
 import { useState } from "react"
 import { TestLogItem } from "@/types/portal"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface TestLogsSectionProps {
@@ -21,87 +19,76 @@ const getScoreColor = (score: number | null) => {
 }
 
 export function TestLogsSection({ logs }: TestLogsSectionProps) {
-  const [isOpen, setIsOpen] = useState(false)
   const [showCount, setShowCount] = useState(12)
 
   const displayedLogs = logs.slice(0, showCount)
 
-  return (
-    <Card>
-      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setIsOpen(!isOpen)}>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            {isOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronDown className="h-5 w-5 -rotate-90" />}
-          </Button>
-          <CardTitle>테스트 기록</CardTitle>
-        </div>
-      </CardHeader>
-      {isOpen && (
-        <CardContent>
-        {logs.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">테스트 기록이 없습니다.</p>
-        ) : (
-          <div className="space-y-3">
-            {displayedLogs.map((log) => (
-              <div key={log.id} className="border rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{log.test || "테스트"}</h3>
-                      {log.test_type && (
-                        <span className="text-xs bg-muted px-2 py-1 rounded">
-                          {log.test_type}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {log.class_name || "수업"} •{" "}
-                      {log.date ? format(new Date(log.date), "M월 d일", { locale: ko }) : "날짜 미정"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-2xl ${getScoreColor(log.test_score)}`}>
-                      {log.test_score !== null ? `${log.test_score}점` : "-"}
-                    </div>
-                  </div>
-                </div>
+  if (logs.length === 0) {
+    return (
+      <p className="text-center text-muted-foreground py-8">
+        테스트 기록이 없습니다.
+      </p>
+    )
+  }
 
-                {log.note && (
-                  <div className="text-sm bg-muted p-2 rounded mt-2">
-                    {log.note}
-                  </div>
+  return (
+    <div className="space-y-3">
+      {displayedLogs.map((log) => (
+        <div key={log.id} className="border rounded-lg p-4">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">{log.test || "테스트"}</h3>
+                {log.test_type && (
+                  <span className="text-xs bg-muted px-2 py-1 rounded">
+                    {log.test_type}
+                  </span>
                 )}
               </div>
-            ))}
-
-            {logs.length > showCount && (
-              <div className="text-center">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCount(prev => prev + 12)}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  외 {logs.length - showCount}개의 테스트 기록 더보기
-                </Button>
+              <p className="text-sm text-muted-foreground mt-1">
+                {log.class_name || "수업"} •{" "}
+                {log.date
+                  ? format(new Date(log.date), "M월 d일", { locale: ko })
+                  : "날짜 미정"}
+              </p>
+            </div>
+            <div className="text-right">
+              <div className={`text-2xl ${getScoreColor(log.test_score)}`}>
+                {log.test_score !== null ? `${log.test_score}점` : "-"}
               </div>
-            )}
-            {showCount > 12 && showCount >= logs.length && (
-              <div className="text-center">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCount(12)}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  접기
-                </Button>
-              </div>
-            )}
+            </div>
           </div>
-        )}
-        </CardContent>
+
+          {log.note && (
+            <div className="text-sm bg-muted p-2 rounded mt-2">{log.note}</div>
+          )}
+        </div>
+      ))}
+
+      {logs.length > showCount && (
+        <div className="text-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCount((prev) => prev + 12)}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            외 {logs.length - showCount}개의 테스트 기록 더보기
+          </Button>
+        </div>
       )}
-    </Card>
+      {showCount > 12 && showCount >= logs.length && (
+        <div className="text-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCount(12)}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            접기
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { PortalData } from "@/types/portal"
 import { getPortalData } from "@/lib/portal-client"
-import { MonthlySummaryCards } from "@/components/portal/monthly-summary-cards"
+import { LearningDashboard } from "@/components/portal/learning-dashboard"
 import { LearningTrendsChart } from "@/components/portal/learning-trends-chart"
 import { LearningCalendar } from "@/components/portal/learning-calendar"
 import { StudyLogsSection } from "@/components/portal/study-logs-section"
@@ -14,7 +14,19 @@ import { MakeupClassesSection } from "@/components/portal/makeup-classes-section
 import { MathflatSection } from "@/components/portal/mathflat-section"
 import { ClassesSection } from "@/components/portal/classes-section"
 import { TuitionSection } from "@/components/portal/tuition-section"
-import { RefreshCw, GraduationCap, BookOpen, MessageCircle, Award } from "lucide-react"
+import { RefreshCw, GraduationCap, BookOpen, MessageCircle, ChevronDown } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import {
   Dialog,
   DialogContent,
@@ -274,11 +286,11 @@ export function PortalView({
                 <div className="text-sm text-gray-600">
                   {upcomingMakeup.class_name} - {
                     upcomingMakeup.absence_reason === 'sick' ? '병결' :
-                    upcomingMakeup.absence_reason === 'travel' ? '여행' :
-                    upcomingMakeup.absence_reason === 'event' ? '행사' :
-                    upcomingMakeup.absence_reason === 'other' ? '기타' :
-                    upcomingMakeup.makeup_type === 'additional' ? '보강' :
-                    upcomingMakeup.absence_reason || '보강'
+                      upcomingMakeup.absence_reason === 'travel' ? '여행' :
+                        upcomingMakeup.absence_reason === 'event' ? '행사' :
+                          upcomingMakeup.absence_reason === 'other' ? '기타' :
+                            upcomingMakeup.makeup_type === 'additional' ? '보강' :
+                              upcomingMakeup.absence_reason || '보강'
                   }
                 </div>
               </div>
@@ -340,8 +352,8 @@ export function PortalView({
     <div className="space-y-6 md:space-y-8">
       <StudentHeader />
 
-      {/* Monthly Summary Cards */}
-      <MonthlySummaryCards
+      {/* Learning Dashboard with Trends */}
+      <LearningDashboard
         monthly_aggregations={portalData.monthly_aggregations}
         monthly_mathflat_stats={portalData.monthly_mathflat_stats}
       />
@@ -349,24 +361,69 @@ export function PortalView({
       {/* Learning Trends Chart */}
       <LearningTrendsChart monthly_aggregations={portalData.monthly_aggregations} />
 
-      {/* Learning Calendar */}
-      <LearningCalendar
-        study_logs={portalData.study_logs}
-        test_logs={portalData.test_logs}
-        makeup_classes={portalData.makeup_classes}
-        consultations={[]}
-        mathflat_records={portalData.mathflat_records}
-      />
+      {/* Learning Calendar - Collapsible (기본 접힘) */}
+      <Collapsible defaultOpen={false}>
+        <Card>
+          <CardHeader className="pb-0">
+            <CollapsibleTrigger className="flex items-center justify-between w-full hover:no-underline group">
+              <CardTitle className="text-lg">학습 캘린더</CardTitle>
+              <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pt-4">
+              <LearningCalendar
+                study_logs={portalData.study_logs}
+                test_logs={portalData.test_logs}
+                makeup_classes={portalData.makeup_classes}
+                consultations={[]}
+                mathflat_records={portalData.mathflat_records}
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-      {/* Detailed Records */}
-      <div className="space-y-6">
-        <h2 className="text-xl md:text-2xl font-bold">상세 학습 기록</h2>
-        <ExamScoresSection scores={portalData.school_exam_scores} />
-        <StudyLogsSection logs={portalData.study_logs} />
-        <TestLogsSection logs={portalData.test_logs} />
-        <MakeupClassesSection classes={portalData.makeup_classes} />
-        <MathflatSection records={portalData.mathflat_records} />
-      </div>
+      {/* Detailed Records - Accordion */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">상세 학습 기록</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="exams">
+              <AccordionTrigger>학교 시험 성적</AccordionTrigger>
+              <AccordionContent>
+                <ExamScoresSection scores={portalData.school_exam_scores} />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="logs">
+              <AccordionTrigger>학습 일지</AccordionTrigger>
+              <AccordionContent>
+                <StudyLogsSection logs={portalData.study_logs} />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="tests">
+              <AccordionTrigger>테스트 기록</AccordionTrigger>
+              <AccordionContent>
+                <TestLogsSection logs={portalData.test_logs} />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="makeup">
+              <AccordionTrigger>보강 수업</AccordionTrigger>
+              <AccordionContent>
+                <MakeupClassesSection classes={portalData.makeup_classes} />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="mathflat">
+              <AccordionTrigger>매쓰플랫 학습</AccordionTrigger>
+              <AccordionContent>
+                <MathflatSection records={portalData.mathflat_records} />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
     </div>
   )
 
