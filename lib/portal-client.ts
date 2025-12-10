@@ -97,18 +97,29 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
       .order("year", { ascending: false })
       .order("month", { ascending: false })
       .limit(12), // 최근 12개월
-    // 상담 요청은 본인이 신청한 것만 보이도록 필터링 (학부모/학생 각각)
+    // 상담 요청 필터링:
+    // - 선생님: 모든 상담 요청 열람 (취소 제외)
+    // - 학부모/학생: 본인이 신청한 것만 (취소 제외)
     user?.id
-      ? supabase
-          .from("consultation_requests")
-          .select(`
-            *,
-            student:students!consultation_requests_student_id_fkey (name),
-            counselor:employees!consultation_requests_counselor_id_fkey (name)
-          `)
-          .eq("student_id", studentId)
-          .eq("requester_id", user.id)
-          .order("created_at", { ascending: false })
+      ? (async () => {
+          let query = supabase
+            .from("consultation_requests")
+            .select(`
+              *,
+              student:students!consultation_requests_student_id_fkey (name),
+              counselor:employees!consultation_requests_counselor_id_fkey (name)
+            `)
+            .eq("student_id", studentId)
+            .neq("status", "취소")  // 취소된 요청은 숨김
+            .order("created_at", { ascending: false })
+
+          // 선생님이 아니면 본인 요청만 필터링
+          if (!isTeacher) {
+            query = query.eq("requester_id", user.id)
+          }
+
+          return query
+        })()
       : Promise.resolve({ data: [], error: null }),
     // RPC: 평균 포함 테스트 점수
     supabase.rpc("get_test_scores_with_averages", { p_student_id: studentId }),

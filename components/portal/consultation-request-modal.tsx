@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { ConsultationRequest } from "@/types/consultation-requests"
 import {
   Dialog,
   DialogContent,
@@ -50,7 +51,9 @@ interface ConsultationRequestModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   studentId: string
-  onSuccess?: () => void
+  onSuccess?: (updatedData?: ConsultationRequest) => void
+  mode?: "create" | "edit"
+  editData?: ConsultationRequest
 }
 
 export function ConsultationRequestModal({
@@ -58,8 +61,11 @@ export function ConsultationRequestModal({
   onOpenChange,
   studentId,
   onSuccess,
+  mode = "create",
+  editData,
 }: ConsultationRequestModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isEditMode = mode === "edit" && editData
 
   const form = useForm<ConsultationRequestFormData>({
     resolver: zodResolver(consultationRequestSchema),
@@ -70,41 +76,83 @@ export function ConsultationRequestModal({
     },
   })
 
+  // 수정 모드일 때 기존 데이터로 폼 초기화
+  useEffect(() => {
+    if (open && isEditMode && editData) {
+      form.reset({
+        method: editData.method as "대면" | "전화",
+        type: editData.type as "학습관련" | "운영관련" | "기타",
+        content: editData.content,
+      })
+    } else if (open && !isEditMode) {
+      form.reset({
+        method: "대면",
+        type: "학습관련",
+        content: "",
+      })
+    }
+  }, [open, isEditMode, editData, form])
+
   const onSubmit = async (data: ConsultationRequestFormData) => {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch("/api/consultation-requests", {
-        method: "POST",
+      // 수정 모드일 때는 PUT, 생성 모드일 때는 POST
+      const url = isEditMode
+        ? `/api/consultation-requests/${editData.id}`
+        : "/api/consultation-requests"
+      const method = isEditMode ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          student_id: studentId,
-          ...data,
-        }),
+        body: JSON.stringify(
+          isEditMode
+            ? data
+            : {
+                student_id: studentId,
+                ...data,
+              }
+        ),
       })
 
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "상담 요청 등록에 실패했습니다.")
+        throw new Error(
+          result.error ||
+            (isEditMode
+              ? "상담 요청 수정에 실패했습니다."
+              : "상담 요청 등록에 실패했습니다.")
+        )
       }
 
-      toast.success("상담 요청이 등록되었습니다.", {
-        description: "선생님께서 확인 후 연락드리겠습니다.",
-      })
+      toast.success(
+        isEditMode ? "상담 요청이 수정되었습니다." : "상담 요청이 등록되었습니다.",
+        {
+          description: isEditMode
+            ? undefined
+            : "선생님께서 확인 후 연락드리겠습니다.",
+        }
+      )
 
       // Reset form and close modal
       form.reset()
       onOpenChange(false)
 
-      // Trigger parent refresh
+      // Trigger parent callback with updated data (for edit mode)
       if (onSuccess) {
-        onSuccess()
+        onSuccess(isEditMode ? result.data : undefined)
       }
     } catch (error: any) {
-      toast.error(error.message || "상담 요청 등록에 실패했습니다.")
+      toast.error(
+        error.message ||
+          (isEditMode
+            ? "상담 요청 수정에 실패했습니다."
+            : "상담 요청 등록에 실패했습니다.")
+      )
       console.error("Submit consultation request error:", error)
     } finally {
       setIsSubmitting(false)
@@ -117,11 +165,17 @@ export function ConsultationRequestModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>상담 요청</DialogTitle>
+          <DialogTitle>{isEditMode ? "상담 요청 수정" : "상담 요청"}</DialogTitle>
           <DialogDescription>
-            선생님과의 상담을 요청하실 수 있습니다.
-            <br />
-            담당 선생님께서 확인 후 연락드리겠습니다.
+            {isEditMode ? (
+              "상담 요청 내용을 수정합니다."
+            ) : (
+              <>
+                선생님과의 상담을 요청하실 수 있습니다.
+                <br />
+                담당 선생님께서 확인 후 연락드리겠습니다.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -223,7 +277,13 @@ export function ConsultationRequestModal({
                 취소
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "등록 중..." : "상담 요청"}
+                {isSubmitting
+                  ? isEditMode
+                    ? "수정 중..."
+                    : "등록 중..."
+                  : isEditMode
+                    ? "수정"
+                    : "상담 요청"}
               </Button>
             </div>
           </form>
