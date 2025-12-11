@@ -607,7 +607,19 @@ export function TuitionTable({
                     </div>
                   </th>
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
-                    비고
+                    <div className="flex items-center gap-2">
+                      비고
+                      {!isReadOnly && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="w-6 h-6 p-0 hover:bg-blue-100 text-blue-600"
+                          onClick={() => onBulkApply?.('note')}
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
                   </th>
                   {isHistoryMode && (
                     <th className="px-3 py-4 text-left font-semibold text-slate-700">

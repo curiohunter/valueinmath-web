@@ -60,9 +60,10 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
         )
       `)
       .eq("student_id", studentId),
+    // study_logs: note 필드는 선생님 전용 메모이므로 제외
     supabase
       .from("study_logs")
-      .select("*")
+      .select("id, student_id, class_id, date, attendance_status, homework, focus, book1, book1log, book2, book2log, class_name_snapshot, student_name_snapshot, created_at, updated_at")
       .eq("student_id", studentId)
       .order("date", { ascending: false }),
     supabase
@@ -177,7 +178,7 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
     book1log: log.book1log,
     book2: log.book2,
     book2log: log.book2log,
-    note: log.note,
+    note: null, // note 필드는 선생님 전용이므로 포털에서 null 처리
   }))
 
   const testLogs: TestLogItem[] = testLogsData.data.map((log) => ({
