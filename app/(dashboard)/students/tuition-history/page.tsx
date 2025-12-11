@@ -27,7 +27,7 @@ const calculateStats = (data: TuitionRow[]) => {
   const totalAmount = data.reduce((sum, row) => sum + row.amount, 0);
   const paidRows = data.filter(row => row.paymentStatus === '완납');
   const unpaidRows = data.filter(row => row.paymentStatus === '미납');
-  const partialRows = data.filter(row => row.paymentStatus === '부분납');
+  const partialRows = data.filter(row => row.paymentStatus === '분할청구');
   
   return {
     totalCount,
@@ -412,26 +412,30 @@ export default function TuitionHistoryPage() {
   // 개별 행 저장 핸들러
   const handleRowSave = async (index: number) => {
     if (index >= paginatedData.length) return;
-    
+
     const row = paginatedData[index];
-    
+
+    // 디버깅: 저장 시점의 note 값 확인
+    console.log('저장할 row:', row.id, 'note:', row.note, 'note 타입:', typeof row.note);
+
     setIsSaving(true);
     try {
-      const updateData: Partial<TuitionFeeInput> = {
-        year: row.year,
-        month: row.month,
-        class_type: row.classType,
-        payment_status: row.paymentStatus,
-        amount: row.amount,
-        is_sibling: row.isSibling,
-        note: row.note || undefined,
-        period_start_date: row.periodStartDate || undefined,
-        period_end_date: row.periodEndDate || undefined
-      };
+      // 빈 문자열이면 null로, 아니면 원래 값 유지
+      const noteValue = row.note === '' || row.note === null || row.note === undefined ? null : row.note;
 
       const { error } = await supabase
         .from("tuition_fees")
-        .update(updateData)
+        .update({
+          year: row.year,
+          month: row.month,
+          class_type: row.classType,
+          payment_status: row.paymentStatus,
+          amount: row.amount,
+          is_sibling: row.isSibling,
+          note: noteValue,
+          period_start_date: row.periodStartDate || null,
+          period_end_date: row.periodEndDate || null
+        })
         .eq("id", row.id);
 
       if (error) throw error;
@@ -612,21 +616,22 @@ export default function TuitionHistoryPage() {
     try {
       // 변경된 데이터 일괄 저장
       for (const row of changedRows) {
-        const updateData: Partial<TuitionFeeInput> = {
-          year: row.year,
-          month: row.month,
-          class_type: row.classType,
-          payment_status: row.paymentStatus,
-          amount: row.amount,
-          is_sibling: row.isSibling,
-          note: row.note || undefined,
-          period_start_date: row.periodStartDate || undefined,
-          period_end_date: row.periodEndDate || undefined
-        };
+        // 빈 문자열이면 null로
+        const noteValue = row.note === '' || row.note === null || row.note === undefined ? null : row.note;
 
         const { error } = await supabase
           .from("tuition_fees")
-          .update(updateData)
+          .update({
+            year: row.year,
+            month: row.month,
+            class_type: row.classType,
+            payment_status: row.paymentStatus,
+            amount: row.amount,
+            is_sibling: row.isSibling,
+            note: noteValue,
+            period_start_date: row.periodStartDate || null,
+            period_end_date: row.periodEndDate || null
+          })
           .eq("id", row.id);
 
         if (error) throw error;
