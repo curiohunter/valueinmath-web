@@ -18,7 +18,7 @@ export const CLASS_TYPE_LABELS: Record<ClassType, string> = {
 }
 
 // 납부 상태 enum
-export const PAYMENT_STATUS = ['미납', '완납', '부분납'] as const
+export const PAYMENT_STATUS = ['미납', '완납', '분할청구'] as const
 export type PaymentStatus = typeof PAYMENT_STATUS[number]
 
 // PaysSam 청구 상태

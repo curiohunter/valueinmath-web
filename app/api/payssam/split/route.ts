@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
     await supabase
       .from('tuition_fees')
       .update({
-        payment_status: '미납',
+        payment_status: '분할청구',
         note: `분할 청구됨 (${amounts.length}건): ${originalFee.note || ''}`.trim(),
         updated_at: now,
       })

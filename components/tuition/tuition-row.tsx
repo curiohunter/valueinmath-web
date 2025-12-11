@@ -51,7 +51,7 @@ export function TuitionRow({
         return 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
       case '미납':
         return 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-      case '부분납':
+      case '분할청구':
         return 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
       default:
         return 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -93,7 +93,7 @@ export function TuitionRow({
     if (!onChange || isReadOnly) return
     
     // 상태 변경
-    onChange(index, 'isSibling', checked)
+    onChange?.(index, 'isSibling', checked)
     
     // 할인 적용/해제에 따른 금액 자동 조정
     const currentAmount = row.amount
@@ -102,11 +102,11 @@ export function TuitionRow({
     if (checked && !row.isSibling) {
       // 할인 적용: 현재 금액에서 5% 할인
       newAmount = Math.round(currentAmount * 0.95)
-      onChange(index, 'amount', newAmount)
+      onChange?.(index, 'amount', newAmount)
     } else if (!checked && row.isSibling) {
       // 할인 해제: 현재 금액을 5% 할인된 금액으로 보고 원래 금액 계산
       newAmount = Math.round(currentAmount / 0.95)
-      onChange(index, 'amount', newAmount)
+      onChange?.(index, 'amount', newAmount)
     }
   }
 
@@ -184,7 +184,7 @@ export function TuitionRow({
       <td className="min-w-[100px] w-[12%] px-3 py-3">
         <Select
           value={row.classType}
-          onValueChange={(value: ClassType) => onChange(index, 'classType', value)}
+          onValueChange={(value: ClassType) => onChange?.(index, 'classType', value)}
         >
           <SelectTrigger className={cn(
             "text-sm font-medium border transition-all duration-200",
@@ -259,7 +259,7 @@ export function TuitionRow({
       <td className="min-w-[100px] w-[12%] px-3 py-3">
         <Select
           value={row.paymentStatus}
-          onValueChange={(value: PaymentStatus) => onChange(index, 'paymentStatus', value)}
+          onValueChange={(value: PaymentStatus) => onChange?.(index, 'paymentStatus', value)}
         >
           <SelectTrigger className={cn(
             "text-sm font-semibold border transition-all duration-200",
@@ -289,7 +289,7 @@ export function TuitionRow({
         <Input
           type="text"
           value={row.note || ''}
-          onChange={(e) => onChange(index, 'note', e.target.value)}
+          onChange={(e) => onChange?.(index, 'note', e.target.value)}
           className="text-sm border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 transition-colors"
           placeholder="비고사항을 입력하세요"
         />

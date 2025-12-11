@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Send,
   RefreshCw,
+  RotateCcw,
   CreditCard,
   Ban,
   Trash2,
@@ -118,6 +119,7 @@ const formatDateTime = (dateStr: string | null) => {
 // 이벤트 타입 라벨
 const EVENT_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   invoice_sent: { label: "청구서 발송", color: "text-blue-600" },
+  resent: { label: "청구서 재발송", color: "text-cyan-600" },
   payment_completed: { label: "결제 완료", color: "text-green-600" },
   cancelled: { label: "결제 취소", color: "text-orange-600" },
   destroyed: { label: "청구서 파기", color: "text-gray-600" },
@@ -333,6 +335,39 @@ export default function TuitionDetailPage() {
     }
   }
 
+  // 청구서 재발송
+  const handleResend = async () => {
+    if (!data?.payssam_bill_id) return
+
+    const confirm = window.confirm(
+      "청구서를 재발송하시겠습니까?\n\n" +
+      "※ 카카오톡으로 결제 안내가 다시 발송됩니다.\n" +
+      "※ 기존 청구서 URL은 유지됩니다."
+    )
+    if (!confirm) return
+
+    setActionLoading("resend")
+    try {
+      const response = await fetch("/api/payssam/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tuitionFeeId: data.id }),
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        toast.success("청구서가 재발송되었습니다.")
+        fetchData()
+      } else {
+        toast.error(result.error || "재발송에 실패했습니다.")
+      }
+    } catch (error) {
+      toast.error("재발송 중 오류가 발생했습니다.")
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   // URL 복사
   const handleCopyUrl = () => {
     if (data?.payssam_short_url) {
@@ -410,6 +445,7 @@ export default function TuitionDetailPage() {
   // 버튼 활성화 조건
   const canSend = !data.payssam_bill_id && data.payment_status !== "완납"
   const canSync = !!data.payssam_bill_id && data.payssam_request_status === "sent"
+  const canResend = data.payssam_request_status === "sent"
   const canOfflinePayment = data.payssam_request_status === "sent"
   const canCancel = data.payssam_request_status === "paid"
   const canDestroy = data.payssam_request_status === "sent"
@@ -718,6 +754,19 @@ export default function TuitionDetailPage() {
                 </Button>
               )}
 
+              {/* 청구서 재발송 */}
+              {canResend && (
+                <Button
+                  variant="outline"
+                  className="w-full text-cyan-600 border-cyan-200 hover:bg-cyan-50"
+                  onClick={handleResend}
+                  disabled={actionLoading === "resend"}
+                >
+                  <RotateCcw className={`w-4 h-4 mr-2 ${actionLoading === "resend" ? "animate-spin" : ""}`} />
+                  {actionLoading === "resend" ? "재발송 중..." : "청구서 재발송"}
+                </Button>
+              )}
+
               {/* 현장결제 완료 */}
               {canOfflinePayment && (
                 <Button
@@ -771,7 +820,7 @@ export default function TuitionDetailPage() {
               )}
 
               {/* 액션 없음 안내 */}
-              {!canSend && !canSync && !canOfflinePayment && !canCancel && !canDestroy && !canSplit && (
+              {!canSend && !canSync && !canResend && !canOfflinePayment && !canCancel && !canDestroy && !canSplit && (
                 <div className="text-sm text-muted-foreground text-center py-4">
                   현재 상태에서 가능한 액션이 없습니다.
                 </div>

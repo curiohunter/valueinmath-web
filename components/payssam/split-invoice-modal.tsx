@@ -231,7 +231,7 @@ export function SplitInvoiceModal({
           <Alert>
             <AlertCircle className="w-4 h-4" />
             <AlertDescription className="text-xs">
-              분할 청구 시 원본 청구서는 파기되고, 분할된 금액으로 새 청구서들이 생성됩니다.
+              분할 청구 시 원본 청구서는 '분할청구' 상태로 변경되고, 분할된 금액으로 새 청구서들이 생성됩니다.
               각 청구서는 개별적으로 발송하거나 현장결제 처리할 수 있습니다.
             </AlertDescription>
           </Alert>

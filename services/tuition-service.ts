@@ -63,7 +63,7 @@ function calculateTuitionStats(tuitionFees: TuitionRow[]): TuitionStats {
   
   const paidCount = tuitionFees.filter(fee => fee.paymentStatus === '완납').length
   const unpaidCount = tuitionFees.filter(fee => fee.paymentStatus === '미납').length
-  const partialPaidCount = tuitionFees.filter(fee => fee.paymentStatus === '부분납').length
+  const partialPaidCount = tuitionFees.filter(fee => fee.paymentStatus === '분할청구').length
   
   const collectionRate = totalStudents > 0 ? (paidCount / totalStudents) * 100 : 0
   const avgAmount = totalStudents > 0 ? totalAmount / totalStudents : 0

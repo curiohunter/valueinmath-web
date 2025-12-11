@@ -19,8 +19,12 @@ function AuthErrorContent() {
         return '인증 코드가 누락되었습니다.'
       case 'unauthorized':
         return '로그인이 필요합니다.'
+      case 'invalid_token':
+        return '인증 토큰이 유효하지 않거나 만료되었습니다. 비밀번호 재설정을 다시 시도해주세요.'
+      case 'token_expired':
+        return '인증 링크가 만료되었습니다. 비밀번호 재설정을 다시 시도해주세요.'
       default:
-        return 'Google 인증 중 오류가 발생했습니다.'
+        return '인증 중 오류가 발생했습니다.'
     }
   }
 
@@ -39,17 +43,19 @@ function AuthErrorContent() {
           </p>
           
           <div className="space-y-2">
-            <Link href="/schedule">
+            <Link href="/login">
               <Button className="w-full">
-                캘린더로 돌아가기
+                로그인 페이지로 이동
               </Button>
             </Link>
-            
-            <Link href="/dashboard">
-              <Button variant="outline" className="w-full">
-                대시보드로 이동
-              </Button>
-            </Link>
+
+            {(error === 'invalid_token' || error === 'token_expired') && (
+              <Link href="/reset-password">
+                <Button variant="outline" className="w-full">
+                  비밀번호 재설정 다시 시도
+                </Button>
+              </Link>
+            )}
           </div>
         </CardContent>
       </Card>

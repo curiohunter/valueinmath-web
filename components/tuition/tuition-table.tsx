@@ -370,7 +370,7 @@ export function TuitionTable({
                   <option value="all">전체 납부상태</option>
                   <option value="미납">미납</option>
                   <option value="완납">완납</option>
-                  <option value="부분납">부분납</option>
+                  <option value="분할청구">분할청구</option>
                 </select>
               </div>
               <div>

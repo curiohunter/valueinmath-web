@@ -37,9 +37,9 @@ export function ResetPasswordForm() {
       setIsLoading(true)
 
       // Supabase 비밀번호 재설정 이메일 전송
-      const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
-        redirectTo: `${window.location.origin}/update-password`,
-      })
+      // redirectTo는 이메일 템플릿에서 처리하므로 여기서는 지정하지 않음
+      // 이메일 템플릿: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/update-password
+      const { error } = await supabase.auth.resetPasswordForEmail(values.email)
 
       if (error) {
         throw error
