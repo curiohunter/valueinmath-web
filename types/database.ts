@@ -86,6 +86,66 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_global_limits: {
+        Row: {
+          id: string
+          date: string
+          total_requests: number
+          total_cost_usd: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          date?: string
+          total_requests?: number
+          total_cost_usd?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          date?: string
+          total_requests?: number
+          total_cost_usd?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      ai_rate_limits: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          hour_bucket: number
+          hourly_count: number
+          daily_count: number
+          daily_cost_usd: number
+          last_request_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date?: string
+          hour_bucket?: number
+          hourly_count?: number
+          daily_count?: number
+          daily_cost_usd?: number
+          last_request_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          hour_bucket?: number
+          hourly_count?: number
+          daily_count?: number
+          daily_cost_usd?: number
+          last_request_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       at_risk_students_snapshots: {
         Row: {
           attendance_avg: number | null

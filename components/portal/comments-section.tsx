@@ -7,7 +7,7 @@ import * as z from "zod"
 import { CommentCardData } from "@/types/comments"
 import { ConsultationRequest } from "@/types/consultation-requests"
 import { Button } from "@/components/ui/button"
-import { MessageSquarePlus, MessageCircle, Save, Calendar, User, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Pencil, Trash2, MoreVertical, HelpCircle } from "lucide-react"
+import { MessageSquarePlus, MessageCircle, Save, Calendar, User, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Pencil, Trash2, MoreVertical, HelpCircle, Sparkles } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LearningCommentCard } from "./learning-comment-card"
 import { ConsultationRequestModal } from "./consultation-request-modal"
@@ -52,6 +52,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { toast } from "sonner"
+import { AICommentAssistant } from "@/components/comments/ai-comment-assistant"
+import type { StudentInfo } from "@/types/comment-assistant"
 
 const commentFormSchema = z.object({
   year: z.number().min(2020).max(2100),
@@ -73,6 +75,9 @@ const statusTooltips: Record<string, string> = {
 
 interface CommentsSectionProps {
   studentId: string
+  studentName?: string  // AI 어시스턴트용 학생 이름
+  studentGrade?: string  // AI 어시스턴트용 학년
+  studentSchool?: string  // AI 어시스턴트용 학교
   comments: CommentCardData[]
   consultationRequests: ConsultationRequest[]
   onRefresh?: () => void
@@ -84,6 +89,9 @@ interface CommentsSectionProps {
 
 export function CommentsSection({
   studentId,
+  studentName,
+  studentGrade,
+  studentSchool,
   comments,
   consultationRequests: initialConsultationRequests,
   onRefresh,
@@ -93,6 +101,7 @@ export function CommentsSection({
   viewerRole,
 }: CommentsSectionProps) {
   const [showConsultationModal, setShowConsultationModal] = useState(false)
+  const [showAIAssistant, setShowAIAssistant] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentCommentIndex, setCurrentCommentIndex] = useState(0)
 
@@ -374,7 +383,21 @@ export function CommentsSection({
                   name="content"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>코멘트 내용</FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>코멘트 내용</FormLabel>
+                        {studentName && studentGrade && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowAIAssistant(true)}
+                            className="gap-1.5 text-yellow-600 border-yellow-300 hover:bg-yellow-50"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            AI 작성
+                          </Button>
+                        )}
+                      </div>
                       <FormControl>
                         <Textarea
                           placeholder={`${form.watch("month")}월 학습 코멘트를 작성해주세요.`}
@@ -739,6 +762,25 @@ export function CommentsSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI 코멘트 어시스턴트 */}
+      {canCreateComment && studentName && studentGrade && (
+        <AICommentAssistant
+          open={showAIAssistant}
+          onOpenChange={setShowAIAssistant}
+          studentInfo={{
+            id: studentId,
+            name: studentName,
+            grade: studentGrade,
+            school: studentSchool,
+          }}
+          year={form.watch("year")}
+          month={form.watch("month")}
+          onApply={(content) => {
+            form.setValue("content", content)
+          }}
+        />
+      )}
     </div>
   )
 }
