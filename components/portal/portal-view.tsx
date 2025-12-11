@@ -457,6 +457,9 @@ export function PortalView({
       <StudentHeader />
       <CommentsSection
         studentId={portalData.student.id}
+        studentName={portalData.student.name}
+        studentGrade={portalData.student.grade}
+        studentSchool={portalData.student.school}
         comments={portalData.learning_comments || []}
         consultationRequests={portalData.consultation_requests || []}
         onRefresh={handleRefresh}
