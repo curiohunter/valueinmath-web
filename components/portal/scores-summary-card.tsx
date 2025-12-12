@@ -1,6 +1,6 @@
 "use client"
 
-import { Award, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { Award } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export interface TestScoreWithAvg {
@@ -28,19 +28,6 @@ function getScoreColor(score: number): string {
   if (score >= 70) return "text-yellow-600"
   if (score >= 60) return "text-orange-600"
   return "text-red-600"
-}
-
-// 평균 대비 트렌드 아이콘
-function TrendIcon({ score, avg }: { score: number; avg: number | null }) {
-  if (avg === null) return null
-
-  const diff = score - avg
-  if (diff > 5) {
-    return <TrendingUp className="h-3 w-3 text-green-500" />
-  } else if (diff < -5) {
-    return <TrendingDown className="h-3 w-3 text-red-500" />
-  }
-  return <Minus className="h-3 w-3 text-gray-400" />
 }
 
 export function ScoresSummaryCard({ scores, maxDisplay = 3 }: ScoresSummaryCardProps) {
@@ -101,7 +88,6 @@ export function ScoresSummaryCard({ scores, maxDisplay = 3 }: ScoresSummaryCardP
                 <span className={cn("font-bold", getScoreColor(score.test_score))}>
                   {score.test_score}점
                 </span>
-                <TrendIcon score={score.test_score} avg={score.overall_avg} />
               </div>
 
               {/* 구분선 */}
