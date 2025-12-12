@@ -66,9 +66,10 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
       .select("id, student_id, class_id, date, attendance_status, homework, focus, book1, book1log, book2, book2log, class_name_snapshot, student_name_snapshot, created_at, updated_at")
       .eq("student_id", studentId)
       .order("date", { ascending: false }),
+    // test_logs: note 필드는 선생님 전용 메모이므로 제외
     supabase
       .from("test_logs")
-      .select("*")
+      .select("id, student_id, class_id, date, test_type, test, test_score, class_name_snapshot, student_name_snapshot, created_at, updated_at")
       .eq("student_id", studentId)
       .order("date", { ascending: false }),
     supabase
@@ -188,7 +189,7 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
     test_type: log.test_type,
     test: log.test,
     test_score: log.test_score,
-    note: log.note,
+    note: null,
   }))
 
   const examScores: SchoolExamScoreItem[] = examScoresData.data.map((score) => ({
