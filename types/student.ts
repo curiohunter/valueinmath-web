@@ -38,6 +38,10 @@ export interface Student {
   notes: string | null
   created_at: string
   updated_at: string
+  // B2B SaaS Foundation - Soft Delete
+  is_active: boolean
+  left_at: string | null
+  left_reason: string | null
 }
 
 export interface StudentFilters {
