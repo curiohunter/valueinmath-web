@@ -1,9 +1,13 @@
 import type { Database } from './database';
+import type { ConsultationOutcomeType } from './b2b-saas';
 
 // Enum types from database
 export type ConsultationType = Database['public']['Enums']['consultation_type_enum'];
 export type ConsultationMethod = Database['public']['Enums']['consultation_method_enum'];
 export type ConsultationStatus = Database['public']['Enums']['consultation_status_enum'];
+
+// B2B SaaS Foundation - Re-export outcome type
+export type { ConsultationOutcomeType } from './b2b-saas';
 
 // Base consultation type from database
 export type ConsultationRow = Database['public']['Tables']['consultations']['Row'];
@@ -31,6 +35,10 @@ export interface ConsultationFormData {
   next_date?: string;
   student_name_snapshot?: string;
   counselor_name_snapshot?: string;
+  // B2B SaaS Foundation - Outcome tracking
+  outcome?: ConsultationOutcomeType;
+  outcome_date?: string;
+  outcome_notes?: string;
 }
 
 // Filter options for consultation list
