@@ -29,9 +29,11 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
-import type { 
-  ConsultationType, 
-  ConsultationMethod, 
+import { recordFunnelEvent } from "@/services/funnel-service";
+import type { FunnelEventType } from "@/types/b2b-saas";
+import type {
+  ConsultationType,
+  ConsultationMethod,
   ConsultationStatus,
   Consultation,
   ConsultationModalProps,
@@ -51,6 +53,23 @@ const getEventTypeFromConsultationType = (consultationType: string): string => {
     '퇴원상담': 'withdrawal_consultation'
   };
   return typeMapping[consultationType] || 'consultation';
+};
+
+// B2B SaaS: 상담 타입을 퍼널 이벤트 타입으로 매핑
+const getFunnelEventFromConsultationType = (
+  consultationType: ConsultationType,
+  status: ConsultationStatus
+): FunnelEventType | null => {
+  // 완료된 상담만 퍼널 이벤트 기록
+  if (status !== '완료') return null;
+
+  const mapping: Partial<Record<ConsultationType, FunnelEventType>> = {
+    '신규상담': 'consultation_completed',
+    '입테후상담': 'test_completed',
+    '등록유도': 'registration_started',
+  };
+
+  return mapping[consultationType] || null;
 };
 
 // Import date utility functions
@@ -302,7 +321,7 @@ export function ConsultationModal({
         }
         
         // Update calendar event IDs if changed
-        if (calendarEventId !== editingConsultation.calendar_event_id || 
+        if (calendarEventId !== editingConsultation.calendar_event_id ||
             nextCalendarEventId !== editingConsultation.next_calendar_event_id) {
           await supabase
             .from("consultations")
@@ -312,7 +331,28 @@ export function ConsultationModal({
             })
             .eq("id", editingConsultation.id);
         }
-        
+
+        // B2B SaaS: 상태가 완료로 변경될 때만 퍼널 이벤트 기록
+        const previousStatus = editingConsultation.status;
+        if (status === '완료' && previousStatus !== '완료') {
+          const funnelEventType = getFunnelEventFromConsultationType(consultationType, status);
+          if (funnelEventType) {
+            try {
+              await recordFunnelEvent(supabase, {
+                studentId: editingConsultation.student_id,
+                eventType: funnelEventType,
+                metadata: {
+                  consultationId: editingConsultation.id,
+                  consultationType,
+                  consultationMethod,
+                },
+              });
+            } catch (error) {
+              console.error("퍼널 이벤트 기록 실패:", error);
+            }
+          }
+        }
+
         toast.success("상담이 수정되었습니다.");
       } else {
         // Create mode
@@ -381,13 +421,32 @@ export function ConsultationModal({
           const updateData: any = {};
           if (calendarEventId) updateData.calendar_event_id = calendarEventId;
           if (nextCalendarEventId) updateData.next_calendar_event_id = nextCalendarEventId;
-          
+
           await supabase
             .from("consultations")
             .update(updateData)
             .eq("id", newConsultation.id);
         }
-        
+
+        // B2B SaaS: 퍼널 이벤트 자동 기록
+        const funnelEventType = getFunnelEventFromConsultationType(consultationType, status);
+        if (funnelEventType && newConsultation) {
+          try {
+            await recordFunnelEvent(supabase, {
+              studentId: studentInfo!.studentId,
+              eventType: funnelEventType,
+              metadata: {
+                consultationId: newConsultation.id,
+                consultationType,
+                consultationMethod,
+              },
+            });
+          } catch (error) {
+            console.error("퍼널 이벤트 기록 실패:", error);
+            // 퍼널 이벤트 실패는 상담 저장에 영향 주지 않음
+          }
+        }
+
         toast.success("상담이 등록되었습니다.");
       }
       
