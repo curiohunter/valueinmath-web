@@ -62,6 +62,8 @@ export interface TestLogDetail {
   testName: string          // 테스트명
   testType: string          // "단원테스트", "오답테스트" 등
   score: number             // 점수
+  classAvg?: number         // 반 평균 (같은 날짜 + 같은 테스트 + 같은 반)
+  overallAvg?: number       // 전체 평균 (같은 날짜 + 같은 테스트)
 }
 
 // 현재 월 상세 데이터
