@@ -97,14 +97,13 @@ async function getCurrentMonthData(
     .lte('date', endDate)
     .order('date', { ascending: true })
 
-  // 테스트 조회
+  // 테스트 조회 (반평균, 전체평균 포함)
   const { data: testLogs } = await supabase
-    .from('test_logs')
-    .select('date, test, test_type, test_score')
-    .eq('student_id', studentId)
-    .gte('date', startDate)
-    .lte('date', endDate)
-    .order('date', { ascending: true })
+    .rpc('get_test_logs_with_avg', {
+      p_student_id: studentId,
+      p_start_date: startDate,
+      p_end_date: endDate
+    })
 
   // 학습일지 변환
   const studyLogDetails: StudyLogDetail[] = (studyLogs || []).map((log: any) => {
@@ -139,12 +138,14 @@ async function getCurrentMonthData(
     }
   })
 
-  // 테스트 변환
+  // 테스트 변환 (반평균, 전체평균 포함)
   const testLogDetails: TestLogDetail[] = (testLogs || []).map((test: any) => ({
     date: formatDateShort(test.date),
     testName: test.test || '테스트',
     testType: test.test_type || '기타',
     score: test.test_score || 0,
+    classAvg: test.class_avg ? Math.round(Number(test.class_avg) * 10) / 10 : undefined,
+    overallAvg: test.overall_avg ? Math.round(Number(test.overall_avg) * 10) / 10 : undefined,
   }))
 
   return {
