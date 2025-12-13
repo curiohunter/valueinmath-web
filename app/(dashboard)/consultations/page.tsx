@@ -83,6 +83,11 @@ export default function ConsultationsPage() {
       .from("consultations")
       .select(`
         *,
+        ai_hurdle,
+        ai_readiness,
+        ai_decision_maker,
+        ai_sentiment,
+        ai_analyzed_at,
         student:students(name, school, grade),
         counselor:employees(name, department)
       `)

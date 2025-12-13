@@ -14,12 +14,24 @@ export type ConsultationRow = Database['public']['Tables']['consultations']['Row
 export type ConsultationInsert = Database['public']['Tables']['consultations']['Insert'];
 export type ConsultationUpdate = Database['public']['Tables']['consultations']['Update'];
 
+// AI 분석 태그 타입
+export type ConsultationHurdle = 'schedule_conflict' | 'competitor_comparison' | 'student_refusal' | 'distance' | 'timing_defer' | 'price' | 'none';
+export type ConsultationReadiness = 'high' | 'medium' | 'low';
+export type ConsultationDecisionMaker = 'parent' | 'student' | 'both';
+export type ConsultationSentiment = 'very_positive' | 'positive' | 'neutral' | 'negative';
+
 // Extended consultation type with relationships
 export interface Consultation extends ConsultationRow {
   student?: Database['public']['Tables']['students']['Row'];
   counselor?: Database['public']['Tables']['employees']['Row'];
   calendar_event?: Database['public']['Tables']['calendar_events']['Row'];
   next_calendar_event?: Database['public']['Tables']['calendar_events']['Row'];
+  // AI 분석 태그
+  ai_hurdle?: ConsultationHurdle | null;
+  ai_readiness?: ConsultationReadiness | null;
+  ai_decision_maker?: ConsultationDecisionMaker | null;
+  ai_sentiment?: ConsultationSentiment | null;
+  ai_analyzed_at?: string | null;
 }
 
 // Form data type for creating/updating consultations
