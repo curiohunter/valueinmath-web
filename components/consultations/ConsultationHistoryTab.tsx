@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Search, Edit, Trash2, Eye } from "lucide-react";
+import { ConsultationAITags } from "./ConsultationAITags";
 import type { Database } from "@/types/database";
 import type { Consultation } from "@/types/consultation";
 
@@ -50,40 +51,43 @@ export function ConsultationHistoryTab({
   // Filter consultations when search or filters change
   useEffect(() => {
     let filtered = [...consultations];
-    
+
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(c => 
+      filtered = filtered.filter(c =>
         c.student_name_snapshot?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     // Apply type filter
     if (typeFilter !== "all") {
       filtered = filtered.filter(c => c.type === typeFilter);
     }
-    
+
     // Apply status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter(c => c.status === statusFilter);
     }
-    
+
     // Apply counselor filter
     if (counselorFilter !== "all") {
       filtered = filtered.filter(c => c.counselor_id === counselorFilter);
     }
-    
+
     // Apply date sorting
     filtered.sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
       return dateOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
-    
+
     setFilteredConsultations(filtered);
-    // 필터 변경 시 첫 페이지로
-    setCurrentPage(1);
   }, [consultations, searchTerm, typeFilter, statusFilter, counselorFilter, dateOrder]);
+
+  // 필터 변경 시에만 첫 페이지로 (데이터 리로드 시에는 현재 페이지 유지)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, typeFilter, statusFilter, counselorFilter]);
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(filteredConsultations.length / itemsPerPage);
@@ -105,16 +109,18 @@ export function ConsultationHistoryTab({
     switch (type) {
       case "신규상담":
         return "bg-purple-100 text-purple-800";
-      case "입학후상담":
+      case "입테유도":
+        return "bg-amber-100 text-amber-800";
+      case "입테후상담":
         return "bg-blue-100 text-blue-800";
       case "등록유도":
         return "bg-indigo-100 text-indigo-800";
-      case "적응상담":
-        return "bg-green-100 text-green-800";
       case "정기상담":
         return "bg-teal-100 text-teal-800";
       case "퇴원상담":
         return "bg-red-100 text-red-800";
+      case "입학후상담":
+        return "bg-green-100 text-green-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -161,11 +167,12 @@ export function ConsultationHistoryTab({
             <SelectContent>
               <SelectItem value="all">전체 유형</SelectItem>
               <SelectItem value="신규상담">신규상담</SelectItem>
-              <SelectItem value="입학후상담">입학후상담</SelectItem>
+              <SelectItem value="입테유도">입테유도</SelectItem>
+              <SelectItem value="입테후상담">입테후상담</SelectItem>
               <SelectItem value="등록유도">등록유도</SelectItem>
-              <SelectItem value="적응상담">적응상담</SelectItem>
               <SelectItem value="정기상담">정기상담</SelectItem>
               <SelectItem value="퇴원상담">퇴원상담</SelectItem>
+              <SelectItem value="입학후상담">입학후상담</SelectItem>
             </SelectContent>
           </Select>
           
@@ -216,6 +223,7 @@ export function ConsultationHistoryTab({
                 <TableHead className="w-20">담당자</TableHead>
                 <TableHead className="w-20">방법</TableHead>
                 <TableHead className="w-32">내용</TableHead>
+                <TableHead className="w-24">AI 분석</TableHead>
                 <TableHead className="w-16">상태</TableHead>
                 <TableHead className="w-24 text-right">액션</TableHead>
               </TableRow>
@@ -268,6 +276,16 @@ export function ConsultationHistoryTab({
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <ConsultationAITags
+                      hurdle={(consultation as any).ai_hurdle}
+                      readiness={(consultation as any).ai_readiness}
+                      decisionMaker={(consultation as any).ai_decision_maker}
+                      sentiment={(consultation as any).ai_sentiment}
+                      analyzedAt={(consultation as any).ai_analyzed_at}
+                      compact
+                    />
                   </TableCell>
                   <TableCell>
                     <Badge className={getStatusBadgeColor(consultation.status)}>

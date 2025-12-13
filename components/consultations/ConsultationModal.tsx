@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
+import { analyzeConsultation, isAnalyzableConsultationType } from "@/services/consultation-ai-service";
 // B2B SaaS: 퍼널 이벤트는 DB 트리거에서 자동 기록됨 (trg_funnel_consultation)
 import type {
   ConsultationType,
@@ -45,11 +46,12 @@ const getEventTypeFromConsultationType = (consultationType: string): string => {
   // EventModal.tsx의 eventCategories와 동일한 value 사용
   const typeMapping: { [key: string]: string } = {
     '신규상담': 'new_consultation',
-    '입학후상담': 'after_enrollment_consultation',
+    '입테유도': 'test_guidance',
     '입테후상담': 'after_test_consultation',
     '등록유도': 'enrollment_guidance',
     '정기상담': 'regular_consultation',
-    '퇴원상담': 'withdrawal_consultation'
+    '퇴원상담': 'withdrawal_consultation',
+    '입학후상담': 'after_enrollment_consultation',
   };
   return typeMapping[consultationType] || 'consultation';
 };
@@ -316,6 +318,16 @@ export function ConsultationModal({
 
         // B2B SaaS: 퍼널 이벤트는 DB 트리거(trg_funnel_consultation)에서 자동 기록됨
 
+        // AI 태깅 분석 (비동기 - fire and forget) - 퍼널 상담만
+        if (content && content.trim().length >= 10 && isAnalyzableConsultationType(consultationType)) {
+          analyzeConsultation(
+            editingConsultation.id,
+            content,
+            consultationType,
+            studentInfo?.studentName
+          ).catch(console.error)
+        }
+
         toast.success("상담이 수정되었습니다.");
       } else {
         // Create mode
@@ -393,6 +405,16 @@ export function ConsultationModal({
 
         // B2B SaaS: 퍼널 이벤트는 DB 트리거(trg_funnel_consultation)에서 자동 기록됨
 
+        // AI 태깅 분석 (비동기 - fire and forget) - 퍼널 상담만
+        if (newConsultation && content && content.trim().length >= 10 && isAnalyzableConsultationType(consultationType)) {
+          analyzeConsultation(
+            newConsultation.id,
+            content,
+            consultationType,
+            studentInfo?.studentName
+          ).catch(console.error)
+        }
+
         toast.success("상담이 등록되었습니다.");
       }
       
@@ -428,12 +450,13 @@ export function ConsultationModal({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="신규상담">신규상담</SelectItem>
-                  <SelectItem value="입학후상담">입학후상담</SelectItem>
-                  <SelectItem value="입테후상담">입테후상담</SelectItem>
-                  <SelectItem value="등록유도">등록유도</SelectItem>
-                  <SelectItem value="정기상담">정기상담</SelectItem>
+                  <SelectItem value="신규상담">신규상담 (첫 상담)</SelectItem>
+                  <SelectItem value="입테유도">입테유도 (테스트 전)</SelectItem>
+                  <SelectItem value="입테후상담">입테후상담 (테스트 직후)</SelectItem>
+                  <SelectItem value="등록유도">등록유도 (테스트 후)</SelectItem>
+                  <SelectItem value="정기상담">정기상담 (재원생)</SelectItem>
                   <SelectItem value="퇴원상담">퇴원상담</SelectItem>
+                  <SelectItem value="입학후상담">입학후상담 (기타)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

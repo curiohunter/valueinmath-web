@@ -20,27 +20,28 @@ interface EventModalProps {
 }
 
 const eventCategories = [
-  // 상담 관련
-  { value: 'new_consultation', label: '신규상담', color: '#ec4899' }, // pink-500
-  { value: 'after_enrollment_consultation', label: '입학후상담', color: '#a855f7' }, // purple-500
-  { value: 'after_test_consultation', label: '입테후상담', color: '#8b5cf6' }, // violet-500
-  { value: 'enrollment_guidance', label: '등록유도', color: '#6366f1' }, // indigo-500
-  { value: 'regular_consultation', label: '정기상담', color: '#3b82f6' }, // blue-500
+  // 상담 관련 (퍼널 순서대로)
+  { value: 'new_consultation', label: '신규상담', color: '#a855f7' }, // purple-500 (첫 상담)
+  { value: 'test_guidance', label: '입테유도', color: '#f59e0b' }, // amber-500 (테스트 전)
+  { value: 'after_test_consultation', label: '입테후상담', color: '#3b82f6' }, // blue-500 (테스트 직후)
+  { value: 'enrollment_guidance', label: '등록유도', color: '#6366f1' }, // indigo-500 (테스트 후)
+  { value: 'regular_consultation', label: '정기상담', color: '#14b8a6' }, // teal-500 (재원생)
   { value: 'withdrawal_consultation', label: '퇴원상담', color: '#ef4444' }, // red-500
-  
+  { value: 'after_enrollment_consultation', label: '입학후상담', color: '#22c55e' }, // green-500 (기타)
+
   // 테스트 및 등원
   { value: 'entrance_test', label: '입학테스트', color: '#7c3aed' }, // violet-600
-  { value: 'new_enrollment', label: '신규등원', color: '#14b8a6' }, // teal-500
-  
+  { value: 'new_enrollment', label: '신규등원', color: '#059669' }, // emerald-600
+
   // 수업 관련
   { value: 'makeup', label: '보강', color: '#10b981' }, // emerald-500
   { value: 'last_minute_makeup', label: '직전보강', color: '#f97316' }, // orange-500
-  { value: 'absence', label: '결석', color: '#f59e0b' }, // amber-500
+  { value: 'absence', label: '결석', color: '#fbbf24' }, // amber-400
   { value: 'holiday', label: '휴강', color: '#6b7280' }, // gray-500
-  
+
   // 시험
   { value: 'school_exam', label: '학교시험', color: '#84cc16' }, // lime-500
-  
+
   // 기타
   { value: 'notice', label: '공지사항', color: '#dc2626' }, // red-600
   { value: 'work', label: '근무관련', color: '#0891b2' }, // cyan-600
