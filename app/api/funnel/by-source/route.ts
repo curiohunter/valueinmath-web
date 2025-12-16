@@ -67,12 +67,18 @@ export async function GET(request: NextRequest) {
       testRate: totals.firstContacts > 0
         ? Math.round((totals.tests / totals.firstContacts) * 1000) / 10
         : 0,
+      testToEnrollRate: totals.tests > 0
+        ? Math.round((totals.enrollments / totals.tests) * 1000) / 10
+        : 0,
       avgDaysToEnroll: totals.daysCount > 0
         ? Math.round(totals.totalDays / totals.daysCount)
         : null,
       avgConsultations: totals.consultationsCount > 0
         ? Math.round((totals.totalConsultations / totals.consultationsCount) * 10) / 10
         : null,
+      totalCost: null,
+      costPerLead: null,
+      costPerEnrollment: null,
     }
 
     return NextResponse.json({

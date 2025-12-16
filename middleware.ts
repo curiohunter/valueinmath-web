@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes that don't require authentication
-  const publicRoutes = ["/", "/login", "/signup", "/reset-password"]
+  const publicRoutes = ["/", "/login", "/reset-password"]
   const isPublicRoute = publicRoutes.includes(path)
 
   // Protected routes that require authentication

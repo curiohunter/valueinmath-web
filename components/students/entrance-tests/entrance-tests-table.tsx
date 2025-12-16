@@ -66,7 +66,7 @@ export function EntranceTestsTable({
   onDelete,
   onUpdate,
 }: EntranceTestsTableProps) {
-  const [sortField, setSortField] = useState<"test_date" | "consultation_id">("test_date");
+  const [sortField, setSortField] = useState<"test_date" | "student_id">("test_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -75,9 +75,9 @@ export function EntranceTestsTable({
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // 학생 이름 찾기
-  const getStudentName = (consultationId: string | null) => {
-    if (!consultationId) return "미지정";
-    const student = students.find(s => s.id === consultationId);
+  const getStudentName = (studentId: string | null) => {
+    if (!studentId) return "미지정";
+    const student = students.find(s => s.id === studentId);
     return student?.name || "알 수 없음";
   };
 
@@ -90,8 +90,8 @@ export function EntranceTestsTable({
         aValue = a.test_date || "";
         bValue = b.test_date || "";
       } else {
-        aValue = getStudentName(a.consultation_id);
-        bValue = getStudentName(b.consultation_id);
+        aValue = getStudentName(a.student_id);
+        bValue = getStudentName(b.student_id);
       }
 
       if (sortOrder === "asc") {
@@ -116,7 +116,7 @@ export function EntranceTestsTable({
   }, [currentPage]);
 
   // 정렬 토글
-  const handleSort = (field: "test_date" | "consultation_id") => {
+  const handleSort = (field: "test_date" | "student_id") => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
@@ -210,14 +210,14 @@ export function EntranceTestsTable({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleSort("consultation_id")}
+                    onClick={() => handleSort("student_id")}
                     className="h-auto p-0 font-semibold"
                   >
                     학생
-                    {sortField === "consultation_id" && (
+                    {sortField === "student_id" && (
                       sortOrder === "asc" ? <ArrowUp className="ml-1 h-4 w-4" /> : <ArrowDown className="ml-1 h-4 w-4" />
                     )}
-                    {sortField !== "consultation_id" && <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />}
+                    {sortField !== "student_id" && <ArrowUpDown className="ml-1 h-4 w-4 opacity-50" />}
                   </Button>
                 </TableHead>
                 <TableHead className="w-[150px]">
@@ -253,8 +253,8 @@ export function EntranceTestsTable({
                       <User className="w-3 h-3 text-gray-400" />
                       {editingId === test.id ? (
                         <Select
-                          value={editingData.consultation_id || ""}
-                          onValueChange={(value) => setEditingData({...editingData, consultation_id: value})}
+                          value={editingData.student_id || ""}
+                          onValueChange={(value) => setEditingData({...editingData, student_id: value})}
                         >
                           <SelectTrigger className="h-8 text-sm">
                             <SelectValue placeholder="학생 선택" />
@@ -268,7 +268,7 @@ export function EntranceTestsTable({
                           </SelectContent>
                         </Select>
                       ) : (
-                        <span className="text-sm">{getStudentName(test.consultation_id)}</span>
+                        <span className="text-sm">{getStudentName(test.student_id)}</span>
                       )}
                     </div>
                   </TableCell>

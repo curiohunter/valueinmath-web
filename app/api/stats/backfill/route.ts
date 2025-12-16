@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
         .from('entrance_tests')
         .select(`
           *,
-          students!consultation_id (
+          students!student_id (
             department
           )
         `)

@@ -4,11 +4,12 @@ import { useState, Suspense } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, UserCheck } from "lucide-react"
+import { Users, UserCheck, UserX } from "lucide-react"
 import { EmployeesTable } from "./employees-table"
 import { EmployeesHeader } from "./employees-header"
 import { EmployeesFilters } from "./employees-filters"
 import { ParentStudentApprovalSection } from "@/components/employees/parent-student-approval-section"
+import { PendingUsersSection } from "@/components/employees/pending-users-section"
 
 function TableSkeleton() {
   return (
@@ -32,7 +33,7 @@ export function EmployeesPageClient() {
       <EmployeesHeader />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-2">
+        <TabsList className="grid w-full max-w-3xl grid-cols-3">
           <TabsTrigger value="employees" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             직원 관리
@@ -40,6 +41,10 @@ export function EmployeesPageClient() {
           <TabsTrigger value="approval" className="flex items-center gap-2">
             <UserCheck className="h-4 w-4" />
             학부모/학생 승인
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="flex items-center gap-2">
+            <UserX className="h-4 w-4" />
+            미승인 관리
           </TabsTrigger>
         </TabsList>
 
@@ -57,6 +62,12 @@ export function EmployeesPageClient() {
         <TabsContent value="approval" className="mt-6">
           <Suspense fallback={<TableSkeleton />}>
             <ParentStudentApprovalSection />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="pending" className="mt-6">
+          <Suspense fallback={<TableSkeleton />}>
+            <PendingUsersSection />
           </Suspense>
         </TabsContent>
       </Tabs>

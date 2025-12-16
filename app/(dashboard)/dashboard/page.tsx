@@ -189,7 +189,7 @@ export default function DashboardPage() {
         .from('entrance_tests')
         .select(`
           *,
-          students!consultation_id (
+          students!student_id (
             department
           )
         `)
@@ -512,12 +512,12 @@ export default function DashboardPage() {
         .select(`
           *,
           calendar_event_id,
-          students!consultation_id (
+          students!student_id (
             name,
             status
           )
         `)
-        .in('consultation_id', studentIds)
+        .in('student_id', studentIds)
         .order('test_date', { ascending: true, nullsFirst: true })
         .limit(20)
 
@@ -546,8 +546,8 @@ export default function DashboardPage() {
     
     // 새로운 테스트를 위한 기본 데이터 설정
     const newTest: Partial<EntranceTestData> = {
-      consultation_id: consultationId,
-      student_name: consultation.name,  // student_id 필드 제거 (DB에 없음)
+      student_id: consultationId,
+      student_name: consultation.name,
       status: '테스트예정',
       test_date: new Date().toISOString(),
       test1_level: '',
@@ -716,11 +716,10 @@ export default function DashboardPage() {
         test_result: (testData as any).test_result === '' ? null : (testData as any).test_result
       }
       
-      // 신규 테스트 생성 시 editingTest에서 consultation_id 가져오기
+      // 신규 테스트 생성 시 editingTest에서 student_id 가져오기
       if (!editingTest?.id && editingTest) {
-        cleanedTestData.consultation_id = editingTest.consultation_id
-        // student_id, student_name은 데이터베이스에 없는 필드이므로 제거
-        delete cleanedTestData.student_id
+        cleanedTestData.student_id = editingTest.student_id
+        // student_name은 표시용 필드이므로 제거
         delete cleanedTestData.student_name
       }
       
@@ -783,11 +782,11 @@ export default function DashboardPage() {
         // 테스트 날짜가 있으면 캘린더 이벤트 먼저 생성
         if (cleanData.test_date) {
           try {
-            // consultation_id로 학생 정보 조회
+            // student_id로 학생 정보 조회
             const { data: studentData } = await supabase
               .from('students')
               .select('name')
-              .eq('id', cleanData.consultation_id)
+              .eq('id', cleanData.student_id)
               .single()
             
             const studentName = studentData?.name || '학생'
@@ -1009,23 +1008,23 @@ export default function DashboardPage() {
   // 등록 결정 - 학생 정보 모달 열기
   const handleEnrollmentDecision = async (testId: number) => {
     try {
-      // 입학테스트에서 consultation_id 찾기
+      // 입학테스트에서 student_id 찾기
       const { data: testData, error: testError } = await supabase
         .from('entrance_tests')
-        .select('consultation_id')
+        .select('student_id')
         .eq('id', testId)
         .single()
-      
-      if (testError || !testData?.consultation_id) {
+
+      if (testError || !testData?.student_id) {
         toast.error('학생 정보를 찾을 수 없습니다.')
         return
       }
-      
+
       // 학생 정보 가져오기
       const { data: studentData, error: studentError } = await supabase
         .from('students')
         .select('*')
-        .eq('id', testData.consultation_id)
+        .eq('id', testData.student_id)
         .single()
       
       if (studentError || !studentData) {

@@ -39,7 +39,7 @@ export async function saveMonthlySnapshot() {
       .from('entrance_tests')
       .select(`
         id,
-        consultation_id,
+        student_id,
         test_date,
         students!inner(
           id, 
@@ -207,7 +207,7 @@ export async function collectMonthlySnapshot(targetYear: number, targetMonth: nu
       .from('entrance_tests')
       .select(`
         id,
-        consultation_id,
+        student_id,
         test_date,
         students!inner(
           id, 
