@@ -28,7 +28,7 @@ export default function ClassesPage() {
     const supabase = createClient()
     
     const [classesRes, teachersRes, studentsRes, classStudentsRes, schedulesRes] = await Promise.all([
-      supabase.from("classes").select("*, monthly_fee").order("teacher_id", { ascending: true }).order("name", { ascending: true }),
+      supabase.from("classes").select("*, monthly_fee").eq("is_active", true).order("teacher_id", { ascending: true }).order("name", { ascending: true }),
       supabase.from("employees")
         .select("id, name, position")
         .in("position", ["원장", "강사"])
@@ -128,36 +128,40 @@ export default function ClassesPage() {
     loadData() // 전체 새로고침 대신 데이터만 다시 로드
   }
 
-  // 반 삭제 기능
+  // 반 삭제 기능 (Soft Delete - 이력 보존)
   const handleDeleteClass = async (classId: string) => {
     const supabase = createClient()
-    
+
     try {
-      // 반 삭제
-      // - class_students는 CASCADE로 자동 삭제됨
-      // - tuition_fees, study_logs, test_logs는 SET NULL로 데이터 보존됨
+      // Soft Delete: is_active = false로 변경
+      // - class_enrollments_history에 'class_closed' 이벤트가 트리거로 자동 기록됨
+      // - 기존 학생 데이터, 학원비, 학습일지 등 모든 데이터 보존
       const { error: classError } = await supabase
         .from("classes")
-        .delete()
+        .update({
+          is_active: false,
+          closed_at: new Date().toISOString(),
+          closed_reason: 'manual_close'
+        })
         .eq("id", classId)
-      
+
       if (classError) {
-        console.error("반 삭제 오류:", classError)
+        console.error("반 비활성화 오류:", classError)
         const { toast } = await import("sonner")
-        toast.error("반 삭제 중 오류가 발생했습니다.")
+        toast.error("반 비활성화 중 오류가 발생했습니다.")
         throw classError
       }
-      
+
       // 성공 메시지 (sonner toast 사용)
       const { toast } = await import("sonner")
-      toast.success("반이 삭제되었습니다. 학원비 기록은 보존됩니다.")
-      
+      toast.success("반이 비활성화되었습니다. 모든 이력이 보존됩니다.")
+
       // 데이터 새로고침
       loadData()
     } catch (error: any) {
-      console.error("반 삭제 중 오류:", error)
+      console.error("반 비활성화 중 오류:", error)
       const { toast } = await import("sonner")
-      toast.error("반 삭제 중 오류가 발생했습니다.")
+      toast.error("반 비활성화 중 오류가 발생했습니다.")
     }
   }
 

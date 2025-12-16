@@ -161,7 +161,7 @@ export default function LearningPage() {
     setLoading(true);
     setError(null);
     try {
-      const { data: classData } = await supabase.from("classes").select("id, name, teacher_id");
+      const { data: classData } = await supabase.from("classes").select("id, name, teacher_id").eq("is_active", true);
       const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
       const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type");
       const { data: teacherData } = await supabase.from("employees").select("id, name");
