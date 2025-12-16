@@ -227,14 +227,31 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         toast.error("수정 실패: " + error.message)
         return
       }
-      // 2. 기존 반-학생 매핑 삭제 후 새로 insert
-      const { error: deleteError } = await supabase.from("class_students").delete().eq("class_id", initialData.id)
-      if (deleteError) {
-        console.error('class_students 삭제 오류:', deleteError)
+
+      // 2. 반-학생 매핑: 차이점만 처리 (트리거 이력 최적화)
+      const currentStudentIds = new Set(selectedStudents.map(s => s.id))
+      const originalStudentIds = new Set(initialData.selectedStudentIds)
+
+      // 새로 추가된 학생들 (현재에 있고 원본에 없음)
+      const studentsToAdd = selectedStudents.filter(s => !originalStudentIds.has(s.id))
+      // 제거된 학생들 (원본에 있고 현재에 없음)
+      const studentsToRemove = initialData.selectedStudentIds.filter(id => !currentStudentIds.has(id))
+
+      // 제거된 학생 삭제
+      if (studentsToRemove.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("class_students")
+          .delete()
+          .eq("class_id", initialData.id)
+          .in("student_id", studentsToRemove)
+        if (deleteError) {
+          console.error('class_students 삭제 오류:', deleteError)
+        }
       }
 
-      if (selectedStudents.length > 0) {
-        const inserts = selectedStudents.map(student => ({ class_id: initialData.id, student_id: student.id }))
+      // 새로 추가된 학생 삽입
+      if (studentsToAdd.length > 0) {
+        const inserts = studentsToAdd.map(student => ({ class_id: initialData.id, student_id: student.id }))
         const { error: insertError } = await supabase.from("class_students").insert(inserts)
         if (insertError) {
           console.error('class_students 추가 오류:', insertError)
