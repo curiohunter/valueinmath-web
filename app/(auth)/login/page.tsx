@@ -53,13 +53,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <CardContent>
           <LoginForm />
         </CardContent>
-        <CardFooter className="flex flex-col items-center gap-2">
-          <div className="text-sm text-muted-foreground">
-            계정이 없으신가요?{" "}
-            <Link href="/signup" className="text-primary hover:underline">
-              회원가입
-            </Link>
-          </div>
+        <CardFooter className="flex justify-center">
           <div className="text-sm text-muted-foreground">
             <Link href="/reset-password" className="text-primary hover:underline">
               비밀번호를 잊으셨나요?

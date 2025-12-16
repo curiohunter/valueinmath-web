@@ -19,7 +19,6 @@ type EntranceTest = Database['public']['Tables']['entrance_tests']['Row']
 
 export interface EntranceTestData extends EntranceTest {
   student_name?: string
-  calendar_event_id?: string | null  // 로컬 calendar_events 테이블 참조
 }
 
 interface EntranceTestTableProps {

@@ -225,3 +225,128 @@ export const FUNNEL_COLORS = {
   registration: '#22c55e',
   enrolled: '#10b981',
 } as const
+
+// ============================================
+// Marketing Intelligence System (Phase 1)
+// ============================================
+
+// DB marketing_channel ENUM과 일치
+export type MarketingChannel =
+  | 'blog_naver'
+  | 'blog_other'
+  | 'instagram'
+  | 'youtube'
+  | 'cafe_naver'
+  | 'cafe_other'
+  | 'kakao_channel'
+  | 'paid_ads'
+  | 'seminar'
+  | 'student_event'
+  | 'parent_event'
+  | 'referral'
+  | 'flyer'
+  | 'seasonal_campaign'
+  | 'partnership'
+  | 'other'
+
+// DB marketing_status ENUM과 일치
+export type MarketingStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled'
+
+export type AttributionType = 'first_touch' | 'last_touch' | 'ai_inferred' | 'multi_touch'
+
+export type InsightType = 'recommendation' | 'warning' | 'trend' | 'anomaly'
+
+export type InsightPriority = 'high' | 'medium' | 'low'
+
+export interface MarketingActivity {
+  id: string
+  channel: MarketingChannel
+  title: string
+  description: string | null
+  start_date: string
+  end_date: string | null
+  budget: number | null
+  actual_cost: number | null
+  target_audience: string | null
+  status: MarketingStatus
+  metadata: Record<string, unknown>
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MarketingAttribution {
+  id: string
+  student_id: string
+  marketing_activity_id: string
+  attribution_type: AttributionType
+  touch_order: number
+  interaction_date: string
+  confidence_score: number | null
+  notes: string | null
+  created_at: string
+}
+
+export interface MarketingInsight {
+  id: string
+  insight_type: InsightType
+  priority: InsightPriority
+  title: string
+  description: string | null
+  related_channel: MarketingChannel | null
+  related_activity_id: string | null
+  data_snapshot: Record<string, unknown>
+  is_read: boolean
+  is_dismissed: boolean
+  generated_at: string
+  expires_at: string | null
+  created_at: string
+}
+
+export interface ChannelMetrics {
+  channel: MarketingChannel
+  channelLabel: string
+  leads: number
+  tests: number
+  enrollments: number
+  leadToTestRate: number
+  testToEnrollRate: number
+  totalConversionRate: number
+  totalBudget: number | null
+  costPerLead: number | null
+  costPerEnrollment: number | null
+}
+
+// 채널 한글 라벨 (DB marketing_channel ENUM과 일치)
+export const CHANNEL_LABELS: Record<MarketingChannel, string> = {
+  'blog_naver': '네이버 블로그',
+  'blog_other': '기타 블로그',
+  'instagram': '인스타그램',
+  'youtube': '유튜브',
+  'cafe_naver': '네이버 카페',
+  'cafe_other': '기타 카페',
+  'kakao_channel': '카카오 채널',
+  'paid_ads': '유료 광고',
+  'seminar': '설명회',
+  'student_event': '학생 이벤트',
+  'parent_event': '학부모 이벤트',
+  'referral': '추천',
+  'flyer': '전단지/현수막',
+  'seasonal_campaign': '시즌 캠페인',
+  'partnership': '제휴',
+  'other': '기타',
+}
+
+// lead_source → channel 매핑 (기존 데이터 호환)
+export const LEAD_SOURCE_TO_CHANNEL: Record<string, MarketingChannel> = {
+  '블로그': 'blog_naver',
+  '맘까페': 'cafe_naver',
+  '입소문': 'referral',
+  '전화상담': 'other',
+  '오프라인': 'other',
+  '원내친구추천': 'referral',
+  '원내학부모추천': 'referral',
+  '원외친구추천': 'referral',
+  '원외학부모추천': 'referral',
+  '형제': 'referral',
+}

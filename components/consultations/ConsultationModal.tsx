@@ -30,6 +30,8 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
 import { analyzeConsultation, isAnalyzableConsultationType } from "@/services/consultation-ai-service";
+import { getMarketingActivities, type MarketingActivity } from "@/services/marketing-service";
+import { CHANNEL_LABELS, type MarketingChannel } from "@/types/b2b-saas";
 // B2B SaaS: 퍼널 이벤트는 DB 트리거에서 자동 기록됨 (trg_funnel_consultation)
 import type {
   ConsultationType,
@@ -117,6 +119,10 @@ export function ConsultationModal({
   const [nextDate, setNextDate] = useState<Date | undefined>();
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
+
+  // Marketing Activity Selection (신규상담 only)
+  const [marketingActivities, setMarketingActivities] = useState<MarketingActivity[]>([]);
+  const [selectedMarketingActivityId, setSelectedMarketingActivityId] = useState<string>("");
   
   // Time options
   const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
@@ -133,6 +139,19 @@ export function ConsultationModal({
       if (data) setEmployees(data);
     };
     loadEmployees();
+  }, []);
+
+  // Load active marketing activities (for 신규상담)
+  useEffect(() => {
+    const loadMarketingActivities = async () => {
+      try {
+        const activities = await getMarketingActivities(supabase, { status: 'active' });
+        setMarketingActivities(activities);
+      } catch (error) {
+        console.error("마케팅 활동 로딩 실패:", error);
+      }
+    };
+    loadMarketingActivities();
   }, []);
   
   // Initialize form data when modal opens
@@ -180,6 +199,7 @@ export function ConsultationModal({
       setStatus("예정");
       setNextAction("");
       setNextDate(undefined);
+      setSelectedMarketingActivityId(""); // Reset marketing activity selection
     }
     
     // Set initial load flag after form initialization
@@ -331,21 +351,28 @@ export function ConsultationModal({
         toast.success("상담이 수정되었습니다.");
       } else {
         // Create mode
+        const insertData: any = {
+          student_id: studentInfo!.studentId,
+          type: consultationType,
+          method: consultationMethod,
+          date: consultationDateTime,
+          counselor_id: counselorId,
+          content: content || null,
+          status,
+          next_action: nextAction || null,
+          next_date: nextDateTime,
+          student_name_snapshot: studentInfo!.studentName,
+          counselor_name_snapshot: counselorName,
+        };
+
+        // 신규상담일 때 마케팅 활동 연결
+        if (consultationType === "신규상담" && selectedMarketingActivityId) {
+          insertData.marketing_activity_id = selectedMarketingActivityId;
+        }
+
         const { data: newConsultation, error } = await supabase
           .from("consultations")
-          .insert({
-            student_id: studentInfo!.studentId,
-            type: consultationType,
-            method: consultationMethod,
-            date: consultationDateTime,
-            counselor_id: counselorId,
-            content: content || null,
-            status,
-            next_action: nextAction || null,
-            next_date: nextDateTime,
-            student_name_snapshot: studentInfo!.studentName,
-            counselor_name_snapshot: counselorName,
-          })
+          .insert(insertData)
           .select()
           .single();
           
@@ -460,7 +487,7 @@ export function ConsultationModal({
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="method">상담 방법</Label>
               <Select value={consultationMethod} onValueChange={(v) => setConsultationMethod(v as ConsultationMethod)}>
@@ -475,6 +502,35 @@ export function ConsultationModal({
               </Select>
             </div>
           </div>
+
+          {/* Row 1.5: Marketing Activity Selection (신규상담 only) */}
+          {consultationType === "신규상담" && !editingConsultation && marketingActivities.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="marketingActivity">
+                유입 경로 (마케팅 활동)
+                <span className="text-muted-foreground text-xs ml-2">선택사항</span>
+              </Label>
+              <Select
+                value={selectedMarketingActivityId}
+                onValueChange={setSelectedMarketingActivityId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="마케팅 활동을 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">선택 안함</SelectItem>
+                  {marketingActivities.map(activity => (
+                    <SelectItem key={activity.id} value={activity.id}>
+                      [{CHANNEL_LABELS[activity.channel as MarketingChannel] || activity.channel}] {activity.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                어떤 마케팅 활동을 통해 유입되었는지 선택하면 전환율 분석에 도움됩니다.
+              </p>
+            </div>
+          )}
           
           {/* Row 2: Date and Time - Improved Layout */}
           <div className="space-y-4">

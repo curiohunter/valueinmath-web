@@ -153,7 +153,7 @@ export default function ConsultationsPage() {
         .from("entrance_tests")
         .select(`
           *,
-          students!consultation_id(department)
+          students!student_id(department)
         `)
         .gte("created_at", startOfMonth.toISOString())
         .lte("created_at", endOfMonth.toISOString());

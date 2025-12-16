@@ -24,7 +24,6 @@ type EntranceTest = Database['public']['Tables']['entrance_tests']['Row']
 
 interface EntranceTestData extends EntranceTest {
   student_name?: string
-  calendar_event_id?: string | null
 }
 
 interface EntranceTestCardProps {

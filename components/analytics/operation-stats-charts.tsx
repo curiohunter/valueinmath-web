@@ -162,7 +162,7 @@ export function OperationStatsCharts() {
       // 이번달 입학테스트 (entrance_tests 테이블에서 조회)
       const { data: tests, error: testError } = await supabase
         .from('entrance_tests')
-        .select('*, student:students!consultation_id(department)')
+        .select('*, student:students!student_id(department)')
         .gte('test_date', monthStart)
         .lte('test_date', monthEnd)
       

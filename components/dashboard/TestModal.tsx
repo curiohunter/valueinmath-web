@@ -27,8 +27,6 @@ type EntranceTest = Database['public']['Tables']['entrance_tests']['Row']
 
 export interface EntranceTestData extends EntranceTest {
   student_name?: string
-  student_id?: string
-  consultation_id?: string
 }
 
 interface TestModalProps {
@@ -191,16 +189,16 @@ export function TestModal({
   
   // 등록 결정
   const handleEnrollmentDecision = async (status: '재원' | '미등록') => {
-    if (!test?.consultation_id) {
+    if (!test?.student_id) {
       alert('학생 정보가 없습니다.')
       return
     }
-    
+
     try {
       const { error } = await supabase
         .from('students')
         .update({ status })
-        .eq('id', test.consultation_id)
+        .eq('id', test.student_id)
       
       if (error) throw error
       

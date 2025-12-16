@@ -107,7 +107,7 @@ serve(async (req) => {
       .from('entrance_tests')
       .select(`
         *,
-        students!consultation_id (
+        students!student_id (
           department
         )
       `)

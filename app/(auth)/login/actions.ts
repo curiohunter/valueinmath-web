@@ -118,3 +118,42 @@ export async function signInWithGoogle() {
     redirect(data.url)
   }
 }
+
+export async function signInWithKakao() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://valueinmath.vercel.app'
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'kakao',
+    options: {
+      redirectTo: `${siteUrl}/api/auth/callback`,
+    },
+  })
+
+  // 명시적 에러 처리
+  if (error) {
+    console.error('Kakao OAuth error:', error)
+    redirect('/login?error=' + encodeURIComponent('카카오 로그인에 실패했습니다. 다시 시도해주세요.'))
+  }
+
+  if (data?.url) {
+    redirect(data.url)
+  }
+}

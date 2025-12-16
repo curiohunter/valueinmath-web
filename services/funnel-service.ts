@@ -285,8 +285,12 @@ export interface LeadSourceFunnelMetrics {
   enrollments: number        // 등록 완료 수
   conversionRate: number     // 최종 전환율 (첫상담→등록)
   testRate: number           // 테스트 전환율 (첫상담→테스트)
+  testToEnrollRate: number   // 테스트→등록 전환율
   avgDaysToEnroll: number | null   // 첫상담→등록 평균 소요일
   avgConsultations: number | null  // 등록까지 평균 상담 횟수
+  totalCost: number | null         // 총 마케팅 비용
+  costPerLead: number | null       // 리드당 비용
+  costPerEnrollment: number | null // 등록당 비용
 }
 
 // 리드 소스 정렬 순서 (연관 있는 것끼리 그룹핑)
@@ -341,8 +345,14 @@ export async function getAllLeadSourceMetrics(
     testRate: row.first_contacts > 0
       ? Math.round((row.tests / row.first_contacts) * 1000) / 10
       : 0,
+    testToEnrollRate: row.tests > 0
+      ? Math.round((row.enrollments / row.tests) * 1000) / 10
+      : 0,
     avgDaysToEnroll: row.avg_days_to_enroll,
     avgConsultations: row.avg_consultations,
+    totalCost: null,  // 마케팅 활동에서 별도 조인 필요
+    costPerLead: null,
+    costPerEnrollment: null,
   }))
 
   // 정렬
@@ -406,8 +416,12 @@ export async function getFunnelByLeadSource(
       enrollments: 0,
       conversionRate: 0,
       testRate: 0,
+      testToEnrollRate: 0,
       avgDaysToEnroll: null,
       avgConsultations: null,
+      totalCost: null,
+      costPerLead: null,
+      costPerEnrollment: null,
     }
   }
 
@@ -473,8 +487,12 @@ export async function getFunnelByLeadSource(
     enrollments,
     conversionRate: firstContacts > 0 ? Math.round((enrollments / firstContacts) * 1000) / 10 : 0,
     testRate: firstContacts > 0 ? Math.round((tests / firstContacts) * 1000) / 10 : 0,
+    testToEnrollRate: tests > 0 ? Math.round((enrollments / tests) * 1000) / 10 : 0,
     avgDaysToEnroll: enrollCountWithDays > 0 ? Math.round(totalDays / enrollCountWithDays) : null,
     avgConsultations: consultationCount > 0 ? Math.round((totalConsultations / consultationCount) * 10) / 10 : null,
+    totalCost: null,  // 마케팅 활동에서 별도 조인 필요
+    costPerLead: null,
+    costPerEnrollment: null,
   }
 }
 
