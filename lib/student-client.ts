@@ -45,6 +45,9 @@ export async function getStudents(
 
     let query = supabase.from("students").select("*", { count: "exact" })
 
+    // 기본적으로 활성 학생만 조회 (is_active = true)
+    query = query.eq("is_active", true)
+
     // 검색어 필터 적용
     if (filters.search) {
       query = query.or(
@@ -105,11 +108,19 @@ export async function getStudents(
   }
 }
 
-// 학생 삭제 (클라이언트용)
-export async function deleteStudent(id: string): Promise<{ error: Error | null }> {
+// 학생 삭제 (클라이언트용 - Soft Delete로 이력 보존)
+export async function deleteStudent(id: string, reason?: string): Promise<{ error: Error | null }> {
   try {
     const supabase = getSupabaseBrowserClient()
-    const { error } = await supabase.from("students").delete().eq("id", id as string)
+    // Soft Delete: is_active = false로 변경하여 이력 보존
+    const { error } = await supabase
+      .from("students")
+      .update({
+        is_active: false,
+        left_at: new Date().toISOString(),
+        left_reason: reason || 'manual_delete'
+      })
+      .eq("id", id as string)
 
     if (error) throw error
 
