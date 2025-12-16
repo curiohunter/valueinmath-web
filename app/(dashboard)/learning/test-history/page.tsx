@@ -97,7 +97,7 @@ export default function TestHistoryPage() {
   // 반/학생 이름 매핑 fetch
   useEffect(() => {
     async function fetchMeta() {
-      const { data: classes } = await supabase.from("classes").select("id,name");
+      const { data: classes } = await supabase.from("classes").select("id,name").eq("is_active", true);
       const { data: students } = await supabase.from("students").select("id,name,school,grade,status");
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
       setStudentMap(Object.fromEntries((students || []).map((s: any) => [s.id, s.name])));
