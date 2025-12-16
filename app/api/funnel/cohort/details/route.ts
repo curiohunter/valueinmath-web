@@ -15,21 +15,33 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 코호트별 미등록 학생의 학년 분포 조회
-    const { data: gradeBreakdown, error } = await supabase
-      .rpc("get_cohort_non_enrolled_details", {
+    // 미등록 학생과 등록 학생의 학년 분포를 병렬로 조회
+    // @ts-ignore - Custom RPC functions
+    const [nonEnrolledResult, enrolledResult] = await Promise.all([
+      supabase.rpc("get_cohort_non_enrolled_details", {
         p_cohort_month: cohortMonth,
         p_lead_source: leadSource,
-      })
+      }),
+      supabase.rpc("get_cohort_enrolled_details", {
+        p_cohort_month: cohortMonth,
+        p_lead_source: leadSource,
+      }),
+    ])
 
-    if (error) {
-      console.error("Cohort details error:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (nonEnrolledResult.error) {
+      console.error("Cohort non-enrolled details error:", nonEnrolledResult.error)
+      return NextResponse.json({ error: nonEnrolledResult.error.message }, { status: 500 })
+    }
+
+    if (enrolledResult.error) {
+      console.error("Cohort enrolled details error:", enrolledResult.error)
+      return NextResponse.json({ error: enrolledResult.error.message }, { status: 500 })
     }
 
     return NextResponse.json({
       cohortMonth,
-      gradeBreakdown: gradeBreakdown || [],
+      gradeBreakdown: nonEnrolledResult.data || [],
+      enrolledGradeBreakdown: enrolledResult.data || [],
     })
   } catch (error) {
     console.error("Cohort details API error:", error)

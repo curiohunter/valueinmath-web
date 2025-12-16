@@ -75,7 +75,7 @@ import {
 } from "@/services/referral-service"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts"
+import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell } from "recharts"
 
 interface Bottleneck {
   stage: string
@@ -138,6 +138,15 @@ interface GradeBreakdown {
   without_test_count: number
 }
 
+interface EnrolledGradeBreakdown {
+  school_type: string
+  grade: number
+  grade_label: string
+  total_count: number
+  same_month_count: number
+  delayed_count: number
+}
+
 type PeriodFilter = "6months" | "1year" | "all"
 
 type SortField = "source" | "firstContacts" | "tests" | "enrollments" | "conversionRate" | "testRate" | "testToEnrollRate" | "avgDaysToEnroll" | "avgConsultations" | "totalCost"
@@ -161,6 +170,7 @@ export function FunnelAnalysisPageClient() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("1year")
   const [isCohortTableExpanded, setIsCohortTableExpanded] = useState(true) // 디폴트 펼침
   const [cohortGradeData, setCohortGradeData] = useState<Record<string, GradeBreakdown[]>>({})
+  const [cohortEnrolledGradeData, setCohortEnrolledGradeData] = useState<Record<string, EnrolledGradeBreakdown[]>>({})
   const [loadingCohortDetails, setLoadingCohortDetails] = useState<Set<string>>(new Set())
 
   // 리드소스 테이블 정렬 상태
@@ -782,7 +792,7 @@ export function FunnelAnalysisPageClient() {
     return { label: "지연등록", class: "bg-amber-100 text-amber-700" }
   }
 
-  // 코호트별 학년 데이터 가져오기
+  // 코호트별 학년 데이터 가져오기 (미등록 + 등록)
   const fetchCohortGradeData = async (cohortMonth: string, leadSource: string | null) => {
     const cacheKey = `${cohortMonth}-${leadSource || 'all'}`
 
@@ -802,9 +812,15 @@ export function FunnelAnalysisPageClient() {
       const res = await fetch(`/api/funnel/cohort/details?${params}`)
       if (res.ok) {
         const data = await res.json()
+        // 미등록 학년 데이터
         setCohortGradeData(prev => ({
           ...prev,
           [cacheKey]: data.gradeBreakdown || []
+        }))
+        // 등록 학년 데이터
+        setCohortEnrolledGradeData(prev => ({
+          ...prev,
+          [cacheKey]: data.enrolledGradeBreakdown || []
         }))
       }
     } catch (error) {
@@ -887,18 +903,41 @@ export function FunnelAnalysisPageClient() {
     }
   }, [filteredCohortData])
 
-  // 차트용 데이터 (월 오름차순)
+  // 차트용 데이터 (월 오름차순) + YoY 계산
   const chartData = useMemo(() => {
-    return [...filteredCohortData]
-      .sort((a, b) => a.cohort_month.localeCompare(b.cohort_month))
-      .map(c => ({
+    const sorted = [...filteredCohortData].sort((a, b) => a.cohort_month.localeCompare(b.cohort_month))
+
+    // 연도-월별로 매핑해서 전년 동월 찾기
+    const monthMap = new Map<string, number>()
+    sorted.forEach(c => {
+      monthMap.set(c.cohort_month, c.final_conversion_rate)
+    })
+
+    return sorted.map(c => {
+      const [year, month] = c.cohort_month.split('-')
+      const prevYearMonth = `${parseInt(year) - 1}-${month}`
+      const prevYearRate = monthMap.get(prevYearMonth)
+
+      // YoY 변화율 계산 (전년 데이터 있을 때만)
+      let yoyChange: number | null = null
+      if (prevYearRate !== undefined && prevYearRate > 0) {
+        yoyChange = Math.round((c.final_conversion_rate - prevYearRate) * 10) / 10
+      }
+
+      return {
         month: c.cohort_month.slice(5), // "2024-09" -> "09"
+        fullMonth: c.cohort_month,
+        year: year,
         전환율: c.final_conversion_rate,
         총원: c.total_students,
         등록: c.enroll_total,
         isOngoing: c.is_ongoing,
-      }))
+        yoyChange, // YoY 변화 (전년 대비 %p 차이)
+        prevYearRate, // 전년도 전환율
+      }
+    })
   }, [filteredCohortData])
+
 
   return (
     <div className="space-y-6">
@@ -1451,48 +1490,119 @@ export function FunnelAnalysisPageClient() {
                     </div>
                   )}
 
-                  {/* 전환율 추이 차트 */}
+                  {/* 전환율 추이 + 상담/등록 건수 + YoY 통합 차트 */}
                   {chartData.length > 0 && (
                     <div className="bg-white rounded-xl border p-4">
-                      <h4 className="text-sm font-medium text-muted-foreground mb-4">월별 전환율 추이</h4>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <LineChart data={chartData}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-medium text-muted-foreground">월별 코호트 현황</h4>
+                        <div className="flex items-center gap-4 text-xs">
+                          <span className="flex items-center gap-1">
+                            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#6366f1' }}></span>
+                            <span className="text-muted-foreground">상담</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#14b8a6' }}></span>
+                            <span className="text-muted-foreground">등록</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-3 h-0.5 rounded" style={{ backgroundColor: '#f97316' }}></span>
+                            <span className="text-muted-foreground">전환율</span>
+                          </span>
+                        </div>
+                      </div>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 40, left: -10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis
-                            dataKey="month"
-                            tick={{ fontSize: 12 }}
-                            tickFormatter={(value) => `${value}월`}
+                            dataKey="fullMonth"
+                            height={55}
+                            tick={(props: { x: number; y: number; payload: { value: string } }) => {
+                              const { x, y, payload } = props
+                              const dataItem = chartData.find(d => d.fullMonth === payload.value)
+                              const yoyChange = dataItem?.yoyChange
+                              const hasYoY = yoyChange !== null && yoyChange !== undefined
+                              const isPositive = yoyChange !== null && yoyChange >= 0
+                              return (
+                                <g transform={`translate(${x},${y})`}>
+                                  <text x={0} y={0} dy={12} textAnchor="middle" fill="#666" fontSize={11}>
+                                    {payload.value?.slice(2) || ''}
+                                  </text>
+                                  <text
+                                    x={0}
+                                    y={0}
+                                    dy={26}
+                                    textAnchor="middle"
+                                    fill={hasYoY ? (isPositive ? '#10b981' : '#ef4444') : '#d1d5db'}
+                                    fontSize={10}
+                                    fontWeight={500}
+                                  >
+                                    {hasYoY ? `${isPositive ? '+' : ''}${yoyChange}%` : '-'}
+                                  </text>
+                                </g>
+                              )
+                            }}
                           />
+                          {/* 왼쪽 Y축: 건수 (명) */}
                           <YAxis
-                            tick={{ fontSize: 12 }}
+                            yAxisId="left"
+                            tick={{ fontSize: 11 }}
+                            tickFormatter={(value) => `${value}`}
+                            domain={[0, 'auto']}
+                          />
+                          {/* 오른쪽 Y축: 전환율 (%) */}
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            tick={{ fontSize: 11 }}
                             tickFormatter={(value) => `${value}%`}
                             domain={[0, 'auto']}
                           />
                           <Tooltip
-                            content={({ active, payload, label }) => {
+                            content={({ active, payload }) => {
                               if (!active || !payload?.length) return null
-                              const data = payload[0].payload
+                              const data = payload[0]?.payload
+                              if (!data) return null
+                              const yoyChange = data.yoyChange
+                              const hasYoY = yoyChange !== null
+                              const isPositive = yoyChange > 0
                               return (
                                 <div className="bg-white shadow-lg border rounded-lg p-3 text-sm">
-                                  <p className="font-semibold">{label}월 코호트</p>
-                                  <p className="text-emerald-600">전환율: {data.전환율}%</p>
-                                  <p className="text-muted-foreground">총원: {data.총원}명 / 등록: {data.등록}명</p>
+                                  <p className="font-semibold mb-2">{data.fullMonth}</p>
+                                  <div className="space-y-1">
+                                    <p style={{ color: '#6366f1' }}>신규 상담: {data.총원}명</p>
+                                    <p style={{ color: '#14b8a6' }}>등록: {data.등록}명</p>
+                                    <p style={{ color: '#f97316' }}>전환율: {data.전환율}%</p>
+                                  </div>
+                                  {hasYoY && (
+                                    <div className="mt-2 pt-2 border-t">
+                                      <p className={isPositive ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
+                                        YoY: {isPositive ? '+' : ''}{yoyChange}%p
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">전년 동월: {data.prevYearRate}%</p>
+                                    </div>
+                                  )}
                                   {data.isOngoing && (
-                                    <p className="text-sky-500 text-xs mt-1">진행중 (추가 전환 가능)</p>
+                                    <p className="text-sky-500 text-xs mt-1">진행중</p>
                                   )}
                                 </div>
                               )
                             }}
                           />
+                          {/* 신규 상담 막대 (인디고) */}
+                          <Bar yAxisId="left" dataKey="총원" name="신규상담" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={20} />
+                          {/* 등록 막대 (틸) */}
+                          <Bar yAxisId="left" dataKey="등록" name="등록" fill="#14b8a6" radius={[3, 3, 0, 0]} maxBarSize={20} />
+                          {/* 전환율 라인 (오렌지) */}
                           <Line
+                            yAxisId="right"
                             type="monotone"
                             dataKey="전환율"
-                            stroke="#10b981"
-                            strokeWidth={2}
-                            dot={{ r: 4, fill: "#10b981" }}
-                            activeDot={{ r: 6 }}
+                            stroke="#f97316"
+                            strokeWidth={2.5}
+                            dot={{ r: 3, fill: "#f97316", strokeWidth: 0 }}
+                            activeDot={{ r: 5 }}
                           />
-                        </LineChart>
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </div>
                   )}
@@ -1581,50 +1691,50 @@ export function FunnelAnalysisPageClient() {
 
                               <CollapsibleContent>
                                 <div className="bg-muted/20 px-4 py-3 border-t">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
                                     {/* 등록 전환 추이 */}
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-2 font-medium">등록 전환 추이</p>
-                                      <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-muted-foreground w-12">M+0</span>
-                                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs text-muted-foreground w-8">M+0</span>
+                                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                             <div
                                               className="h-full bg-emerald-500 rounded-full"
                                               style={{ width: `${cohort.total_students > 0 ? (cohort.enroll_month_0 / cohort.total_students) * 100 : 0}%` }}
                                             />
                                           </div>
-                                          <span className="text-xs font-medium w-8">{cohort.enroll_month_0}명</span>
+                                          <span className="text-xs font-medium w-6 text-right">{cohort.enroll_month_0}</span>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-muted-foreground w-12">M+1</span>
-                                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs text-muted-foreground w-8">M+1</span>
+                                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                             <div
                                               className="h-full bg-emerald-400 rounded-full"
                                               style={{ width: `${cohort.total_students > 0 ? (cohort.enroll_month_1 / cohort.total_students) * 100 : 0}%` }}
                                             />
                                           </div>
-                                          <span className="text-xs font-medium w-8">{cohort.enroll_month_1}명</span>
+                                          <span className="text-xs font-medium w-6 text-right">{cohort.enroll_month_1}</span>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-muted-foreground w-12">M+2</span>
-                                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs text-muted-foreground w-8">M+2</span>
+                                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                             <div
                                               className="h-full bg-emerald-300 rounded-full"
                                               style={{ width: `${cohort.total_students > 0 ? (cohort.enroll_month_2 / cohort.total_students) * 100 : 0}%` }}
                                             />
                                           </div>
-                                          <span className="text-xs font-medium w-8">{cohort.enroll_month_2}명</span>
+                                          <span className="text-xs font-medium w-6 text-right">{cohort.enroll_month_2}</span>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-muted-foreground w-12">M+3+</span>
-                                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-xs text-muted-foreground w-8">M+3+</span>
+                                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                                             <div
                                               className="h-full bg-emerald-200 rounded-full"
                                               style={{ width: `${cohort.total_students > 0 ? (cohort.enroll_month_3 / cohort.total_students) * 100 : 0}%` }}
                                             />
                                           </div>
-                                          <span className="text-xs font-medium w-8">{cohort.enroll_month_3}명</span>
+                                          <span className="text-xs font-medium w-6 text-right">{cohort.enroll_month_3}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -1632,9 +1742,9 @@ export function FunnelAnalysisPageClient() {
                                     {/* 테스트 현황 */}
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-2 font-medium">테스트 현황</p>
-                                      <div className="space-y-1">
+                                      <div className="space-y-0.5 text-xs">
                                         <div className="flex justify-between">
-                                          <span className="text-muted-foreground">테스트 완료</span>
+                                          <span className="text-muted-foreground">완료</span>
                                           <span className="font-medium">{cohort.test_total}명</span>
                                         </div>
                                         <div className="flex justify-between">
@@ -1644,7 +1754,7 @@ export function FunnelAnalysisPageClient() {
                                           </span>
                                         </div>
                                         <div className="flex justify-between">
-                                          <span className="text-muted-foreground">테스트 후 미등록</span>
+                                          <span className="text-muted-foreground">테스트후 미등록</span>
                                           <span className="font-medium text-amber-600">{testedButNotEnrolled}명</span>
                                         </div>
                                       </div>
@@ -1653,7 +1763,7 @@ export function FunnelAnalysisPageClient() {
                                     {/* 미등록 현황 */}
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-2 font-medium">미등록 현황</p>
-                                      <div className="space-y-1">
+                                      <div className="space-y-0.5 text-xs">
                                         <div className="flex justify-between">
                                           <span className="text-muted-foreground">총 미등록</span>
                                           <span className="font-medium text-amber-600">{notEnrolled}명</span>
@@ -1665,7 +1775,7 @@ export function FunnelAnalysisPageClient() {
                                           </span>
                                         </div>
                                         <div className="flex justify-between">
-                                          <span className="text-muted-foreground">테스트 없이 이탈</span>
+                                          <span className="text-muted-foreground">테스트X 이탈</span>
                                           <span className="font-medium text-gray-500">{notEnrolled - testedButNotEnrolled}명</span>
                                         </div>
                                       </div>
@@ -1694,16 +1804,46 @@ export function FunnelAnalysisPageClient() {
                                         }
 
                                         return (
-                                          <div className="space-y-1">
+                                          <div className="space-y-0.5">
                                             {gradeData.map((g, idx) => (
-                                              <div key={idx} className="flex justify-between text-xs">
+                                              <div key={idx} className="flex justify-between text-xs gap-1">
                                                 <span className="text-muted-foreground">{g.grade_label}</span>
-                                                <div className="flex gap-2">
-                                                  <span className="font-medium">{g.total_count}명</span>
-                                                  <span className="text-muted-foreground">
-                                                    (테O {g.with_test_count} / 테X {g.without_test_count})
-                                                  </span>
-                                                </div>
+                                                <span className="font-medium">{g.total_count}<span className="text-muted-foreground text-[10px] ml-0.5">({g.with_test_count}/{g.without_test_count})</span></span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )
+                                      })()}
+                                    </div>
+
+                                    {/* 등록 학년별 구성 */}
+                                    <div>
+                                      <p className="text-xs text-muted-foreground mb-2 font-medium">등록 학년별 구성</p>
+                                      {(() => {
+                                        const enrolledGradeData = cohortEnrolledGradeData[cohortKey]
+                                        const isLoading = loadingCohortDetails.has(cohortKey)
+
+                                        if (isLoading) {
+                                          return (
+                                            <div className="flex items-center gap-1 text-muted-foreground">
+                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              <span className="text-xs">로딩중...</span>
+                                            </div>
+                                          )
+                                        }
+
+                                        if (!enrolledGradeData || enrolledGradeData.length === 0) {
+                                          return (
+                                            <span className="text-xs text-muted-foreground">데이터 없음</span>
+                                          )
+                                        }
+
+                                        return (
+                                          <div className="space-y-0.5">
+                                            {enrolledGradeData.map((g, idx) => (
+                                              <div key={idx} className="flex justify-between text-xs gap-1">
+                                                <span className="text-muted-foreground">{g.grade_label}</span>
+                                                <span className="font-medium text-emerald-600">{g.total_count}<span className="text-muted-foreground text-[10px] ml-0.5">({g.same_month_count}/{g.delayed_count})</span></span>
                                               </div>
                                             ))}
                                           </div>
