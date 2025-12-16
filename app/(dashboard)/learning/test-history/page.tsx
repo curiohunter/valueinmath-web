@@ -69,7 +69,7 @@ export default function TestHistoryPage() {
   const [classMap, setClassMap] = useState<{ [id: string]: string }>({});
   const [studentMap, setStudentMap] = useState<{ [id: string]: string }>({});
   const [classOptions, setClassOptions] = useState<{id: string, name: string}[]>([]);
-  const [studentOptions, setStudentOptions] = useState<{id: string, name: string}[]>([]);
+  const [studentOptions, setStudentOptions] = useState<{id: string, name: string, school?: string, grade?: number, status?: string}[]>([]);
   const [classSearch, setClassSearch] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [testTypeFilter, setTestTypeFilter] = useState("");
@@ -98,7 +98,7 @@ export default function TestHistoryPage() {
   useEffect(() => {
     async function fetchMeta() {
       const { data: classes } = await supabase.from("classes").select("id,name");
-      const { data: students } = await supabase.from("students").select("id,name");
+      const { data: students } = await supabase.from("students").select("id,name,school,grade,status");
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
       setStudentMap(Object.fromEntries((students || []).map((s: any) => [s.id, s.name])));
       setClassOptions(classes || []);
@@ -532,31 +532,84 @@ export default function TestHistoryPage() {
             <div className="relative">
               <Input
                 value={classSearch}
-                onChange={e => setClassSearch(e.target.value)}
+                onChange={e => {
+                  setClassSearch(e.target.value);
+                  // 검색어가 비면 선택된 ID도 초기화
+                  if (!e.target.value) setFilteredClassId("");
+                }}
                 placeholder="반 이름 검색"
                 className="h-10"
               />
               {classSearch && (
-                <div className="absolute top-full left-0 mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                  {classOptions.filter(c => c.name.toLowerCase().includes(classSearch.toLowerCase())).length}개 결과
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {classOptions
+                    .filter(c => c.name.toLowerCase().includes(classSearch.toLowerCase()))
+                    .slice(0, 10)
+                    .map(c => (
+                      <div
+                        key={c.id}
+                        className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${filteredClassId === c.id ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}`}
+                        onClick={() => {
+                          setClassSearch(c.name);
+                          setFilteredClassId(c.id);
+                        }}
+                      >
+                        {c.name}
+                      </div>
+                    ))}
+                  {classOptions.filter(c => c.name.toLowerCase().includes(classSearch.toLowerCase())).length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-400">검색 결과 없음</div>
+                  )}
                 </div>
               )}
             </div>
           </div>
-          
+
           {/* 학생 검색 */}
           <div className="flex flex-col">
             <label className="text-sm font-medium text-gray-700 mb-2">학생</label>
             <div className="relative">
               <Input
                 value={studentSearch}
-                onChange={e => setStudentSearch(e.target.value)}
+                onChange={e => {
+                  setStudentSearch(e.target.value);
+                  // 검색어가 비면 선택된 ID도 초기화
+                  if (!e.target.value) setFilteredStudentId("");
+                }}
                 placeholder="학생 이름 검색"
                 className="h-10"
               />
               {studentSearch && (
-                <div className="absolute top-full left-0 mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                  {studentOptions.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase())).length}개 결과
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                  {studentOptions
+                    .filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()))
+                    .slice(0, 10)
+                    .map(s => (
+                      <div
+                        key={s.id}
+                        className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${filteredStudentId === s.id ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}`}
+                        onClick={() => {
+                          setStudentSearch(s.name);
+                          setFilteredStudentId(s.id);
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{s.name}</span>
+                          <span className="text-xs text-gray-500">
+                            {s.school && `${s.school} `}
+                            {s.grade && `${s.grade}학년`}
+                            {s.status && s.status !== '재원' && (
+                              <span className={`ml-1 px-1 rounded ${s.status === '퇴원' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                                {s.status}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  {studentOptions.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase())).length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-400">검색 결과 없음</div>
+                  )}
                 </div>
               )}
             </div>

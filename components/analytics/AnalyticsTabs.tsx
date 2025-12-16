@@ -32,6 +32,18 @@ export default function AnalyticsTabs() {
         퍼널 분석
       </Link>
       <Link
+        href="/analytics/funnel-v2"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname === "/analytics/funnel-v2"
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        액션 센터
+        <span className="ml-1 text-xs text-amber-600 font-medium">Beta</span>
+      </Link>
+      <Link
         href="/analytics/risk"
         className={clsx(
           "px-4 py-2 font-semibold",

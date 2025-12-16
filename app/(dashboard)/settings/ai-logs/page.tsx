@@ -272,6 +272,7 @@ export default function AILogsPage() {
       case "comment": return "AI 코멘트"
       case "consultation_analysis": return "상담 분석"
       case "risk_analysis": return "위험도 분석"
+      case "funnel_suggestion": return "퍼널 제안"
       default: return feature
     }
   }
@@ -281,6 +282,7 @@ export default function AILogsPage() {
       case "comment": return "bg-blue-100 text-blue-700"
       case "consultation_analysis": return "bg-purple-100 text-purple-700"
       case "risk_analysis": return "bg-orange-100 text-orange-700"
+      case "funnel_suggestion": return "bg-amber-100 text-amber-700"
       default: return "bg-gray-100 text-gray-700"
     }
   }
