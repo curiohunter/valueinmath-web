@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Loader2, Phone, MessageSquare, Users, TrendingUp, CheckCircle2, AlertTriangle, XCircle, ArrowUpDown, ChevronUp, ChevronDown, ChevronRight, Trophy, Clock, Target, BarChart3, Plus, Pencil, Trash2, CalendarIcon, DollarSign, Megaphone } from "lucide-react"
 import { toast } from "sonner"
-import { FollowupStudentsSection } from "./followup-students-section"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -905,9 +904,6 @@ export function FunnelAnalysisPageClient() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">통계 분석</h1>
       <AnalyticsTabs />
-
-      {/* 팔로업 필요 학생 목록 - 항상 표시 */}
-      <FollowupStudentsSection />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
