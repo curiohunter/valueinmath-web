@@ -62,6 +62,17 @@ export default function StudentClassTabs() {
       >
         입학테스트
       </Link>
+      <Link
+        href="/students/enrollment-history"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname === "/students/enrollment-history"
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        수강 이력
+      </Link>
     </div>
   );
 } 

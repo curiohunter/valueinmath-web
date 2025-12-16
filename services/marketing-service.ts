@@ -257,11 +257,6 @@ export async function getMarketingActivities(
 
     return data || []
   } catch (error) {
-    // 빈 객체 에러는 무시 (RLS로 인한 빈 결과일 수 있음)
-    if (error && typeof error === 'object' && Object.keys(error).length === 0) {
-      console.log('[MarketingService] getMarketingActivities: empty error object, returning empty array')
-      return []
-    }
     console.error('[MarketingService] getMarketingActivities error:', JSON.stringify(error, null, 2))
     return []
   }

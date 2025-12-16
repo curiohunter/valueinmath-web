@@ -145,7 +145,8 @@ export function ConsultationModal({
   useEffect(() => {
     const loadMarketingActivities = async () => {
       try {
-        const activities = await getMarketingActivities(supabase, { status: 'active' });
+        // 진행 중인 마케팅 활동 로드 (in_progress)
+        const activities = await getMarketingActivities(supabase, { status: 'in_progress' });
         setMarketingActivities(activities);
       } catch (error) {
         console.error("마케팅 활동 로딩 실패:", error);
