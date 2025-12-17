@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Pencil, Trash2, Undo2 } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import { toast } from "sonner"
@@ -23,6 +23,7 @@ interface ApprovedRegistrationsTableProps {
   registrations: ApprovedRegistration[]
   loading: boolean
   onEdit?: (registration: ApprovedRegistration) => void
+  onRevoke?: (registration: ApprovedRegistration) => void
   onRefresh?: () => void
 }
 
@@ -32,10 +33,12 @@ export function ApprovedRegistrationsTable({
   registrations,
   loading,
   onEdit,
+  onRevoke,
   onRefresh,
 }: ApprovedRegistrationsTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [revoking, setRevoking] = useState<string | null>(null)
 
   const handleDelete = async (registration: ApprovedRegistration) => {
     if (!confirm(`정말 이 계정을 완전히 삭제하시겠습니까?\n\n이름: ${registration.name}\n이메일: ${registration.email}\n\n⚠️ 이 작업은 되돌릴 수 없습니다.\n- Auth 계정 삭제\n- 프로필 삭제\n- 학생 연결 정보 삭제`)) {
@@ -66,6 +69,19 @@ export function ApprovedRegistrationsTable({
       console.error("Delete error:", error)
     } finally {
       setDeleting(null)
+    }
+  }
+
+  const handleRevoke = async (registration: ApprovedRegistration) => {
+    if (!confirm(`정말 이 계정의 승인을 취소하시겠습니까?\n\n이름: ${registration.name}\n이메일: ${registration.email}\n\n승인 취소 시:\n- 학생 연결 정보 삭제\n- 승인 상태가 '대기'로 변경됨\n- 계정은 삭제되지 않습니다`)) {
+      return
+    }
+
+    setRevoking(registration.id)
+    try {
+      await onRevoke?.(registration)
+    } finally {
+      setRevoking(null)
     }
   }
 
@@ -157,6 +173,16 @@ export function ApprovedRegistrationsTable({
                           >
                             <Pencil className="h-3 w-3 mr-1" />
                             수정
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleRevoke(registration)}
+                            disabled={revoking === registration.id}
+                            className="h-8"
+                          >
+                            <Undo2 className="h-3 w-3 mr-1" />
+                            {revoking === registration.id ? "취소 중..." : "승인취소"}
                           </Button>
                           <Button
                             variant="destructive"

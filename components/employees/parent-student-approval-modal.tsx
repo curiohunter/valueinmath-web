@@ -175,13 +175,17 @@ export function ParentStudentApprovalModal({
         throw pendingError
       }
 
-      // Update profiles with role and approval_status if user exists
+      // Update profiles with role, approval_status, and student_id if user exists
       if (approval.user_id) {
+        // First student is primary - set to profiles.student_id for RLS
+        const primaryStudentId = selectedStudentIds[0]
+
         const { error: profileError } = await supabase
           .from("profiles")
           .update({
             approval_status: "approved",
             role: approval.role,
+            student_id: primaryStudentId, // Required for RLS policy
           })
           .eq("id", approval.user_id)
 
