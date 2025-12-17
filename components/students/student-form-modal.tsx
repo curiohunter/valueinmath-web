@@ -226,6 +226,12 @@ export function StudentFormModal({
       return
     }
 
+    // 담당관 필수 검증
+    if (!values.department) {
+      toast.error("담당관은 필수로 선택해야 합니다.")
+      return
+    }
+
     // 재원 상태일 때 시작일 필수 검증
     if (values.status === "재원" && !values.start_date) {
       toast.error("재원 상태인 경우 시작일을 입력해야 합니다.")
@@ -259,7 +265,7 @@ export function StudentFormModal({
       }
 
       if (student) {
-        // 기존 학생 정보 수정 - created_by_type은 수정하지 않음
+        // 기존 학생 정보 수정 (props로 전달된 학생) - created_by_type은 수정하지 않음
         const { error } = await supabase
           .from("students")
           .update(baseFormattedValues)
@@ -267,6 +273,16 @@ export function StudentFormModal({
 
         if (error) throw error
         setSavedStudentId(student.id)
+      } else if (savedStudentId) {
+        // 이미 생성된 학생 정보 수정 (Step 1에서 이미 저장한 경우)
+        // 이 경우는 사용자가 Step 2에서 "이전" 버튼으로 돌아와서 다시 저장하는 경우
+        const { error } = await supabase
+          .from("students")
+          .update(baseFormattedValues)
+          .eq("id", savedStudentId)
+
+        if (error) throw error
+        // savedStudentId는 이미 설정되어 있으므로 유지
       } else {
         // 새 학생 등록 - created_by_type 포함
         const { data, error } = await supabase
@@ -480,8 +496,8 @@ export function StudentFormModal({
                       name="department"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>담당관</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormLabel>담당관 *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || undefined}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="담당관 선택" />
@@ -539,7 +555,7 @@ export function StudentFormModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>학교 구분</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <Select onValueChange={field.onChange} value={field.value || undefined}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="학교 구분 선택" />
@@ -564,7 +580,7 @@ export function StudentFormModal({
                           <FormLabel>학년</FormLabel>
                           <Select
                             onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                            value={field.value?.toString() || ""}
+                            value={field.value?.toString() || undefined}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -591,7 +607,7 @@ export function StudentFormModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>유입 경로</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <Select onValueChange={field.onChange} value={field.value || undefined}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="유입 경로 선택" />

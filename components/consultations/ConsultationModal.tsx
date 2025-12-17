@@ -512,14 +512,14 @@ export function ConsultationModal({
                 <span className="text-muted-foreground text-xs ml-2">선택사항</span>
               </Label>
               <Select
-                value={selectedMarketingActivityId}
-                onValueChange={setSelectedMarketingActivityId}
+                value={selectedMarketingActivityId || "none"}
+                onValueChange={(value) => setSelectedMarketingActivityId(value === "none" ? "" : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="마케팅 활동을 선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">선택 안함</SelectItem>
+                  <SelectItem value="none">선택 안함</SelectItem>
                   {marketingActivities.map(activity => (
                     <SelectItem key={activity.id} value={activity.id}>
                       [{CHANNEL_LABELS[activity.channel as MarketingChannel] || activity.channel}] {activity.title}
