@@ -257,6 +257,48 @@ export function ParentStudentApprovalSection() {
     setIsEditModalOpen(true)
   }
 
+  const handleRevokeApproval = async (registration: ApprovedRegistration) => {
+    const supabase = createClient()
+
+    try {
+      // 1. Delete all profile_students records for this user
+      const { error: psDeleteError } = await supabase
+        .from("profile_students")
+        .delete()
+        .eq("profile_id", registration.id)
+
+      if (psDeleteError) {
+        throw psDeleteError
+      }
+
+      // 2. Update profiles: set student_id to null and approval_status to pending
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          student_id: null,
+          approval_status: "pending",
+        })
+        .eq("id", registration.id)
+
+      if (profileError) {
+        throw profileError
+      }
+
+      // 3. Update pending_registrations status back to pending (if exists)
+      await supabase
+        .from("pending_registrations")
+        .update({ status: "pending" })
+        .eq("user_id", registration.id)
+
+      toast.success("승인이 취소되었습니다. 대기 목록에서 다시 승인할 수 있습니다.")
+      loadPendingApprovals()
+      loadApprovedRegistrations()
+    } catch (error: any) {
+      console.error("Revoke approval failed:", error)
+      toast.error("승인 취소에 실패했습니다: " + (error.message || ""))
+    }
+  }
+
   const handleEditSuccess = () => {
     setIsEditModalOpen(false)
     setSelectedEditProfile(null)
@@ -389,6 +431,7 @@ export function ParentStudentApprovalSection() {
           registrations={approvedRegistrations}
           loading={approvedLoading}
           onEdit={handleEditProfile}
+          onRevoke={handleRevokeApproval}
           onRefresh={loadApprovedRegistrations}
         />
       </div>

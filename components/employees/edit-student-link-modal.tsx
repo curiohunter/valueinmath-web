@@ -191,6 +191,17 @@ export function EditStudentLinkModal({
         throw insertError
       }
 
+      // Update profiles.student_id with primary student (required for RLS)
+      const primaryStudentId = selectedStudentIds[0]
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ student_id: primaryStudentId })
+        .eq("id", profile.id)
+
+      if (profileError) {
+        throw profileError
+      }
+
       toast.success("학생 연결이 수정되었습니다")
       onSuccess()
     } catch (error: any) {
