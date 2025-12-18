@@ -21,6 +21,17 @@ export default function AnalyticsTabs() {
         운영 통계
       </Link>
       <Link
+        href="/analytics/marketing"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname === "/analytics/marketing"
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground hover:text-foreground"
+        )}
+      >
+        마케팅 관리
+      </Link>
+      <Link
         href="/analytics/funnel"
         className={clsx(
           "px-4 py-2 font-semibold",
