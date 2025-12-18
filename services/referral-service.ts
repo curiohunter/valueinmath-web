@@ -69,13 +69,26 @@ export interface CreateReferralData {
 
 // 추천 수정 데이터
 export interface UpdateReferralData {
+  referrer_student_id?: string
+  referrer_name_snapshot?: string
+  referred_student_id?: string
+  referred_name_snapshot?: string
+  referral_date?: string
+  referral_type?: ReferralType
   referral_status?: ReferralStatus
+  marketing_activity_id?: string | null
   enrolled_date?: string | null
+  // 추천인 보상
   reward_given?: boolean
   reward_type?: RewardType | null
   reward_amount?: number
   reward_date?: string | null
   reward_notes?: string | null
+  // 피추천인 보상 (신규)
+  referee_reward_given?: boolean
+  referee_reward_type?: string | null
+  referee_reward_amount?: number
+  referee_reward_date?: string | null
   notes?: string
 }
 
@@ -289,6 +302,67 @@ export async function updateReferralStatus(
   }
 
   return updateReferral(supabase, id, updateData)
+}
+
+/**
+ * 추천 완료 처리 (등록 확정 + 보상 자동 생성)
+ * - 상태를 '등록완료'로 변경
+ * - 마케팅 활동이 연결되어 있고 보상 템플릿이 있으면 보상 자동 생성
+ */
+export async function onReferralCompleted(
+  supabase: SupabaseClient,
+  referralId: string,
+  enrolledDate?: string
+): Promise<{ referral: StudentReferral; rewardsCreated: number }> {
+  // 1. 상태 변경
+  const referral = await updateReferralStatus(
+    supabase,
+    referralId,
+    '등록완료',
+    enrolledDate || new Date().toISOString().split('T')[0]
+  )
+
+  // 2. 마케팅 활동이 연결되어 있으면 보상 생성 시도
+  let rewardsCreated = 0
+  if (referral.marketing_activity_id) {
+    try {
+      // reward-service의 createRewardsForReferral 호출
+      const { createRewardsForReferral } = await import("@/services/reward-service")
+      const rewards = await createRewardsForReferral(supabase, referralId, {
+        referrerStudentId: referral.referrer_student_id!,
+        refereeStudentId: referral.referred_student_id!,
+        activityId: referral.marketing_activity_id,
+        referrerName: referral.referrer_name_snapshot,
+        refereeName: referral.referred_name_snapshot,
+      })
+      rewardsCreated = rewards.length
+    } catch (error) {
+      console.error("[ReferralService] onReferralCompleted - reward creation error:", error)
+      // 보상 생성 실패해도 추천 완료 처리는 유지
+    }
+  }
+
+  return { referral, rewardsCreated }
+}
+
+/**
+ * 피추천인 보상 지급 처리 (레거시 호환)
+ */
+export async function giveRefereeReward(
+  supabase: SupabaseClient,
+  id: string,
+  rewardData: {
+    reward_type: string
+    reward_amount: number
+    reward_date: string
+  }
+): Promise<StudentReferral> {
+  return updateReferral(supabase, id, {
+    referee_reward_given: true,
+    referee_reward_type: rewardData.reward_type,
+    referee_reward_amount: rewardData.reward_amount,
+    referee_reward_date: rewardData.reward_date,
+  })
 }
 
 /**

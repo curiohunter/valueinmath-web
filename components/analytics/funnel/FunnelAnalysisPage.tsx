@@ -125,6 +125,8 @@ export function FunnelAnalysisPage() {
     referred_student_id: "",
     referral_date: new Date(),
     referral_type: "학부모추천" as ReferralType,
+    referral_status: "상담중" as ReferralStatus,
+    marketing_activity_id: "" as string,
     notes: "",
   })
   const [savingReferral, setSavingReferral] = useState(false)
@@ -240,6 +242,8 @@ export function FunnelAnalysisPage() {
       referred_student_id: "",
       referral_date: new Date(),
       referral_type: "학부모추천",
+      referral_status: "상담중",
+      marketing_activity_id: "",
       notes: "",
     })
     setReferrerSearchQuery("")
@@ -254,6 +258,8 @@ export function FunnelAnalysisPage() {
       referred_student_id: referral.referred_student_id || "",
       referral_date: new Date(referral.referral_date),
       referral_type: referral.referral_type,
+      referral_status: referral.referral_status,
+      marketing_activity_id: referral.marketing_activity_id || "",
       notes: referral.notes || "",
     })
     setReferrerSearchQuery(referral.referrer_name_snapshot)
@@ -262,6 +268,7 @@ export function FunnelAnalysisPage() {
   }
 
   const handleSaveReferral = async () => {
+    // 추천인/피추천인 검증 (신규 및 수정 모두)
     if (!referralForm.referrer_student_id || !referralForm.referred_student_id) {
       toast.error("추천인과 피추천인을 모두 선택해주세요.")
       return
@@ -274,8 +281,29 @@ export function FunnelAnalysisPage() {
 
       if (editingReferral) {
         await updateReferral(supabase, editingReferral.id, {
+          referrer_student_id: referralForm.referrer_student_id,
+          referrer_name_snapshot: referrerStudent?.name || "",
+          referred_student_id: referralForm.referred_student_id,
+          referred_name_snapshot: referredStudent?.name || "",
+          referral_date: format(referralForm.referral_date, "yyyy-MM-dd"),
+          referral_type: referralForm.referral_type,
+          referral_status: referralForm.referral_status,
+          marketing_activity_id: referralForm.marketing_activity_id || null,
           notes: referralForm.notes,
         })
+
+        // 마케팅 활동이 변경되었고 새 활동이 선택된 경우, 추천인을 참가자로 추가
+        if (referralForm.marketing_activity_id &&
+            referralForm.marketing_activity_id !== editingReferral.marketing_activity_id) {
+          await addActivityParticipants(
+            supabase,
+            referralForm.marketing_activity_id,
+            [referralForm.referrer_student_id],
+            undefined,
+            format(referralForm.referral_date, "yyyy-MM-dd")
+          )
+        }
+
         toast.success("추천 정보가 수정되었습니다")
       } else {
         await createReferral(supabase, {
@@ -285,12 +313,29 @@ export function FunnelAnalysisPage() {
           referred_name_snapshot: referredStudent?.name || "",
           referral_date: format(referralForm.referral_date, "yyyy-MM-dd"),
           referral_type: referralForm.referral_type,
+          marketing_activity_id: referralForm.marketing_activity_id || undefined,
           notes: referralForm.notes,
         })
+
+        // 마케팅 활동이 선택된 경우, 추천인을 해당 활동의 참가자로 자동 등록
+        if (referralForm.marketing_activity_id) {
+          await addActivityParticipants(
+            supabase,
+            referralForm.marketing_activity_id,
+            [referralForm.referrer_student_id],
+            undefined,
+            format(referralForm.referral_date, "yyyy-MM-dd")
+          )
+        }
+
         toast.success("추천이 등록되었습니다")
       }
       setIsReferralModalOpen(false)
       referralHook.loadData()
+      // 마케팅 활동에 참가자가 추가되었을 수 있으므로 마케팅 데이터도 새로고침
+      if (referralForm.marketing_activity_id) {
+        marketingHook.loadData()
+      }
     } catch (error) {
       console.error("Failed to save referral:", error)
       toast.error("추천 저장에 실패했습니다.")
@@ -493,6 +538,7 @@ export function FunnelAnalysisPage() {
                     topReferrers={referralHook.topReferrers}
                     pendingRewards={referralHook.pendingRewards}
                     loadingReferrals={referralHook.loading}
+                    marketingActivities={marketingHook.marketingActivities}
                     onOpenCreateModal={openCreateReferralModal}
                     onOpenEditModal={openEditReferralModal}
                     onDeleteReferral={(id) => setDeleteReferralId(id)}
@@ -654,73 +700,89 @@ export function FunnelAnalysisPage() {
           <div className="space-y-4 py-4">
             {/* 추천인 선택 */}
             <div className="space-y-2">
-              <Label>추천인 (재원생) *</Label>
+              <Label className="flex items-center gap-2">
+                추천인 (재원생) *
+                {referralForm.referrer_student_id && (
+                  <Badge variant="secondary" className="text-[10px] text-green-600">✓ 선택됨</Badge>
+                )}
+              </Label>
               <Input
                 value={referrerSearchQuery}
-                onChange={(e) => setReferrerSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setReferrerSearchQuery(e.target.value)
+                  if (referralForm.referrer_student_id) {
+                    setReferralForm(prev => ({ ...prev, referrer_student_id: "" }))
+                  }
+                }}
                 placeholder="이름으로 검색..."
-                disabled={!!editingReferral}
+                className={cn(referralForm.referrer_student_id && "border-green-500")}
               />
-              {referrerSearchQuery && !editingReferral && filteredReferrerStudents.length > 0 && (
-                <ScrollArea className="h-[120px] border rounded-md">
-                  <div className="p-2 space-y-1">
-                    {filteredReferrerStudents.map(s => (
-                      <div
-                        key={s.id}
-                        className={cn(
-                          "p-2 rounded cursor-pointer text-sm hover:bg-muted/50",
-                          referralForm.referrer_student_id === s.id && "bg-primary/10"
-                        )}
-                        onClick={() => {
-                          setReferralForm(prev => ({ ...prev, referrer_student_id: s.id }))
-                          setReferrerSearchQuery(s.name)
-                        }}
-                      >
-                        {s.name}
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {s.school_type} {s.grade}학년
-                        </span>
-                        <Badge variant="outline" className="ml-2 text-[10px]">{s.status}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+              {referrerSearchQuery && filteredReferrerStudents.length > 0 && !referralForm.referrer_student_id && (
+                <div className="max-h-[120px] overflow-y-auto border rounded-md p-2 space-y-1">
+                  {filteredReferrerStudents.map(s => (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        "p-2 rounded cursor-pointer text-sm hover:bg-muted/50",
+                        referralForm.referrer_student_id === s.id && "bg-primary/10"
+                      )}
+                      onClick={() => {
+                        setReferralForm(prev => ({ ...prev, referrer_student_id: s.id }))
+                        setReferrerSearchQuery(s.name)
+                      }}
+                    >
+                      {s.name}
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {s.school_type} {s.grade}학년
+                      </span>
+                      <Badge variant="outline" className="ml-2 text-[10px]">{s.status}</Badge>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
             {/* 피추천인 선택 */}
             <div className="space-y-2">
-              <Label>피추천인 (신규상담) *</Label>
+              <Label className="flex items-center gap-2">
+                피추천인 *
+                {referralForm.referred_student_id && (
+                  <Badge variant="secondary" className="text-[10px] text-green-600">✓ 선택됨</Badge>
+                )}
+              </Label>
               <Input
                 value={referredSearchQuery}
-                onChange={(e) => setReferredSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setReferredSearchQuery(e.target.value)
+                  if (referralForm.referred_student_id) {
+                    setReferralForm(prev => ({ ...prev, referred_student_id: "" }))
+                  }
+                }}
                 placeholder="이름으로 검색..."
-                disabled={!!editingReferral}
+                className={cn(referralForm.referred_student_id && "border-green-500")}
               />
-              {referredSearchQuery && !editingReferral && filteredReferredStudents.length > 0 && (
-                <ScrollArea className="h-[120px] border rounded-md">
-                  <div className="p-2 space-y-1">
-                    {filteredReferredStudents.map(s => (
-                      <div
-                        key={s.id}
-                        className={cn(
-                          "p-2 rounded cursor-pointer text-sm hover:bg-muted/50",
-                          referralForm.referred_student_id === s.id && "bg-primary/10"
-                        )}
-                        onClick={() => {
-                          setReferralForm(prev => ({ ...prev, referred_student_id: s.id }))
-                          setReferredSearchQuery(s.name)
-                        }}
-                      >
-                        {s.name}
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {s.school_type} {s.grade}학년
-                        </span>
-                        <Badge variant="outline" className="ml-2 text-[10px]">{s.status}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+              {referredSearchQuery && filteredReferredStudents.length > 0 && !referralForm.referred_student_id && (
+                <div className="max-h-[120px] overflow-y-auto border rounded-md p-2 space-y-1">
+                  {filteredReferredStudents.map(s => (
+                    <div
+                      key={s.id}
+                      className={cn(
+                        "p-2 rounded cursor-pointer text-sm hover:bg-muted/50",
+                        referralForm.referred_student_id === s.id && "bg-primary/10"
+                      )}
+                      onClick={() => {
+                        setReferralForm(prev => ({ ...prev, referred_student_id: s.id }))
+                        setReferredSearchQuery(s.name)
+                      }}
+                    >
+                      {s.name}
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {s.school_type} {s.grade}학년
+                      </span>
+                      <Badge variant="outline" className="ml-2 text-[10px]">{s.status}</Badge>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -729,7 +791,7 @@ export function FunnelAnalysisPage() {
                 <Label>추천일</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal" disabled={!!editingReferral}>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {format(referralForm.referral_date, "yyyy-MM-dd", { locale: ko })}
                     </Button>
@@ -750,7 +812,6 @@ export function FunnelAnalysisPage() {
                 <Select
                   value={referralForm.referral_type}
                   onValueChange={(value) => setReferralForm(prev => ({ ...prev, referral_type: value as ReferralType }))}
-                  disabled={!!editingReferral}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -763,6 +824,55 @@ export function FunnelAnalysisPage() {
                 </Select>
               </div>
             </div>
+
+            {/* 추천 상태 - 수정 모드에서 주로 사용 */}
+            <div className="space-y-2">
+              <Label>추천 상태</Label>
+              <Select
+                value={referralForm.referral_status}
+                onValueChange={(value) => setReferralForm(prev => ({ ...prev, referral_status: value as ReferralStatus }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="상담중">상담중</SelectItem>
+                  <SelectItem value="테스트완료">테스트완료</SelectItem>
+                  <SelectItem value="등록완료">등록완료</SelectItem>
+                  <SelectItem value="미등록">미등록</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 마케팅 활동 연결 (선택) */}
+            <div className="space-y-2">
+              <Label>마케팅 활동 연결 (선택)</Label>
+              <Select
+                value={referralForm.marketing_activity_id || "none"}
+                onValueChange={(value) => setReferralForm(prev => ({
+                  ...prev,
+                  marketing_activity_id: value === "none" ? "" : value
+                }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="마케팅 활동 선택..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">연결 안함</SelectItem>
+                  {marketingHook.marketingActivities
+                    .filter(a => a.status !== 'cancelled')
+                    .map((activity) => (
+                      <SelectItem key={activity.id} value={activity.id}>
+                        {activity.title} ({activity.status === 'in_progress' ? '진행중' : activity.status === 'completed' ? '완료' : '예정'})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                추천인이 해당 마케팅 활동의 참가자로 자동 등록됩니다
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>메모</Label>
               <Textarea

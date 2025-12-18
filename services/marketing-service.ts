@@ -45,6 +45,9 @@ export interface MarketingActivityInput {
   reachCount?: number   // DB: reach_count
   status?: MarketingStatus
   createdBy?: string
+  // 보상 플래그
+  hasTuitionReward?: boolean
+  hasCashReward?: boolean
 }
 
 export interface MarketingActivity {
@@ -61,6 +64,8 @@ export interface MarketingActivity {
   reach_count: number | null
   ai_effectiveness_score: number | null
   ai_insights: Record<string, unknown> | null
+  has_tuition_reward: boolean
+  has_cash_reward: boolean
   created_by: string | null
   created_at: string
   updated_at: string
@@ -152,6 +157,8 @@ export async function createMarketingActivity(
         reach_count: input.reachCount || null,
         status: input.status || 'in_progress',
         created_by: input.createdBy || null,
+        has_tuition_reward: input.hasTuitionReward || false,
+        has_cash_reward: input.hasCashReward || false,
       })
       .select('id')
       .single()
@@ -186,6 +193,8 @@ export async function updateMarketingActivity(
     if (updates.targetGrades !== undefined) updateData.target_grades = updates.targetGrades
     if (updates.reachCount !== undefined) updateData.reach_count = updates.reachCount
     if (updates.status !== undefined) updateData.status = updates.status
+    if (updates.hasTuitionReward !== undefined) updateData.has_tuition_reward = updates.hasTuitionReward
+    if (updates.hasCashReward !== undefined) updateData.has_cash_reward = updates.hasCashReward
 
     const { error } = await supabase
       .from('marketing_activities')
@@ -503,6 +512,7 @@ export interface MarketingActivityParticipant {
   id: string
   marketing_activity_id: string
   student_id: string
+  name_snapshot: string | null
   participated_at: string | null
   created_at: string
   created_by: string | null
@@ -629,5 +639,68 @@ export async function getActivityParticipantCount(
   } catch (error) {
     console.error('[MarketingService] getActivityParticipantCount error:', error)
     return 0
+  }
+}
+
+// ============================================
+// 보상 플래그 관리
+// ============================================
+
+/**
+ * 보상 템플릿 기반으로 마케팅 활동의 보상 플래그 업데이트
+ */
+export async function updateActivityRewardFlags(
+  supabase: SupabaseClient,
+  activityId: string
+): Promise<void> {
+  try {
+    // 해당 활동의 템플릿 조회
+    const { data: templates, error: templateError } = await supabase
+      .from('reward_templates')
+      .select('reward_type')
+      .eq('marketing_activity_id', activityId)
+      .eq('is_active', true)
+
+    if (templateError) throw templateError
+
+    const hasTuitionReward = templates?.some(t => t.reward_type === 'tuition_discount') || false
+    const hasCashReward = templates?.some(t => t.reward_type === 'cash') || false
+
+    // 활동 업데이트
+    const { error: updateError } = await supabase
+      .from('marketing_activities')
+      .update({
+        has_tuition_reward: hasTuitionReward,
+        has_cash_reward: hasCashReward,
+      })
+      .eq('id', activityId)
+
+    if (updateError) throw updateError
+  } catch (error) {
+    console.error('[MarketingService] updateActivityRewardFlags error:', error)
+    throw error
+  }
+}
+
+/**
+ * 마케팅 활동에 보상 템플릿이 있는지 확인
+ */
+export async function hasRewardTemplates(
+  supabase: SupabaseClient,
+  activityId: string
+): Promise<boolean> {
+  try {
+    const { count, error } = await supabase
+      .from('reward_templates')
+      .select('*', { count: 'exact', head: true })
+      .eq('marketing_activity_id', activityId)
+      .eq('is_active', true)
+
+    if (error) throw error
+
+    return (count || 0) > 0
+  } catch (error) {
+    console.error('[MarketingService] hasRewardTemplates error:', error)
+    return false
   }
 }
