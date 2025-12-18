@@ -75,12 +75,15 @@ import {
 } from "@/services/referral-service"
 import {
   getPendingRewards as getPendingRewardsFromService,
+  getRewardTemplates,
+  saveRewardTemplates,
 } from "@/services/reward-service"
-import type { Reward } from "@/types/reward"
+import type { Reward, RewardRole, RewardType as NewRewardType, AmountType, CreateRewardTemplateData } from "@/types/reward"
 import {
   REWARD_TYPE_LABELS as NEW_REWARD_TYPE_LABELS,
   REWARD_STATUS_LABELS,
   REWARD_ROLE_LABELS,
+  AMOUNT_TYPE_LABELS,
   formatRewardAmount,
   getRewardStatusColor,
   getRewardRoleColor,
@@ -102,6 +105,18 @@ export default function MarketingPage() {
     status: "in_progress" as MarketingStatus,
   })
   const [savingActivity, setSavingActivity] = useState(false)
+
+  // 보상 템플릿 관련 상태
+  interface RewardTemplateFormItem {
+    id?: string
+    role: RewardRole
+    reward_type: NewRewardType
+    amount_type: AmountType
+    reward_amount: string
+    description: string
+  }
+  const [rewardTemplatesEnabled, setRewardTemplatesEnabled] = useState(false)
+  const [rewardTemplates, setRewardTemplates] = useState<RewardTemplateFormItem[]>([])
 
   // 참가자 관리 관련 상태
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null)
@@ -255,10 +270,12 @@ export default function MarketingPage() {
       contentUrl: "",
       status: "in_progress",
     })
+    setRewardTemplatesEnabled(false)
+    setRewardTemplates([])
     setIsActivityModalOpen(true)
   }
 
-  const openEditActivityModal = (activity: MarketingActivity) => {
+  const openEditActivityModal = async (activity: MarketingActivity) => {
     setEditingActivity(activity)
     setActivityForm({
       channel: activity.channel,
@@ -269,6 +286,30 @@ export default function MarketingPage() {
       contentUrl: activity.content_url || "",
       status: activity.status,
     })
+
+    // 기존 보상 템플릿 로드
+    try {
+      const templates = await getRewardTemplates(supabase, activity.id)
+      if (templates.length > 0) {
+        setRewardTemplatesEnabled(true)
+        setRewardTemplates(templates.map(t => ({
+          id: t.id,
+          role: t.role,
+          reward_type: t.reward_type,
+          amount_type: t.amount_type,
+          reward_amount: t.reward_amount.toString(),
+          description: t.description || "",
+        })))
+      } else {
+        setRewardTemplatesEnabled(false)
+        setRewardTemplates([])
+      }
+    } catch (error) {
+      console.error("Failed to load reward templates:", error)
+      setRewardTemplatesEnabled(false)
+      setRewardTemplates([])
+    }
+
     setIsActivityModalOpen(true)
   }
 
@@ -291,12 +332,59 @@ export default function MarketingPage() {
         status: activityForm.status,
       }
 
+      let activityId: string
+
       if (editingActivity) {
         await updateMarketingActivity(supabase, editingActivity.id, input)
+        activityId = editingActivity.id
         toast.success("마케팅 활동이 수정되었습니다")
       } else {
-        await createMarketingActivity(supabase, input)
+        const result = await createMarketingActivity(supabase, input)
+        if (!result.success || !result.id) {
+          throw new Error(result.error || "마케팅 활동 생성에 실패했습니다.")
+        }
+        activityId = result.id
         toast.success("마케팅 활동이 등록되었습니다")
+      }
+
+      // 보상 템플릿 저장
+      if (rewardTemplatesEnabled && rewardTemplates.length > 0) {
+        const templateData: CreateRewardTemplateData[] = rewardTemplates
+          .filter(t => t.reward_amount && parseInt(t.reward_amount) > 0)
+          .map(t => ({
+            marketing_activity_id: activityId,
+            role: t.role,
+            reward_type: t.reward_type,
+            amount_type: t.amount_type,
+            reward_amount: parseInt(t.reward_amount),
+            description: t.description || undefined,
+          }))
+        await saveRewardTemplates(supabase, activityId, templateData)
+
+        // 보상 플래그 업데이트
+        const hasTuition = templateData.some(t => t.reward_type === 'tuition_discount')
+        const hasCash = templateData.some(t => t.reward_type === 'cash')
+        await updateMarketingActivity(supabase, activityId, {
+          channel: activityForm.channel as MarketingChannel,
+          title: activityForm.title,
+          activityDate: format(activityForm.activityDate, "yyyy-MM-dd"),
+          status: activityForm.status,
+          hasTuitionReward: hasTuition,
+          hasCashReward: hasCash,
+        })
+      } else if (editingActivity) {
+        // 보상 템플릿 비활성화 시 모두 삭제
+        await saveRewardTemplates(supabase, activityId, [])
+
+        // 보상 플래그 리셋
+        await updateMarketingActivity(supabase, activityId, {
+          channel: activityForm.channel as MarketingChannel,
+          title: activityForm.title,
+          activityDate: format(activityForm.activityDate, "yyyy-MM-dd"),
+          status: activityForm.status,
+          hasTuitionReward: false,
+          hasCashReward: false,
+        })
       }
 
       setIsActivityModalOpen(false)
@@ -306,6 +394,39 @@ export default function MarketingPage() {
     } finally {
       setSavingActivity(false)
     }
+  }
+
+  // 보상 템플릿 추가
+  const addRewardTemplate = (role: RewardRole) => {
+    setRewardTemplates([
+      ...rewardTemplates,
+      {
+        role,
+        reward_type: role === 'participant' ? 'tuition_discount' : 'cash',
+        amount_type: 'fixed',
+        reward_amount: "",
+        description: "",
+      },
+    ])
+  }
+
+  // 보상 템플릿 삭제
+  const removeRewardTemplate = (index: number) => {
+    setRewardTemplates(rewardTemplates.filter((_, i) => i !== index))
+  }
+
+  // 보상 템플릿 수정
+  const updateRewardTemplate = (index: number, field: keyof RewardTemplateFormItem, value: string) => {
+    const updated = [...rewardTemplates]
+    updated[index] = { ...updated[index], [field]: value }
+    setRewardTemplates(updated)
+  }
+
+  // 역할별 보상 템플릿 그룹
+  const getTemplatesByRole = (role: RewardRole) => {
+    return rewardTemplates
+      .map((t, index) => ({ ...t, index }))
+      .filter(t => t.role === role)
   }
 
   // 마케팅 활동 삭제
@@ -638,6 +759,12 @@ export default function MarketingPage() {
                               <span className="flex items-center gap-1">
                                 <DollarSign className="w-3 h-3" />
                                 {activity.cost_amount.toLocaleString()}원
+                              </span>
+                            )}
+                            {(activity.has_tuition_reward || activity.has_cash_reward) && (
+                              <span className="flex items-center gap-1 text-amber-600">
+                                <Gift className="w-3 h-3" />
+                                보상
                               </span>
                             )}
                             <Badge
@@ -1157,7 +1284,7 @@ export default function MarketingPage() {
 
       {/* 마케팅 활동 등록/수정 모달 */}
       <Dialog open={isActivityModalOpen} onOpenChange={setIsActivityModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingActivity ? "마케팅 활동 수정" : "마케팅 활동 등록"}
@@ -1258,6 +1385,243 @@ export default function MarketingPage() {
                 onChange={(e) => setActivityForm({ ...activityForm, contentUrl: e.target.value })}
                 placeholder="https://..."
               />
+            </div>
+
+            {/* 보상 설정 섹션 */}
+            <div className="border-t pt-4 mt-2">
+              <div className="flex items-center gap-2 mb-4">
+                <Checkbox
+                  id="reward-enabled"
+                  checked={rewardTemplatesEnabled}
+                  onCheckedChange={(checked) => {
+                    setRewardTemplatesEnabled(!!checked)
+                    if (!checked) setRewardTemplates([])
+                  }}
+                />
+                <Label htmlFor="reward-enabled" className="text-base font-semibold cursor-pointer">
+                  보상 설정 활성화
+                </Label>
+              </div>
+
+              {rewardTemplatesEnabled && (
+                <div className="space-y-4 pl-4 border-l-2 border-primary/20">
+                  {/* 추천인 보상 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-purple-700">추천인 보상</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => addRewardTemplate('referrer')}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        추가
+                      </Button>
+                    </div>
+                    {getTemplatesByRole('referrer').length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">보상이 없습니다</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {getTemplatesByRole('referrer').map((template) => (
+                          <div key={template.index} className="flex items-center gap-2 p-2 rounded-lg bg-purple-50/50 border border-purple-100">
+                            <Select
+                              value={template.reward_type}
+                              onValueChange={(v) => updateRewardTemplate(template.index, 'reward_type', v)}
+                            >
+                              <SelectTrigger className="w-[100px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(NEW_REWARD_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              value={template.amount_type}
+                              onValueChange={(v) => updateRewardTemplate(template.index, 'amount_type', v)}
+                            >
+                              <SelectTrigger className="w-[80px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(AMOUNT_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              value={template.reward_amount}
+                              onChange={(e) => updateRewardTemplate(template.index, 'reward_amount', e.target.value)}
+                              className="w-[80px] h-8"
+                              placeholder="0"
+                            />
+                            <span className="text-xs text-muted-foreground w-6">
+                              {template.amount_type === 'percent' ? '%' : '원'}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => removeRewardTemplate(template.index)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 피추천인 보상 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-indigo-700">피추천인 보상</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => addRewardTemplate('referee')}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        추가
+                      </Button>
+                    </div>
+                    {getTemplatesByRole('referee').length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">보상이 없습니다</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {getTemplatesByRole('referee').map((template) => (
+                          <div key={template.index} className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50/50 border border-indigo-100">
+                            <Select
+                              value={template.reward_type}
+                              onValueChange={(v) => updateRewardTemplate(template.index, 'reward_type', v)}
+                            >
+                              <SelectTrigger className="w-[100px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(NEW_REWARD_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              value={template.amount_type}
+                              onValueChange={(v) => updateRewardTemplate(template.index, 'amount_type', v)}
+                            >
+                              <SelectTrigger className="w-[80px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(AMOUNT_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              value={template.reward_amount}
+                              onChange={(e) => updateRewardTemplate(template.index, 'reward_amount', e.target.value)}
+                              className="w-[80px] h-8"
+                              placeholder="0"
+                            />
+                            <span className="text-xs text-muted-foreground w-6">
+                              {template.amount_type === 'percent' ? '%' : '원'}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => removeRewardTemplate(template.index)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 참가자 보상 */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-cyan-700">참가자 보상</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => addRewardTemplate('participant')}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        추가
+                      </Button>
+                    </div>
+                    {getTemplatesByRole('participant').length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">보상이 없습니다</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {getTemplatesByRole('participant').map((template) => (
+                          <div key={template.index} className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50/50 border border-cyan-100">
+                            <Select
+                              value={template.reward_type}
+                              onValueChange={(v) => updateRewardTemplate(template.index, 'reward_type', v)}
+                            >
+                              <SelectTrigger className="w-[100px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(NEW_REWARD_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              value={template.amount_type}
+                              onValueChange={(v) => updateRewardTemplate(template.index, 'amount_type', v)}
+                            >
+                              <SelectTrigger className="w-[80px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(AMOUNT_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              value={template.reward_amount}
+                              onChange={(e) => updateRewardTemplate(template.index, 'reward_amount', e.target.value)}
+                              className="w-[80px] h-8"
+                              placeholder="0"
+                            />
+                            <span className="text-xs text-muted-foreground w-6">
+                              {template.amount_type === 'percent' ? '%' : '원'}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => removeRewardTemplate(template.index)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
