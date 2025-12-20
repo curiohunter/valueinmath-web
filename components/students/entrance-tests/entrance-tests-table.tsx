@@ -30,16 +30,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Trash2, 
-  Edit2, 
-  ArrowUp, 
-  ArrowDown, 
+import {
+  Trash2,
+  Edit2,
+  ArrowUp,
+  ArrowDown,
   ArrowUpDown,
   Calendar,
   User,
   Award,
-  FileText
+  FileText,
+  Search,
+  X
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -73,6 +75,7 @@ export function EntranceTestsTable({
   const [editingData, setEditingData] = useState<Partial<EntranceTest>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // 학생 이름 찾기
   const getStudentName = (studentId: string | null) => {
@@ -81,9 +84,19 @@ export function EntranceTestsTable({
     return student?.name || "알 수 없음";
   };
 
+  // 검색 필터링된 데이터
+  const filteredTests = useMemo(() => {
+    if (!searchTerm.trim()) return entranceTests;
+    const term = searchTerm.toLowerCase();
+    return entranceTests.filter(test => {
+      const studentName = getStudentName(test.student_id).toLowerCase();
+      return studentName.includes(term);
+    });
+  }, [entranceTests, searchTerm, students]);
+
   // 정렬된 데이터
   const sortedTests = useMemo(() => {
-    const sorted = [...entranceTests].sort((a, b) => {
+    const sorted = [...filteredTests].sort((a, b) => {
       let aValue, bValue;
 
       if (sortField === "test_date") {
@@ -102,7 +115,7 @@ export function EntranceTestsTable({
     });
 
     return sorted;
-  }, [entranceTests, sortField, sortOrder]);
+  }, [filteredTests, sortField, sortOrder]);
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(sortedTests.length / itemsPerPage);
@@ -202,6 +215,38 @@ export function EntranceTestsTable({
   return (
     <>
       <div className="bg-white rounded-lg shadow-sm border">
+        {/* 학생 검색 */}
+        <div className="p-4 border-b">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="학생 이름 검색..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1); // 검색 시 첫 페이지로
+              }}
+              className="pl-9 pr-9"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setCurrentPage(1);
+                }}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          {searchTerm && (
+            <p className="text-sm text-gray-500 mt-2">
+              "{searchTerm}" 검색 결과: {filteredTests.length}건
+            </p>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -39,6 +39,29 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
   const [isDeleting, setIsDeleting] = useState(false)
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  // 정렬된 성적 목록
+  const sortedScores = useMemo(() => {
+    return [...scores].sort((a, b) => {
+      // 1. 연도 내림차순 (최근 연도가 위로)
+      if (a.exam_year !== b.exam_year) {
+        return b.exam_year - a.exam_year
+      }
+      // 2. 학기 내림차순 (2학기가 위로)
+      if (a.semester !== b.semester) {
+        return b.semester - a.semester
+      }
+      // 3. 시험 유형 (기말이 위로)
+      if (a.exam_type !== b.exam_type) {
+        return a.exam_type === "기말고사" ? -1 : 1
+      }
+      // 4. 학교 유형 (고등학교가 위로)
+      if (a.school_type !== b.school_type) {
+        return a.school_type === "고등학교" ? -1 : 1
+      }
+      return 0
+    })
+  }, [scores])
 
   const handleDeleteClick = (score: SchoolExamScore) => {
     setScoreToDelete(score)
@@ -110,8 +133,9 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
               <TableHead className="w-[100px]">학생명</TableHead>
               <TableHead className="w-[150px]">학교명</TableHead>
               <TableHead className="w-[60px]">학년</TableHead>
-              <TableHead className="w-[80px]">시험</TableHead>
+              <TableHead className="w-[60px]">연도</TableHead>
               <TableHead className="w-[60px]">학기</TableHead>
+              <TableHead className="w-[80px]">시험</TableHead>
               <TableHead className="w-[100px]">과목</TableHead>
               <TableHead className="w-[80px] text-center">점수</TableHead>
               <TableHead className="w-[60px] text-center">시험지</TableHead>
@@ -119,7 +143,7 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
             </TableRow>
           </TableHeader>
           <TableBody>
-            {scores.map((score) => (
+            {sortedScores.map((score) => (
               <TableRow key={score.id}>
                 <TableCell className="w-[100px] font-medium">
                   {score.student?.name}
@@ -130,6 +154,8 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
                   </div>
                 </TableCell>
                 <TableCell className="w-[60px]">{score.grade}학년</TableCell>
+                <TableCell className="w-[60px] text-gray-600">{score.exam_year}</TableCell>
+                <TableCell className="w-[60px]">{score.semester}학기</TableCell>
                 <TableCell className="w-[80px]">
                   <Badge
                     className={
@@ -141,7 +167,6 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
                     {score.exam_type}
                   </Badge>
                 </TableCell>
-                <TableCell className="w-[60px]">{score.semester}학기</TableCell>
                 <TableCell className="w-[100px]">{score.subject}</TableCell>
                 <TableCell className={`w-[80px] text-center ${getScoreColor(score.score)}`}>
                   {score.score !== null ? score.score : "-"}

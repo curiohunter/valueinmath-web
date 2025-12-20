@@ -5,13 +5,13 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Plus, Pencil, Trash2, CalendarIcon, DollarSign, Megaphone, Users, Trophy, Clock, Gift, CheckCircle2 } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, Megaphone, Gift, CheckCircle2, DollarSign, Users, TrendingUp, ChevronDown, ChevronUp } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -30,626 +30,675 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
+import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
-import { cn } from "@/lib/utils"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  getMarketingActivities,
-  createMarketingActivity,
-  updateMarketingActivity,
-  deleteMarketingActivity,
-  getAllChannels,
-  getChannelLabel,
-  getActivityParticipants,
-  addActivityParticipants,
-  removeActivityParticipant,
-  type MarketingActivity,
-  type MarketingChannel,
-  type MarketingStatus,
-  type MarketingActivityParticipant,
-} from "@/services/marketing-service"
-import {
-  getReferrals,
-  createReferral,
-  updateReferral,
-  deleteReferral,
-  giveReward,
-  updateReferralStatus,
-  getReferralStats,
-  getTopReferrers,
+  getCampaigns,
+  createCampaign,
+  updateCampaign,
+  deleteCampaign,
+  getParticipants,
+  addParticipant,
+  removeParticipant,
+  updateParticipant,
+  markRewardPaid,
   getPendingRewards,
-  getReferralStatusColor,
-  REFERRAL_TYPE_LABELS,
-  REFERRAL_STATUS_LABELS,
-  REWARD_TYPE_LABELS,
-  type StudentReferral,
-  type ReferralType,
-  type ReferralStatus,
+  getCampaignStats,
+  getAllEventStats,
+  getPolicies,
+  createPolicy,
+  updatePolicy,
+  deletePolicy,
+  type Campaign,
+  type CampaignParticipant,
+  type CampaignType,
+  type CampaignStatus,
   type RewardType,
-  type ReferralStats,
-  type TopReferrer,
-} from "@/services/referral-service"
-import {
-  getPendingRewards as getPendingRewardsFromService,
-  getRewardTemplates,
-  saveRewardTemplates,
-} from "@/services/reward-service"
-import type { Reward, RewardRole, RewardType as NewRewardType, AmountType, CreateRewardTemplateData } from "@/types/reward"
-import {
-  REWARD_TYPE_LABELS as NEW_REWARD_TYPE_LABELS,
-  REWARD_STATUS_LABELS,
-  REWARD_ROLE_LABELS,
-  AMOUNT_TYPE_LABELS,
-  formatRewardAmount,
-  getRewardStatusColor,
-  getRewardRoleColor,
-} from "@/types/reward"
+  type RewardStatus,
+  type RewardAmountType,
+  type PolicyTarget,
+} from "@/services/campaign-service"
+
+// ============ 상수 ============
+
+const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  planned: "예정",
+  active: "진행중",
+  completed: "완료",
+  cancelled: "취소",
+}
+
+const PROMO_CHANNELS = [
+  { value: "banner", label: "현수막" },
+  { value: "flyer", label: "전단지" },
+  { value: "blog", label: "블로그" },
+  { value: "cafe_mom", label: "맘카페" },
+  { value: "ad", label: "온라인광고" },
+  { value: "seminar", label: "설명회" },
+  { value: "other", label: "기타" },
+]
+
+const REWARD_TYPES = [
+  { value: "cash", label: "현금" },
+  { value: "tuition_discount", label: "학원비 할인" },
+  { value: "gift_card", label: "상품권" },
+  { value: "other", label: "기타" },
+]
+
+const REWARD_AMOUNT_TYPES = [
+  { value: "fixed", label: "금액" },
+  { value: "percent", label: "할인율 (%)" },
+]
+
+const REWARD_STATUS_LABELS: Record<RewardStatus, string> = {
+  pending: "대기",
+  paid: "지급완료",
+  applied: "적용됨",
+  cancelled: "취소",
+}
+
+const POLICY_TARGET_LABELS: Record<PolicyTarget, string> = {
+  sibling: "형제 할인",
+  dual_subject: "수학+과학 동시수강 할인",
+  early_bird: "조기등록 할인",
+  long_term: "장기수강 할인",
+  custom: "기타 할인",
+}
+
+const POLICY_TARGET_ICONS: Record<PolicyTarget, string> = {
+  sibling: "👨‍👩‍👧‍👦",
+  dual_subject: "📚",
+  early_bird: "🎓",
+  long_term: "📅",
+  custom: "🎁",
+}
+
+// ============ 컴포넌트 ============
 
 export default function MarketingPage() {
-  // 마케팅 활동 관련 상태
-  const [marketingActivities, setMarketingActivities] = useState<MarketingActivity[]>([])
-  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false)
-  const [editingActivity, setEditingActivity] = useState<MarketingActivity | null>(null)
-  const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null)
-  const [activityForm, setActivityForm] = useState({
-    channel: "" as MarketingChannel | "",
+  const supabase = createClient()
+  const [activeTab, setActiveTab] = useState<"promo" | "event" | "policy">("event")
+  const [isLoading, setIsLoading] = useState(true)
+
+  // 캠페인
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+  const [deleteCampaignId, setDeleteCampaignId] = useState<string | null>(null)
+
+  // 참여자
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
+  const [participants, setParticipants] = useState<CampaignParticipant[]>([])
+  const [isParticipantModalOpen, setIsParticipantModalOpen] = useState(false)
+  const [students, setStudents] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
+
+  // 참여자 필터/검색
+  const [statusFilter, setStatusFilter] = useState<RewardStatus | "all">("all")
+  const [studentSearch, setStudentSearch] = useState("")
+
+  // 참여자 추가 폼
+  const [addParticipantForm, setAddParticipantForm] = useState({
+    participatedAt: format(new Date(), "yyyy-MM-dd"),
+    rewardAmount: 0,
+    rewardAmountType: "fixed" as RewardAmountType,
+  })
+
+  // 참여자 수정
+  const [editingParticipant, setEditingParticipant] = useState<CampaignParticipant | null>(null)
+
+  // 참여자 통계 (캠페인별)
+  const [participantStats, setParticipantStats] = useState({
+    total: 0,
+    pending: 0,
+    paid: 0,
+    applied: 0,
+  })
+
+  // 전체 이벤트 통계 (탭 상단용)
+  const [overallEventStats, setOverallEventStats] = useState({
+    total: 0,
+    pending: 0,
+    paid: 0,
+    applied: 0,
+  })
+
+  // 할인정책
+  const [policies, setPolicies] = useState<Campaign[]>([])
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState<Campaign | null>(null)
+  const [deletePolicyId, setDeletePolicyId] = useState<string | null>(null)
+
+  // 형제 그룹 정보 (같은 학부모 전화번호 기준)
+  const [siblingGroups, setSiblingGroups] = useState<Array<{
+    parentPhone: string
+    students: Array<{ id: string; name: string; grade: number | null; school: string | null }>
+  }>>([])
+  const [expandedSiblingGroups, setExpandedSiblingGroups] = useState<Record<string, boolean>>({})
+
+  // 수학+과학 동시수강 학생 목록
+  const [dualSubjectStudents, setDualSubjectStudents] = useState<Array<{
+    id: string
+    name: string
+    grade: number | null
+    school: string | null
+    mathClasses: string[]
+    scienceClasses: string[]
+  }>>([])
+  const [expandedDualSubject, setExpandedDualSubject] = useState<Record<string, boolean>>({})
+
+  const [policyFormData, setPolicyFormData] = useState({
     title: "",
     description: "",
-    activityDate: new Date(),
-    costAmount: "",
-    contentUrl: "",
-    status: "in_progress" as MarketingStatus,
+    policy_target: "sibling" as PolicyTarget,
+    reward_amount: 0,
+    reward_amount_type: "percent" as RewardAmountType,
+    status: "active" as CampaignStatus,
   })
-  const [savingActivity, setSavingActivity] = useState(false)
 
-  // 보상 템플릿 관련 상태
-  interface RewardTemplateFormItem {
-    id?: string
-    role: RewardRole
-    reward_type: NewRewardType
-    amount_type: AmountType
-    reward_amount: string
-    description: string
-  }
-  const [rewardTemplatesEnabled, setRewardTemplatesEnabled] = useState(false)
-  const [rewardTemplates, setRewardTemplates] = useState<RewardTemplateFormItem[]>([])
-
-  // 참가자 관리 관련 상태
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null)
-  const [participants, setParticipants] = useState<MarketingActivityParticipant[]>([])
-  const [allStudents, setAllStudents] = useState<{ id: string; name: string; school_type: string | null; grade: number | null; status: string }[]>([])
-  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
-  const [loadingParticipants, setLoadingParticipants] = useState(false)
-  const [savingParticipants, setSavingParticipants] = useState(false)
-  const [studentSearchQuery, setStudentSearchQuery] = useState("")
-  const [activityStatusFilter, setActivityStatusFilter] = useState<MarketingStatus | "all">("all")
-  const [participatedDate, setParticipatedDate] = useState<Date>(new Date())
-
-  // 추천 관리 관련 상태
-  const [referrals, setReferrals] = useState<StudentReferral[]>([])
-  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null)
-  const [topReferrers, setTopReferrers] = useState<TopReferrer[]>([])
-  const [pendingRewards, setPendingRewards] = useState<StudentReferral[]>([])
-  const [loadingReferrals, setLoadingReferrals] = useState(false)
-  const [isReferralModalOpen, setIsReferralModalOpen] = useState(false)
-  const [editingReferral, setEditingReferral] = useState<StudentReferral | null>(null)
-  const [deleteReferralId, setDeleteReferralId] = useState<string | null>(null)
-  const [savingReferral, setSavingReferral] = useState(false)
-  const [referralForm, setReferralForm] = useState({
-    referrer_student_id: "",
-    referred_student_id: "",
-    referral_date: new Date(),
-    referral_type: "학부모추천" as ReferralType,
-    notes: "",
-    marketing_activity_id: "",
+  // 폼 상태
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    status: "active" as CampaignStatus,
+    start_date: format(new Date(), "yyyy-MM-dd"),
+    end_date: "",
+    channel: "",
+    cost_amount: 0,
+    reach_count: 0,
+    reward_type: "tuition_discount" as RewardType,
+    reward_amount: 0,
+    reward_amount_type: "fixed" as RewardAmountType,
+    reward_description: "",
   })
-  const [isRewardModalOpen, setIsRewardModalOpen] = useState(false)
-  const [rewardTargetReferral, setRewardTargetReferral] = useState<StudentReferral | null>(null)
-  const [rewardForm, setRewardForm] = useState({
-    reward_type: "학원비할인" as RewardType,
-    reward_amount: "",
-    reward_date: new Date(),
-    reward_notes: "",
-  })
-  const [referrerSearchQuery, setReferrerSearchQuery] = useState("")
-  const [referredSearchQuery, setReferredSearchQuery] = useState("")
 
-  // 보상 현황 관련 상태
-  const [pendingRewardsNew, setPendingRewardsNew] = useState<Reward[]>([])
-  const [loadingPendingRewards, setLoadingPendingRewards] = useState(false)
-
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-  const channels = getAllChannels()
+  // ============ 데이터 로드 ============
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (activeTab === "policy") {
+      loadPolicies()
+    } else {
+      loadCampaigns()
+    }
+    loadStudents()
+    if (activeTab === "event") {
+      loadOverallEventStats()
+    }
+  }, [activeTab])
 
-  const loadData = async () => {
-    setLoading(true)
-    try {
-      await Promise.all([
-        loadMarketingActivities(),
-        loadAllStudents(),
-        loadReferralData(),
-        loadPendingRewardsNew(),
-      ])
-    } catch (error) {
-      console.error("Failed to load data:", error)
-      toast.error("데이터를 불러오는데 실패했습니다.")
-    } finally {
-      setLoading(false)
+  async function loadCampaigns() {
+    setIsLoading(true)
+    const result = await getCampaigns(supabase, { type: activeTab })
+    if (result.success && result.data) {
+      setCampaigns(result.data)
+    }
+    setIsLoading(false)
+  }
+
+  async function loadOverallEventStats() {
+    const result = await getAllEventStats(supabase)
+    if (result.success && result.data) {
+      setOverallEventStats(result.data)
     }
   }
 
-  // 마케팅 활동 로드
-  const loadMarketingActivities = async () => {
-    const activities = await getMarketingActivities(supabase)
-    setMarketingActivities(activities)
+  async function loadPolicies() {
+    setIsLoading(true)
+    const result = await getPolicies(supabase)
+    if (result.success && result.data) {
+      setPolicies(result.data)
+    }
+    // 형제 할인 정책이 있으면 형제 그룹도 로드
+    loadSiblingGroups()
+    // 수학+과학 동시수강 학생 로드
+    loadDualSubjectStudents()
+    setIsLoading(false)
   }
 
-  // 전체 학생 목록 로드 (참가자 선택용)
-  const loadAllStudents = async () => {
+  async function loadSiblingGroups() {
+    try {
+      // 재원 학생 중 parent_phone이 있는 학생들 조회
+      const { data: studentsData, error } = await supabase
+        .from("students")
+        .select("id, name, parent_phone, grade, school")
+        .eq("status", "재원")
+        .not("parent_phone", "is", null)
+
+      if (error) throw error
+      if (!studentsData) return
+
+      // 같은 전화번호를 가진 학생들 그룹화
+      const phoneGroups: Record<string, Array<{ id: string; name: string; grade: number | null; school: string | null }>> = {}
+      for (const student of studentsData) {
+        if (student.parent_phone) {
+          const phone = student.parent_phone.replace(/[^0-9]/g, "") // 숫자만 추출
+          if (!phoneGroups[phone]) {
+            phoneGroups[phone] = []
+          }
+          phoneGroups[phone].push({
+            id: student.id,
+            name: student.name,
+            grade: student.grade,
+            school: student.school,
+          })
+        }
+      }
+
+      // 2명 이상인 그룹만 형제 그룹으로 설정
+      const groups = Object.entries(phoneGroups)
+        .filter(([_, students]) => students.length >= 2)
+        .map(([phone, students]) => ({
+          parentPhone: phone,
+          students: students.sort((a, b) => (a.grade || 0) - (b.grade || 0)),
+        }))
+
+      setSiblingGroups(groups)
+    } catch (error) {
+      console.error("Failed to load sibling groups:", error)
+    }
+  }
+
+  async function loadDualSubjectStudents() {
+    try {
+      // 재원 학생들의 수강 반 정보 조회
+      const { data: classStudentsData, error: csError } = await supabase
+        .from("class_students")
+        .select(`
+          student_id,
+          class:classes(id, name, subject)
+        `)
+
+      if (csError) throw csError
+      if (!classStudentsData) return
+
+      // 재원 학생 정보 조회
+      const { data: studentsData, error: sError } = await supabase
+        .from("students")
+        .select("id, name, grade, school, status")
+        .eq("status", "재원")
+
+      if (sError) throw sError
+      if (!studentsData) return
+
+      const activeStudentIds = new Set(studentsData.map(s => s.id))
+
+      // 학생별 수강 과목 그룹화
+      const studentSubjects: Record<string, { mathClasses: string[]; scienceClasses: string[] }> = {}
+
+      for (const cs of classStudentsData) {
+        if (!activeStudentIds.has(cs.student_id)) continue // 재원생만
+
+        const classData = cs.class as any
+        if (!classData) continue
+
+        if (!studentSubjects[cs.student_id]) {
+          studentSubjects[cs.student_id] = { mathClasses: [], scienceClasses: [] }
+        }
+
+        const subject = classData.subject
+        const className = classData.name
+
+        if (subject === "수학" || subject === "수학특강") {
+          studentSubjects[cs.student_id].mathClasses.push(className)
+        } else if (subject === "과학" || subject === "과학특강") {
+          studentSubjects[cs.student_id].scienceClasses.push(className)
+        }
+      }
+
+      // 수학과 과학을 모두 수강하는 학생 필터링
+      const dualStudents = studentsData
+        .filter(s => {
+          const subjects = studentSubjects[s.id]
+          return subjects && subjects.mathClasses.length > 0 && subjects.scienceClasses.length > 0
+        })
+        .map(s => ({
+          id: s.id,
+          name: s.name,
+          grade: s.grade,
+          school: s.school,
+          mathClasses: studentSubjects[s.id]?.mathClasses || [],
+          scienceClasses: studentSubjects[s.id]?.scienceClasses || [],
+        }))
+        .sort((a, b) => (a.grade || 0) - (b.grade || 0))
+
+      setDualSubjectStudents(dualStudents)
+    } catch (error) {
+      console.error("Failed to load dual subject students:", error)
+    }
+  }
+
+  async function loadStudents() {
     const { data } = await supabase
       .from("students")
-      .select("id, name, school_type, grade, status")
+      .select("id, name")
+      .eq("status", "재원")
       .order("name")
-    setAllStudents(data || [])
+    setStudents(data || [])
   }
 
-  // 추천 데이터 로드
-  const loadReferralData = async () => {
-    setLoadingReferrals(true)
-    try {
-      const [referralsData, statsData, topData, pendingData] = await Promise.all([
-        getReferrals(supabase, { limit: 50 }),
-        getReferralStats(supabase),
-        getTopReferrers(supabase, 5),
-        getPendingRewards(supabase),
-      ])
-      setReferrals(referralsData)
-      setReferralStats(statsData)
-      setTopReferrers(topData)
-      setPendingRewards(pendingData)
-    } catch (error) {
-      console.error("Failed to load referral data:", error)
-      toast.error("추천 데이터를 불러오는데 실패했습니다.")
-    } finally {
-      setLoadingReferrals(false)
-    }
-  }
-
-  // 신규 보상 시스템 데이터 로드
-  const loadPendingRewardsNew = async () => {
-    setLoadingPendingRewards(true)
-    try {
-      const rewards = await getPendingRewardsFromService(supabase)
-      setPendingRewardsNew(rewards)
-    } catch (error) {
-      console.error("Failed to load pending rewards:", error)
-    } finally {
-      setLoadingPendingRewards(false)
-    }
-  }
-
-  // 참가자 로드
-  const loadParticipants = async (activityId: string) => {
-    setLoadingParticipants(true)
-    try {
-      const data = await getActivityParticipants(supabase, activityId)
-      setParticipants(data)
-    } catch (error) {
-      console.error("Failed to load participants:", error)
-      toast.error("참가자 목록을 불러오는데 실패했습니다.")
-    } finally {
-      setLoadingParticipants(false)
-    }
-  }
-
-  // 마케팅 활동 선택
-  const handleActivitySelect = (activityId: string) => {
-    setSelectedActivityId(activityId)
-    setSelectedStudentIds([])
-    loadParticipants(activityId)
-  }
-
-  // 마케팅 활동 모달 열기
-  const openCreateActivityModal = () => {
-    setEditingActivity(null)
-    setActivityForm({
-      channel: "",
-      title: "",
-      description: "",
-      activityDate: new Date(),
-      costAmount: "",
-      contentUrl: "",
-      status: "in_progress",
-    })
-    setRewardTemplatesEnabled(false)
-    setRewardTemplates([])
-    setIsActivityModalOpen(true)
-  }
-
-  const openEditActivityModal = async (activity: MarketingActivity) => {
-    setEditingActivity(activity)
-    setActivityForm({
-      channel: activity.channel,
-      title: activity.title,
-      description: activity.description || "",
-      activityDate: activity.activity_date ? new Date(activity.activity_date) : new Date(),
-      costAmount: activity.cost_amount?.toString() || "",
-      contentUrl: activity.content_url || "",
-      status: activity.status,
-    })
-
-    // 기존 보상 템플릿 로드
-    try {
-      const templates = await getRewardTemplates(supabase, activity.id)
-      if (templates.length > 0) {
-        setRewardTemplatesEnabled(true)
-        setRewardTemplates(templates.map(t => ({
-          id: t.id,
-          role: t.role,
-          reward_type: t.reward_type,
-          amount_type: t.amount_type,
-          reward_amount: t.reward_amount.toString(),
-          description: t.description || "",
-        })))
-      } else {
-        setRewardTemplatesEnabled(false)
-        setRewardTemplates([])
+  async function loadParticipants(campaignId: string) {
+    const result = await getParticipants(supabase, campaignId)
+    if (result.success && result.data) {
+      setParticipants(result.data)
+      // 통계 계산
+      const stats = {
+        total: result.data.length,
+        pending: result.data.filter(p => p.reward_status === "pending").length,
+        paid: result.data.filter(p => p.reward_status === "paid").length,
+        applied: result.data.filter(p => p.reward_status === "applied").length,
       }
-    } catch (error) {
-      console.error("Failed to load reward templates:", error)
-      setRewardTemplatesEnabled(false)
-      setRewardTemplates([])
+      setParticipantStats(stats)
     }
-
-    setIsActivityModalOpen(true)
+    // 전체 통계도 갱신
+    loadOverallEventStats()
   }
 
-  // 마케팅 활동 저장
-  const handleSaveActivity = async () => {
-    if (!activityForm.channel || !activityForm.title) {
-      toast.error("채널과 제목은 필수입니다.")
+  // ============ 캠페인 CRUD ============
+
+  function handleOpenModal(campaign?: Campaign) {
+    if (campaign) {
+      setEditingCampaign(campaign)
+      setFormData({
+        title: campaign.title,
+        description: campaign.description || "",
+        status: campaign.status,
+        start_date: campaign.start_date,
+        end_date: campaign.end_date || "",
+        channel: campaign.channel || "",
+        cost_amount: campaign.cost_amount || 0,
+        reach_count: campaign.reach_count || 0,
+        reward_type: (campaign.reward_type as RewardType) || "tuition_discount",
+        reward_amount: campaign.reward_amount || 0,
+        reward_amount_type: campaign.reward_amount_type || "fixed",
+        reward_description: campaign.reward_description || "",
+      })
+    } else {
+      setEditingCampaign(null)
+      setFormData({
+        title: "",
+        description: "",
+        status: "active",
+        start_date: format(new Date(), "yyyy-MM-dd"),
+        end_date: "",
+        channel: "",
+        cost_amount: 0,
+        reach_count: 0,
+        reward_type: "tuition_discount",
+        reward_amount: 0,
+        reward_amount_type: "fixed",
+        reward_description: "",
+      })
+    }
+    setIsModalOpen(true)
+  }
+
+  async function handleSaveCampaign() {
+    if (!formData.title.trim()) {
+      toast.error("제목을 입력하세요")
       return
     }
 
-    setSavingActivity(true)
-    try {
-      const input = {
-        channel: activityForm.channel as MarketingChannel,
-        title: activityForm.title,
-        description: activityForm.description || undefined,
-        activityDate: format(activityForm.activityDate, "yyyy-MM-dd"),
-        costAmount: activityForm.costAmount ? parseInt(activityForm.costAmount) : undefined,
-        contentUrl: activityForm.contentUrl || undefined,
-        status: activityForm.status,
-      }
+    const data = {
+      title: formData.title,
+      description: formData.description || undefined,
+      campaign_type: activeTab as CampaignType,
+      status: formData.status,
+      start_date: formData.start_date,
+      end_date: formData.end_date || undefined,
+      channel: activeTab === "promo" ? formData.channel : undefined,
+      cost_amount: activeTab === "promo" ? formData.cost_amount : undefined,
+      reach_count: activeTab === "promo" ? formData.reach_count : undefined,
+      reward_type: activeTab === "event" ? formData.reward_type : undefined,
+      reward_amount: activeTab === "event" ? formData.reward_amount : undefined,
+      reward_amount_type: activeTab === "event" ? formData.reward_amount_type : undefined,
+      reward_description: activeTab === "event" ? formData.reward_description : undefined,
+    }
 
-      let activityId: string
+    let result
+    if (editingCampaign) {
+      result = await updateCampaign(supabase, editingCampaign.id, data)
+    } else {
+      result = await createCampaign(supabase, data)
+    }
 
-      if (editingActivity) {
-        await updateMarketingActivity(supabase, editingActivity.id, input)
-        activityId = editingActivity.id
-        toast.success("마케팅 활동이 수정되었습니다")
-      } else {
-        const result = await createMarketingActivity(supabase, input)
-        if (!result.success || !result.id) {
-          throw new Error(result.error || "마케팅 활동 생성에 실패했습니다.")
-        }
-        activityId = result.id
-        toast.success("마케팅 활동이 등록되었습니다")
-      }
-
-      // 보상 템플릿 저장
-      if (rewardTemplatesEnabled && rewardTemplates.length > 0) {
-        const templateData: CreateRewardTemplateData[] = rewardTemplates
-          .filter(t => t.reward_amount && parseInt(t.reward_amount) > 0)
-          .map(t => ({
-            marketing_activity_id: activityId,
-            role: t.role,
-            reward_type: t.reward_type,
-            amount_type: t.amount_type,
-            reward_amount: parseInt(t.reward_amount),
-            description: t.description || undefined,
-          }))
-        await saveRewardTemplates(supabase, activityId, templateData)
-
-        // 보상 플래그 업데이트
-        const hasTuition = templateData.some(t => t.reward_type === 'tuition_discount')
-        const hasCash = templateData.some(t => t.reward_type === 'cash')
-        await updateMarketingActivity(supabase, activityId, {
-          channel: activityForm.channel as MarketingChannel,
-          title: activityForm.title,
-          activityDate: format(activityForm.activityDate, "yyyy-MM-dd"),
-          status: activityForm.status,
-          hasTuitionReward: hasTuition,
-          hasCashReward: hasCash,
-        })
-      } else if (editingActivity) {
-        // 보상 템플릿 비활성화 시 모두 삭제
-        await saveRewardTemplates(supabase, activityId, [])
-
-        // 보상 플래그 리셋
-        await updateMarketingActivity(supabase, activityId, {
-          channel: activityForm.channel as MarketingChannel,
-          title: activityForm.title,
-          activityDate: format(activityForm.activityDate, "yyyy-MM-dd"),
-          status: activityForm.status,
-          hasTuitionReward: false,
-          hasCashReward: false,
-        })
-      }
-
-      setIsActivityModalOpen(false)
-      loadMarketingActivities()
-    } catch (error: any) {
-      toast.error(error.message || "저장에 실패했습니다.")
-    } finally {
-      setSavingActivity(false)
+    if (result.success) {
+      toast.success(editingCampaign ? "수정되었습니다" : "생성되었습니다")
+      setIsModalOpen(false)
+      loadCampaigns()
+    } else {
+      toast.error(result.error || "저장에 실패했습니다")
     }
   }
 
-  // 보상 템플릿 추가
-  const addRewardTemplate = (role: RewardRole) => {
-    setRewardTemplates([
-      ...rewardTemplates,
-      {
-        role,
-        reward_type: role === 'participant' ? 'tuition_discount' : 'cash',
-        amount_type: 'fixed',
-        reward_amount: "",
-        description: "",
-      },
-    ])
-  }
+  async function handleDeleteCampaign() {
+    if (!deleteCampaignId) return
 
-  // 보상 템플릿 삭제
-  const removeRewardTemplate = (index: number) => {
-    setRewardTemplates(rewardTemplates.filter((_, i) => i !== index))
-  }
-
-  // 보상 템플릿 수정
-  const updateRewardTemplate = (index: number, field: keyof RewardTemplateFormItem, value: string) => {
-    const updated = [...rewardTemplates]
-    updated[index] = { ...updated[index], [field]: value }
-    setRewardTemplates(updated)
-  }
-
-  // 역할별 보상 템플릿 그룹
-  const getTemplatesByRole = (role: RewardRole) => {
-    return rewardTemplates
-      .map((t, index) => ({ ...t, index }))
-      .filter(t => t.role === role)
-  }
-
-  // 마케팅 활동 삭제
-  const handleDeleteActivity = async () => {
-    if (!deleteActivityId) return
-
-    try {
-      await deleteMarketingActivity(supabase, deleteActivityId)
-      toast.success("마케팅 활동이 삭제되었습니다")
-      setDeleteActivityId(null)
-      if (selectedActivityId === deleteActivityId) {
-        setSelectedActivityId(null)
+    const result = await deleteCampaign(supabase, deleteCampaignId)
+    if (result.success) {
+      toast.success("삭제되었습니다")
+      setDeleteCampaignId(null)
+      loadCampaigns()
+      if (selectedCampaign?.id === deleteCampaignId) {
+        setSelectedCampaign(null)
         setParticipants([])
       }
-      loadMarketingActivities()
-    } catch (error: any) {
-      toast.error(error.message || "삭제에 실패했습니다.")
+    } else {
+      toast.error(result.error || "삭제에 실패했습니다")
     }
   }
 
-  // 참가자 추가
-  const handleAddParticipants = async () => {
-    if (!selectedActivityId || selectedStudentIds.length === 0) return
+  // ============ 참여자 관리 ============
 
-    setSavingParticipants(true)
-    try {
-      await addActivityParticipants(supabase, selectedActivityId, selectedStudentIds, format(participatedDate, "yyyy-MM-dd"))
-      toast.success(`${selectedStudentIds.length}명의 참가자가 추가되었습니다`)
-      setSelectedStudentIds([])
-      loadParticipants(selectedActivityId)
-    } catch (error: any) {
-      toast.error(error.message || "참가자 추가에 실패했습니다.")
-    } finally {
-      setSavingParticipants(false)
-    }
-  }
-
-  // 참가자 제거
-  const handleRemoveParticipant = async (participantId: string) => {
-    if (!selectedActivityId) return
-
-    try {
-      await removeActivityParticipant(supabase, participantId)
-      toast.success("참가자가 제거되었습니다")
-      loadParticipants(selectedActivityId)
-    } catch (error: any) {
-      toast.error(error.message || "참가자 제거에 실패했습니다.")
-    }
-  }
-
-  // 추천 모달 열기 (등록)
-  const openCreateReferralModal = () => {
-    setEditingReferral(null)
-    setReferralForm({
-      referrer_student_id: "",
-      referred_student_id: "",
-      referral_date: new Date(),
-      referral_type: "학부모추천",
-      notes: "",
-      marketing_activity_id: "",
+  function handleSelectCampaign(campaign: Campaign) {
+    setSelectedCampaign(campaign)
+    loadParticipants(campaign.id)
+    // 참여자 추가 폼 초기화
+    setAddParticipantForm({
+      participatedAt: format(new Date(), "yyyy-MM-dd"),
+      rewardAmount: campaign.reward_amount || 0,
+      rewardAmountType: campaign.reward_amount_type || "fixed",
     })
-    setReferrerSearchQuery("")
-    setReferredSearchQuery("")
-    setIsReferralModalOpen(true)
+    setStatusFilter("all")
   }
 
-  // 추천 모달 열기 (수정)
-  const openEditReferralModal = (referral: StudentReferral) => {
-    setEditingReferral(referral)
-    setReferralForm({
-      referrer_student_id: referral.referrer_student_id || "",
-      referred_student_id: referral.referred_student_id || "",
-      referral_date: referral.referral_date ? new Date(referral.referral_date) : new Date(),
-      referral_type: referral.referral_type,
-      notes: referral.notes || "",
-      marketing_activity_id: referral.marketing_activity_id || "",
+  function handleOpenParticipantModal() {
+    if (!selectedCampaign) return
+    // 캠페인 기본값으로 폼 초기화
+    setAddParticipantForm({
+      participatedAt: format(new Date(), "yyyy-MM-dd"),
+      rewardAmount: selectedCampaign.reward_amount || 0,
+      rewardAmountType: selectedCampaign.reward_amount_type || "fixed",
     })
-    setReferrerSearchQuery(referral.referrer_name_snapshot || "")
-    setReferredSearchQuery(referral.referred_name_snapshot || "")
-    setIsReferralModalOpen(true)
+    setSelectedStudentIds([])
+    setStudentSearch("")
+    setIsParticipantModalOpen(true)
   }
 
-  // 추천 저장
-  const handleSaveReferral = async () => {
-    if (!referralForm.referrer_student_id || !referralForm.referred_student_id) {
-      toast.error("추천인과 피추천인을 선택해주세요.")
-      return
+  async function handleAddParticipants() {
+    if (!selectedCampaign || selectedStudentIds.length === 0) return
+
+    let successCount = 0
+    for (const studentId of selectedStudentIds) {
+      // 캠페인 기본값 사용 (rewardAmount, rewardAmountType 미전달)
+      const result = await addParticipant(supabase, selectedCampaign.id, studentId)
+      if (result.success) successCount++
     }
 
-    const referrerStudent = allStudents.find(s => s.id === referralForm.referrer_student_id)
-    const referredStudent = allStudents.find(s => s.id === referralForm.referred_student_id)
-
-    setSavingReferral(true)
-    try {
-      if (editingReferral) {
-        await updateReferral(supabase, editingReferral.id, {
-          referrer_student_id: referralForm.referrer_student_id,
-          referrer_name_snapshot: referrerStudent?.name,
-          referred_student_id: referralForm.referred_student_id,
-          referred_name_snapshot: referredStudent?.name,
-          referral_date: format(referralForm.referral_date, "yyyy-MM-dd"),
-          referral_type: referralForm.referral_type,
-          notes: referralForm.notes || undefined,
-          marketing_activity_id: referralForm.marketing_activity_id || null,
-        })
-        toast.success("추천 정보가 수정되었습니다")
-      } else {
-        await createReferral(supabase, {
-          referrer_student_id: referralForm.referrer_student_id,
-          referrer_name_snapshot: referrerStudent?.name || "알 수 없음",
-          referred_student_id: referralForm.referred_student_id,
-          referred_name_snapshot: referredStudent?.name || "알 수 없음",
-          referral_date: format(referralForm.referral_date, "yyyy-MM-dd"),
-          referral_type: referralForm.referral_type,
-          notes: referralForm.notes || undefined,
-          marketing_activity_id: referralForm.marketing_activity_id || undefined,
-        })
-        toast.success("추천이 등록되었습니다")
-      }
-
-      setIsReferralModalOpen(false)
-      loadReferralData()
-    } catch (error: any) {
-      toast.error(error.message || "저장에 실패했습니다.")
-    } finally {
-      setSavingReferral(false)
-    }
+    toast.success(`${successCount}명 추가되었습니다`)
+    setIsParticipantModalOpen(false)
+    setSelectedStudentIds([])
+    loadParticipants(selectedCampaign.id)
   }
 
-  // 추천 삭제
-  const handleDeleteReferral = async () => {
-    if (!deleteReferralId) return
-
-    try {
-      await deleteReferral(supabase, deleteReferralId)
-      toast.success("추천이 삭제되었습니다")
-      setDeleteReferralId(null)
-      loadReferralData()
-    } catch (error: any) {
-      toast.error(error.message || "삭제에 실패했습니다.")
-    }
-  }
-
-  // 보상 지급 모달 열기
-  const openRewardModal = (referral: StudentReferral) => {
-    setRewardTargetReferral(referral)
-    setRewardForm({
-      reward_type: (referral.reward_type as RewardType) || "학원비할인",
-      reward_amount: referral.reward_amount?.toString() || "",
-      reward_date: new Date(),
-      reward_notes: "",
-    })
-    setIsRewardModalOpen(true)
-  }
-
-  // 보상 지급
-  const handleGiveReward = async () => {
-    if (!rewardTargetReferral) return
-    if (!rewardForm.reward_amount || parseInt(rewardForm.reward_amount) <= 0) {
-      toast.error("보상 금액을 입력해주세요.")
-      return
-    }
-
-    setSavingReferral(true)
-    try {
-      await giveReward(supabase, rewardTargetReferral.id, {
-        reward_type: rewardForm.reward_type,
-        reward_amount: parseInt(rewardForm.reward_amount),
-        reward_date: format(rewardForm.reward_date, "yyyy-MM-dd"),
-        reward_notes: rewardForm.reward_notes || undefined,
-      })
-      toast.success("보상이 지급되었습니다")
-      setIsRewardModalOpen(false)
-      loadReferralData()
-    } catch (error: any) {
-      toast.error(error.message || "보상 지급에 실패했습니다.")
-    } finally {
-      setSavingReferral(false)
-    }
-  }
-
-  // 추천 상태 변경
-  const handleStatusChange = async (referralId: string, newStatus: ReferralStatus) => {
-    try {
-      await updateReferralStatus(supabase, referralId, newStatus)
+  async function handleUpdateParticipantStatus(participantId: string, newStatus: RewardStatus) {
+    const result = await updateParticipant(supabase, participantId, { reward_status: newStatus })
+    if (result.success) {
       toast.success("상태가 변경되었습니다")
-      loadReferralData()
-    } catch (error: any) {
-      toast.error(error.message || "상태 변경에 실패했습니다.")
+      if (selectedCampaign) {
+        loadParticipants(selectedCampaign.id)
+      }
+    } else {
+      toast.error(result.error || "상태 변경에 실패했습니다")
     }
   }
 
-  // 필터링된 학생 목록
-  const filteredStudents = allStudents.filter(s =>
-    s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) &&
-    !participants.some(p => p.student_id === s.id)
-  )
+  async function handleSaveParticipantEdit() {
+    if (!editingParticipant) return
 
-  // 필터링된 마케팅 활동
-  const filteredActivities = marketingActivities.filter(a =>
-    activityStatusFilter === "all" || a.status === activityStatusFilter
-  )
+    const result = await updateParticipant(supabase, editingParticipant.id, {
+      participated_at: editingParticipant.participated_at,
+      reward_amount: editingParticipant.reward_amount,
+      reward_amount_type: editingParticipant.reward_amount_type,
+    })
 
-  // 추천 타입별 마케팅 활동 필터링 (추천 관련 활동만)
-  const referralMarketingActivities = marketingActivities.filter(a =>
-    a.channel === "referral" || a.title.includes("추천")
-  )
+    if (result.success) {
+      toast.success("수정되었습니다")
+      setEditingParticipant(null)
+      if (selectedCampaign) {
+        loadParticipants(selectedCampaign.id)
+      }
+    } else {
+      toast.error(result.error || "수정에 실패했습니다")
+    }
+  }
 
-  // 추천인/피추천인 검색용 필터링
-  const filteredReferrers = allStudents.filter(s =>
-    s.name.toLowerCase().includes(referrerSearchQuery.toLowerCase()) &&
-    s.id !== referralForm.referred_student_id
-  )
-  const filteredReferred = allStudents.filter(s =>
-    s.name.toLowerCase().includes(referredSearchQuery.toLowerCase()) &&
-    s.id !== referralForm.referrer_student_id
-  )
+  async function handleRemoveParticipant(participantId: string) {
+    const result = await removeParticipant(supabase, participantId)
+    if (result.success) {
+      toast.success("삭제되었습니다")
+      if (selectedCampaign) {
+        loadParticipants(selectedCampaign.id)
+      }
+    } else {
+      toast.error(result.error || "삭제에 실패했습니다")
+    }
+  }
 
-  const selectedActivity = marketingActivities.find(a => a.id === selectedActivityId)
+  async function handleMarkPaid(participantId: string) {
+    const result = await markRewardPaid(supabase, participantId)
+    if (result.success) {
+      toast.success("지급 완료 처리되었습니다")
+      if (selectedCampaign) {
+        loadParticipants(selectedCampaign.id)
+      }
+    } else {
+      toast.error(result.error || "처리에 실패했습니다")
+    }
+  }
 
-  if (loading) {
+  // ============ 할인 정책 CRUD ============
+
+  function handleOpenPolicyModal(policy?: Campaign) {
+    if (policy) {
+      setEditingPolicy(policy)
+      setPolicyFormData({
+        title: policy.title,
+        description: policy.description || "",
+        policy_target: (policy.policy_target as PolicyTarget) || "sibling",
+        reward_amount: policy.reward_amount || 0,
+        reward_amount_type: policy.reward_amount_type || "percent",
+        status: policy.status,
+      })
+    } else {
+      setEditingPolicy(null)
+      setPolicyFormData({
+        title: "",
+        description: "",
+        policy_target: "sibling",
+        reward_amount: 0,
+        reward_amount_type: "percent",
+        status: "active",
+      })
+    }
+    setIsPolicyModalOpen(true)
+  }
+
+  async function handleSavePolicy() {
+    if (!policyFormData.title.trim()) {
+      toast.error("제목을 입력하세요")
+      return
+    }
+
+    const data = {
+      title: policyFormData.title,
+      description: policyFormData.description || undefined,
+      policy_target: policyFormData.policy_target,
+      reward_amount: policyFormData.reward_amount,
+      reward_amount_type: policyFormData.reward_amount_type,
+      status: policyFormData.status,
+    }
+
+    let result
+    if (editingPolicy) {
+      result = await updatePolicy(supabase, editingPolicy.id, data)
+    } else {
+      result = await createPolicy(supabase, data)
+    }
+
+    if (result.success) {
+      toast.success(editingPolicy ? "수정되었습니다" : "생성되었습니다")
+      setIsPolicyModalOpen(false)
+      loadPolicies()
+    } else {
+      toast.error(result.error || "저장에 실패했습니다")
+    }
+  }
+
+  async function handleDeletePolicy() {
+    if (!deletePolicyId) return
+
+    const result = await deletePolicy(supabase, deletePolicyId)
+    if (result.success) {
+      toast.success("삭제되었습니다")
+      setDeletePolicyId(null)
+      loadPolicies()
+    } else {
+      toast.error(result.error || "삭제에 실패했습니다")
+    }
+  }
+
+  // ============ 렌더링 ============
+
+  const getStatusBadge = (status: CampaignStatus) => {
+    const colors: Record<CampaignStatus, string> = {
+      planned: "bg-gray-100 text-gray-700",
+      active: "bg-green-100 text-green-700",
+      completed: "bg-blue-100 text-blue-700",
+      cancelled: "bg-red-100 text-red-700",
+    }
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <Badge className={cn("font-medium", colors[status])}>
+        {CAMPAIGN_STATUS_LABELS[status]}
+      </Badge>
+    )
+  }
+
+  const getRewardStatusBadge = (status: RewardStatus) => {
+    const colors: Record<RewardStatus, string> = {
+      pending: "bg-yellow-100 text-yellow-700",
+      paid: "bg-green-100 text-green-700",
+      applied: "bg-blue-100 text-blue-700",
+      cancelled: "bg-red-100 text-red-700",
+    }
+    const labels: Record<RewardStatus, string> = {
+      pending: "대기",
+      paid: "지급완료",
+      applied: "적용됨",
+      cancelled: "취소",
+    }
+    return (
+      <Badge className={cn("font-medium", colors[status])}>
+        {labels[status]}
+      </Badge>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     )
@@ -657,415 +706,337 @@ export default function MarketingPage() {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="activities" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="activities">마케팅 활동</TabsTrigger>
-          <TabsTrigger value="referral">추천 관리</TabsTrigger>
-          <TabsTrigger value="rewards">보상 현황</TabsTrigger>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">마케팅 관리</h2>
+          <p className="text-muted-foreground">
+            홍보 활동과 고객 이벤트를 관리합니다
+          </p>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "promo" | "event" | "policy")}>
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
+          <TabsTrigger value="promo" className="gap-2">
+            <Megaphone className="w-4 h-4" />
+            홍보 활동
+          </TabsTrigger>
+          <TabsTrigger value="event" className="gap-2">
+            <Gift className="w-4 h-4" />
+            고객 이벤트
+          </TabsTrigger>
+          <TabsTrigger value="policy" className="gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            할인 정책
+          </TabsTrigger>
         </TabsList>
 
-        {/* 마케팅 활동 탭 */}
-        <TabsContent value="activities" className="mt-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* 왼쪽: 마케팅 활동 목록 */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">
-                    <Megaphone className="w-5 h-5 inline mr-2" />
-                    마케팅 활동
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Select value={activityStatusFilter} onValueChange={(v) => setActivityStatusFilter(v as MarketingStatus | "all")}>
-                      <SelectTrigger className="w-[120px] h-8">
-                        <SelectValue placeholder="상태 필터" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">전체</SelectItem>
-                        <SelectItem value="planned">예정</SelectItem>
-                        <SelectItem value="in_progress">진행중</SelectItem>
-                        <SelectItem value="completed">완료</SelectItem>
-                        <SelectItem value="cancelled">취소</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button size="sm" onClick={openCreateActivityModal}>
-                      <Plus className="w-4 h-4 mr-1" />
-                      등록
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[500px]">
-                  {filteredActivities.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Megaphone className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">등록된 마케팅 활동이 없습니다.</p>
-                      <p className="text-xs mt-1">새 마케팅 활동을 등록해주세요.</p>
+        {/* ============ 홍보 활동 탭 ============ */}
+        <TabsContent value="promo" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => handleOpenModal()}>
+              <Plus className="w-4 h-4 mr-2" />
+              새 홍보 활동
+            </Button>
+          </div>
+
+          <div className="grid gap-4">
+            {campaigns.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10">
+                  <Megaphone className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">등록된 홍보 활동이 없습니다</p>
+                </CardContent>
+              </Card>
+            ) : (
+              campaigns.map((campaign) => (
+                <Card key={campaign.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {campaign.title}
+                          {getStatusBadge(campaign.status)}
+                        </CardTitle>
+                        <CardDescription>
+                          {campaign.start_date}
+                          {campaign.end_date && ` ~ ${campaign.end_date}`}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenModal(campaign)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteCampaignId(campaign.id)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredActivities.map((activity) => (
-                        <div
-                          key={activity.id}
-                          className={cn(
-                            "p-3 rounded-lg border cursor-pointer transition-colors",
-                            selectedActivityId === activity.id
-                              ? "border-primary bg-primary/5"
-                              : "hover:bg-muted/50"
-                          )}
-                          onClick={() => handleActivitySelect(activity.id)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                {getChannelLabel(activity.channel)}
-                              </Badge>
-                              <span className="font-medium">{activity.title}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openEditActivityModal(activity)
-                                }}
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setDeleteActivityId(activity.id)
-                                }}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                            {activity.activity_date && (
-                              <span className="flex items-center gap-1">
-                                <CalendarIcon className="w-3 h-3" />
-                                {format(new Date(activity.activity_date), "yyyy.MM.dd")}
-                              </span>
-                            )}
-                            {activity.cost_amount && (
-                              <span className="flex items-center gap-1">
-                                <DollarSign className="w-3 h-3" />
-                                {activity.cost_amount.toLocaleString()}원
-                              </span>
-                            )}
-                            {(activity.has_tuition_reward || activity.has_cash_reward) && (
-                              <span className="flex items-center gap-1 text-amber-600">
-                                <Gift className="w-3 h-3" />
-                                보상
-                              </span>
-                            )}
-                            <Badge
-                              variant={
-                                activity.status === "completed" ? "default" :
-                                activity.status === "in_progress" ? "secondary" :
-                                activity.status === "cancelled" ? "destructive" : "outline"
-                              }
-                              className="text-[10px] h-5"
-                            >
-                              {activity.status === "planned" ? "예정" :
-                               activity.status === "in_progress" ? "진행중" :
-                               activity.status === "completed" ? "완료" : "취소"}
-                            </Badge>
-                          </div>
-                          {activity.description && (
-                            <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                              {activity.description}
-                            </p>
-                          )}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-6 text-sm">
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="w-4 h-4 text-muted-foreground" />
+                        <span>비용: {(campaign.cost_amount || 0).toLocaleString()}원</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <span>도달: {campaign.reach_count || 0}명</span>
+                      </div>
+                      {campaign.cost_amount && campaign.reach_count ? (
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                          <span>
+                            CPA: {Math.round(campaign.cost_amount / campaign.reach_count).toLocaleString()}원
+                          </span>
                         </div>
-                      ))}
+                      ) : null}
                     </div>
-                  )}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* 오른쪽: 참가자 관리 */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">
-                  <Users className="w-5 h-5 inline mr-2" />
-                  참가자 관리
-                  {selectedActivity && (
-                    <span className="text-sm font-normal text-muted-foreground ml-2">
-                      - {selectedActivity.title}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!selectedActivityId ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">왼쪽에서 마케팅 활동을 선택하세요.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* 참가자 추가 */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          placeholder="학생 검색..."
-                          value={studentSearchQuery}
-                          onChange={(e) => setStudentSearchQuery(e.target.value)}
-                          className="h-8"
-                        />
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 w-[130px]">
-                              <CalendarIcon className="w-3.5 h-3.5 mr-1" />
-                              {format(participatedDate, "yyyy.MM.dd")}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                              mode="single"
-                              selected={participatedDate}
-                              onSelect={(date) => date && setParticipatedDate(date)}
-                              locale={ko}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      <ScrollArea className="h-[150px] border rounded-md p-2">
-                        {filteredStudents.length === 0 ? (
-                          <p className="text-xs text-muted-foreground text-center py-4">
-                            {studentSearchQuery ? "검색 결과가 없습니다." : "추가할 학생이 없습니다."}
-                          </p>
-                        ) : (
-                          <div className="space-y-1">
-                            {filteredStudents.map((student) => (
-                              <div key={student.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50">
-                                <Checkbox
-                                  id={`student-${student.id}`}
-                                  checked={selectedStudentIds.includes(student.id)}
-                                  onCheckedChange={(checked) => {
-                                    if (checked) {
-                                      setSelectedStudentIds([...selectedStudentIds, student.id])
-                                    } else {
-                                      setSelectedStudentIds(selectedStudentIds.filter(id => id !== student.id))
-                                    }
-                                  }}
-                                />
-                                <label htmlFor={`student-${student.id}`} className="flex-1 text-sm cursor-pointer">
-                                  {student.name}
-                                  <span className="text-xs text-muted-foreground ml-1">
-                                    ({student.school_type || "미지정"} {student.grade || ""}학년)
-                                  </span>
-                                </label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </ScrollArea>
-
-                      <Button
-                        onClick={handleAddParticipants}
-                        disabled={selectedStudentIds.length === 0 || savingParticipants}
-                        className="w-full h-8"
-                        size="sm"
-                      >
-                        {savingParticipants ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-1" />
-                            {selectedStudentIds.length}명 추가
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    {/* 참가자 목록 */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">참가자 목록</span>
-                        <Badge variant="secondary">{participants.length}명</Badge>
-                      </div>
-                      <ScrollArea className="h-[200px] border rounded-md">
-                        {loadingParticipants ? (
-                          <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : participants.length === 0 ? (
-                          <p className="text-xs text-muted-foreground text-center py-4">
-                            참가자가 없습니다.
-                          </p>
-                        ) : (
-                          <div className="p-2 space-y-1">
-                            {participants.map((p) => (
-                              <div key={p.id} className="flex items-center justify-between p-2 rounded hover:bg-muted/50">
-                                <div>
-                                  <span className="text-sm font-medium">{p.student?.name || "알 수 없음"}</span>
-                                  {p.participated_at && (
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                      {format(new Date(p.participated_at), "yyyy.MM.dd")}
-                                    </span>
-                                  )}
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-destructive hover:text-destructive"
-                                  onClick={() => handleRemoveParticipant(p.id)}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </ScrollArea>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    {campaign.description && (
+                      <p className="text-sm text-muted-foreground mt-2">{campaign.description}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
 
-        {/* 추천 관리 탭 */}
-        <TabsContent value="referral" className="mt-4">
-          <div className="grid grid-cols-3 gap-4">
-            {/* 통계 카드들 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">총 추천 현황</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{referralStats?.totalReferrals || 0}건</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline" className="text-xs">
-                    등록완료 {referralStats?.enrolledCount || 0}
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    진행중 {referralStats?.pendingCount || 0}
-                  </Badge>
+        {/* ============ 고객 이벤트 탭 ============ */}
+        <TabsContent value="event" className="space-y-4">
+          {/* 전체 이벤트 통계 카드 */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+                  <div className="text-2xl font-bold text-yellow-700">{overallEventStats.pending}</div>
+                  <div className="text-sm text-yellow-600">대기</div>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="text-center p-4 rounded-lg bg-green-50 border border-green-200">
+                  <div className="text-2xl font-bold text-green-700">{overallEventStats.paid}</div>
+                  <div className="text-sm text-green-600">지급완료</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-blue-50 border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-700">{overallEventStats.applied}</div>
+                  <div className="text-sm text-blue-600">적용됨</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">미지급 보상</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-amber-600">{pendingRewards.length}건</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  지급 대기 중인 보상
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">전환율</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{referralStats?.successRate?.toFixed(1) || 0}%</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  등록완료 / 전체 추천
-                </p>
-              </CardContent>
-            </Card>
+          <div className="flex justify-end">
+            <Button onClick={() => handleOpenModal()}>
+              <Plus className="w-4 h-4 mr-2" />
+              새 이벤트
+            </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mt-4">
-            {/* 추천 왕 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-amber-500" />
-                  추천 왕
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {topReferrers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">아직 추천 데이터가 없습니다.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {topReferrers.map((referrer, idx) => (
-                      <div key={referrer.student_id} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium",
-                            idx === 0 ? "bg-amber-100 text-amber-700" :
-                            idx === 1 ? "bg-gray-100 text-gray-700" :
-                            idx === 2 ? "bg-orange-100 text-orange-700" : "bg-muted"
-                          )}>
-                            {idx + 1}
-                          </span>
-                          <span className="text-sm">{referrer.student_name}</span>
+          <div className="grid lg:grid-cols-2 gap-4">
+            {/* 이벤트 목록 */}
+            <div className="space-y-4">
+              {campaigns.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-10">
+                    <Gift className="w-12 h-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">등록된 이벤트가 없습니다</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                campaigns.map((campaign) => (
+                  <Card
+                    key={campaign.id}
+                    className={cn(
+                      "cursor-pointer hover:shadow-md transition-all",
+                      selectedCampaign?.id === campaign.id && "ring-2 ring-primary"
+                    )}
+                    onClick={() => handleSelectCampaign(campaign)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            {campaign.title}
+                            {getStatusBadge(campaign.status)}
+                          </CardTitle>
+                          <CardDescription>
+                            {campaign.start_date}
+                            {campaign.end_date && ` ~ ${campaign.end_date}`}
+                          </CardDescription>
                         </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {referrer.referral_count}건
-                        </Badge>
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" onClick={() => handleOpenModal(campaign)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteCampaignId(campaign.id)}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
-                    ))}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">혜택: </span>
+                        <span className="font-medium">
+                          {REWARD_TYPES.find((r) => r.value === campaign.reward_type)?.label || "미설정"}{" "}
+                          {campaign.reward_amount > 0 && (
+                            campaign.reward_amount_type === "percent"
+                              ? `${campaign.reward_amount}%`
+                              : `${campaign.reward_amount.toLocaleString()}원`
+                          )}
+                        </span>
+                      </div>
+                      {campaign.reward_description && (
+                        <p className="text-sm text-muted-foreground mt-1">{campaign.reward_description}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+
+            {/* 참여자 목록 */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>
+                      {selectedCampaign ? selectedCampaign.title : "참여자 관리"}
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedCampaign
+                        ? `총 ${participantStats.total}명 참여`
+                        : "이벤트를 선택하세요"}
+                    </CardDescription>
+                  </div>
+                  {selectedCampaign && (
+                    <Button size="sm" onClick={handleOpenParticipantModal}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      참여자 추가
+                    </Button>
+                  )}
+                </div>
+
+                {/* 상태 필터 버튼 */}
+                {selectedCampaign && participantStats.total > 0 && (
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => setStatusFilter("all")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-sm transition-colors border",
+                        statusFilter === "all" ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                      )}
+                    >
+                      전체 ({participantStats.total})
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter("pending")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-sm transition-colors border",
+                        statusFilter === "pending" ? "bg-yellow-100 border-yellow-400 text-yellow-700" : "hover:bg-yellow-50"
+                      )}
+                    >
+                      대기 ({participantStats.pending})
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter("paid")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-sm transition-colors border",
+                        statusFilter === "paid" ? "bg-green-100 border-green-400 text-green-700" : "hover:bg-green-50"
+                      )}
+                    >
+                      지급완료 ({participantStats.paid})
+                    </button>
+                    <button
+                      onClick={() => setStatusFilter("applied")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-sm transition-colors border",
+                        statusFilter === "applied" ? "bg-blue-100 border-blue-400 text-blue-700" : "hover:bg-blue-50"
+                      )}
+                    >
+                      적용됨 ({participantStats.applied})
+                    </button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* 미지급 보상 목록 */}
-            <Card className="col-span-2">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-500" />
-                    보상 지급 대기
-                  </CardTitle>
-                  <Button size="sm" variant="outline" onClick={openCreateReferralModal}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    추천 등록
-                  </Button>
-                </div>
               </CardHeader>
               <CardContent>
-                {pendingRewards.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    지급 대기 중인 보상이 없습니다.
-                  </p>
+                {!selectedCampaign ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <Users className="w-12 h-12 mb-4" />
+                    <p>왼쪽에서 이벤트를 선택하세요</p>
+                  </div>
+                ) : participants.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                    <Users className="w-12 h-12 mb-4" />
+                    <p>참여자가 없습니다</p>
+                  </div>
                 ) : (
-                  <ScrollArea className="h-[200px]">
+                  <ScrollArea className="h-[400px]">
                     <div className="space-y-2">
-                      {pendingRewards.map((referral) => (
-                        <div key={referral.id} className="flex items-center justify-between p-2 rounded-lg border">
-                          <div>
+                      {participants
+                        .filter(p => statusFilter === "all" || p.reward_status === statusFilter)
+                        .map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50"
+                        >
+                          <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{referral.referrer_name_snapshot}</span>
-                              <span className="text-xs text-muted-foreground">→</span>
-                              <span>{referral.referred_name_snapshot}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs">
-                                {REFERRAL_TYPE_LABELS[referral.referral_type] || referral.referral_type}
-                              </Badge>
-                              {referral.reward_amount && (
-                                <span className="text-xs text-muted-foreground">
-                                  {referral.reward_amount.toLocaleString()}원
+                              <span className="font-medium">
+                                {p.student_name_snapshot || (p.student as any)?.name || "알 수 없음"}
+                              </span>
+                              {p.referrer_name_snapshot && (
+                                <span className="text-sm text-muted-foreground">
+                                  (추천: {p.referrer_name_snapshot})
                                 </span>
                               )}
                             </div>
+                            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                              <span>{p.participated_at}</span>
+                              <span>|</span>
+                              <span>
+                                {p.reward_amount_type === "percent"
+                                  ? `${p.reward_amount}%`
+                                  : `${p.reward_amount.toLocaleString()}원`}
+                              </span>
+                            </div>
                           </div>
-                          <Button size="sm" onClick={() => openRewardModal(referral)}>
-                            <Gift className="w-4 h-4 mr-1" />
-                            지급
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            {/* 인라인 상태 드롭다운 */}
+                            <Select
+                              value={p.reward_status}
+                              onValueChange={(value: RewardStatus) => handleUpdateParticipantStatus(p.id, value)}
+                            >
+                              <SelectTrigger className={cn(
+                                "w-24 h-7 text-xs font-medium border",
+                                p.reward_status === "pending" && "bg-yellow-100 text-yellow-700 border-yellow-200",
+                                p.reward_status === "paid" && "bg-green-100 text-green-700 border-green-200",
+                                p.reward_status === "applied" && "bg-blue-100 text-blue-700 border-blue-200"
+                              )}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">대기</SelectItem>
+                                <SelectItem value="paid">지급완료</SelectItem>
+                                <SelectItem value="applied">적용됨</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {/* 수정 버튼 */}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setEditingParticipant(p)}
+                              title="수정"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleRemoveParticipant(p.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1074,793 +1045,241 @@ export default function MarketingPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* 추천 목록 */}
-          <Card className="mt-4">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">추천 내역</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingReferrals ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : referrals.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">등록된 추천이 없습니다.</p>
-                </div>
-              ) : (
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2">
-                    {referrals.map((referral) => (
-                      <div key={referral.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <span className="font-medium">{referral.referrer_name_snapshot}</span>
-                              <span className="text-xs text-muted-foreground ml-1">(추천인)</span>
-                            </div>
-                            <span className="text-muted-foreground">→</span>
-                            <div>
-                              <span className="font-medium">{referral.referred_name_snapshot}</span>
-                              <span className="text-xs text-muted-foreground ml-1">(피추천인)</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              {REFERRAL_TYPE_LABELS[referral.referral_type] || referral.referral_type}
-                            </Badge>
-                            <Badge className={cn("text-xs", getReferralStatusColor(referral.referral_status))}>
-                              {REFERRAL_STATUS_LABELS[referral.referral_status] || referral.referral_status}
-                            </Badge>
-                            {referral.reward_given && (
-                              <Badge variant="default" className="text-xs bg-green-100 text-green-700">
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                보상완료
-                              </Badge>
-                            )}
-                            {referral.referral_date && (
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(referral.referral_date), "yyyy.MM.dd")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Select
-                            value={referral.referral_status}
-                            onValueChange={(value) => handleStatusChange(referral.id, value as ReferralStatus)}
-                          >
-                            <SelectTrigger className="w-[100px] h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="상담중">상담중</SelectItem>
-                              <SelectItem value="테스트완료">테스트완료</SelectItem>
-                              <SelectItem value="등록완료">등록완료</SelectItem>
-                              <SelectItem value="미등록">미등록</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openEditReferralModal(referral)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => setDeleteReferralId(referral.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
-        {/* 보상 현황 탭 */}
-        <TabsContent value="rewards" className="mt-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* 학원비 할인 대기 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Gift className="w-4 h-4 text-blue-500" />
-                  학원비 할인 대기
-                </CardTitle>
-                <CardDescription>학원비에 적용할 수 있는 할인 보상</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingPendingRewards ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[300px]">
-                    {pendingRewardsNew.filter(r => r.reward_type === "tuition_discount").length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        학원비 할인 대기 보상이 없습니다.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {pendingRewardsNew.filter(r => r.reward_type === "tuition_discount").map((reward) => (
-                          <div key={reward.id} className="p-3 rounded-lg border">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="font-medium">{reward.student_name_snapshot || reward.student?.name || "알 수 없음"}</span>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge className={cn("text-xs", getRewardRoleColor(reward.role))}>
-                                    {REWARD_ROLE_LABELS[reward.role]}
-                                  </Badge>
-                                  <span className="text-sm font-medium text-blue-600">
-                                    {formatRewardAmount(reward.reward_amount, reward.amount_type)}
-                                  </span>
-                                </div>
-                              </div>
-                              <Button size="sm" variant="outline">
-                                학원비에 적용
-                              </Button>
-                            </div>
-                            {reward.activity_title_snapshot && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {reward.activity_title_snapshot}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
+        {/* ============ 할인 정책 탭 ============ */}
+        <TabsContent value="policy" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => handleOpenPolicyModal()}>
+              <Plus className="w-4 h-4 mr-2" />
+              새 할인 정책
+            </Button>
+          </div>
 
-            {/* 현금 지급 대기 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-green-500" />
-                  현금 지급 대기
-                </CardTitle>
-                <CardDescription>현금으로 지급할 보상</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingPendingRewards ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[300px]">
-                    {pendingRewardsNew.filter(r => r.reward_type === "cash").length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        현금 지급 대기 보상이 없습니다.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {pendingRewardsNew.filter(r => r.reward_type === "cash").map((reward) => (
-                          <div key={reward.id} className="p-3 rounded-lg border">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="font-medium">{reward.student_name_snapshot || reward.student?.name || "알 수 없음"}</span>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Badge className={cn("text-xs", getRewardRoleColor(reward.role))}>
-                                    {REWARD_ROLE_LABELS[reward.role]}
-                                  </Badge>
-                                  <span className="text-sm font-medium text-green-600">
-                                    {formatRewardAmount(reward.reward_amount, reward.amount_type)}
+          <div className="grid gap-4">
+            {policies.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-10">
+                  <CheckCircle2 className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">등록된 할인 정책이 없습니다</p>
+                </CardContent>
+              </Card>
+            ) : (
+              policies.map((policy) => (
+                <Card key={policy.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <span>{POLICY_TARGET_ICONS[policy.policy_target as PolicyTarget] || "🎁"}</span>
+                          {policy.title}
+                          {getStatusBadge(policy.status)}
+                        </CardTitle>
+                        <CardDescription>
+                          {POLICY_TARGET_LABELS[policy.policy_target as PolicyTarget] || "기타 할인"}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenPolicyModal(policy)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDeletePolicyId(policy.id)}>
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">할인: </span>
+                      <span className="font-medium">
+                        {policy.reward_amount_type === "percent"
+                          ? `${policy.reward_amount}%`
+                          : `${policy.reward_amount.toLocaleString()}원`}
+                      </span>
+                    </div>
+                    {policy.description && (
+                      <p className="text-sm text-muted-foreground">{policy.description}</p>
+                    )}
+
+                    {/* 형제할인 정책인 경우 형제 그룹 표시 */}
+                    {policy.policy_target === "sibling" && siblingGroups.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <button
+                          onClick={() => setExpandedSiblingGroups(prev => ({
+                            ...prev,
+                            [policy.id]: !prev[policy.id]
+                          }))}
+                          className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors w-full"
+                        >
+                          <Users className="w-4 h-4" />
+                          형제 할인 대상 {siblingGroups.length}그룹 ({siblingGroups.reduce((sum, g) => sum + g.students.length, 0)}명)
+                          {expandedSiblingGroups[policy.id] ? (
+                            <ChevronUp className="w-4 h-4 ml-auto" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 ml-auto" />
+                          )}
+                        </button>
+
+                        {expandedSiblingGroups[policy.id] && (
+                          <div className="mt-3 space-y-2">
+                            {siblingGroups.map((group, idx) => (
+                              <div
+                                key={group.parentPhone}
+                                className="p-3 rounded-lg bg-blue-50 border border-blue-100"
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+                                    그룹 {idx + 1}
+                                  </span>
+                                  <span className="text-xs text-blue-500">
+                                    ({group.students.length}명)
                                   </span>
                                 </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {group.students.map((student) => (
+                                    <span
+                                      key={student.id}
+                                      className="inline-flex items-center gap-1 text-sm bg-white px-2 py-1 rounded border border-blue-200"
+                                    >
+                                      <span className="font-medium">{student.name}</span>
+                                      {student.grade && (
+                                        <span className="text-xs text-muted-foreground">
+                                          ({student.school ? `${student.school} ` : ""}{student.grade}학년)
+                                        </span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
-                              <Button size="sm" variant="outline">
-                                지급 완료
-                              </Button>
-                            </div>
-                            {reward.activity_title_snapshot && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {reward.activity_title_snapshot}
-                              </p>
-                            )}
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
                     )}
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
+
+                    {/* 수학+과학 동시수강 정책인 경우 학생 목록 표시 */}
+                    {policy.policy_target === "dual_subject" && dualSubjectStudents.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <button
+                          onClick={() => setExpandedDualSubject(prev => ({
+                            ...prev,
+                            [policy.id]: !prev[policy.id]
+                          }))}
+                          className="flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-800 transition-colors w-full"
+                        >
+                          <Users className="w-4 h-4" />
+                          동시수강 할인 대상 {dualSubjectStudents.length}명
+                          {expandedDualSubject[policy.id] ? (
+                            <ChevronUp className="w-4 h-4 ml-auto" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 ml-auto" />
+                          )}
+                        </button>
+
+                        {expandedDualSubject[policy.id] && (
+                          <div className="mt-3 space-y-2">
+                            {dualSubjectStudents.map((student) => (
+                              <div
+                                key={student.id}
+                                className="p-3 rounded-lg bg-emerald-50 border border-emerald-100"
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-medium text-emerald-700">{student.name}</span>
+                                  {student.grade && (
+                                    <span className="text-xs text-emerald-600">
+                                      ({student.school ? `${student.school} ` : ""}{student.grade}학년)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-2 text-xs">
+                                  <div className="flex items-center gap-1">
+                                    <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">수학</span>
+                                    <span className="text-muted-foreground">{student.mathClasses.join(", ")}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">과학</span>
+                                    <span className="text-muted-foreground">{student.scienceClasses.join(", ")}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* 마케팅 활동 등록/수정 모달 */}
-      <Dialog open={isActivityModalOpen} onOpenChange={setIsActivityModalOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      {/* ============ 캠페인 생성/수정 모달 ============ */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingActivity ? "마케팅 활동 수정" : "마케팅 활동 등록"}
+              {editingCampaign
+                ? activeTab === "promo"
+                  ? "홍보 활동 수정"
+                  : "이벤트 수정"
+                : activeTab === "promo"
+                ? "새 홍보 활동"
+                : "새 이벤트"}
             </DialogTitle>
-            <DialogDescription>
-              마케팅 활동 정보를 입력하세요.
-            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>채널 *</Label>
-                <Select
-                  value={activityForm.channel}
-                  onValueChange={(v) => setActivityForm({ ...activityForm, channel: v as MarketingChannel })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="채널 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {channels.map((ch) => (
-                      <SelectItem key={ch.value} value={ch.value}>
-                        {ch.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>상태</Label>
-                <Select
-                  value={activityForm.status}
-                  onValueChange={(v) => setActivityForm({ ...activityForm, status: v as MarketingStatus })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="planned">예정</SelectItem>
-                    <SelectItem value="in_progress">진행중</SelectItem>
-                    <SelectItem value="completed">완료</SelectItem>
-                    <SelectItem value="cancelled">취소</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label>제목 *</Label>
               <Input
-                value={activityForm.title}
-                onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
-                placeholder="마케팅 활동 제목"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder={activeTab === "promo" ? "예: 네이버 블로그 광고" : "예: 친구추천 이벤트"}
               />
             </div>
+
             <div className="space-y-2">
               <Label>설명</Label>
               <Textarea
-                value={activityForm.description}
-                onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })}
-                placeholder="활동 설명"
-                rows={3}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="상세 설명"
               />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>활동 일자</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      {format(activityForm.activityDate, "yyyy.MM.dd")}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={activityForm.activityDate}
-                      onSelect={(date) => date && setActivityForm({ ...activityForm, activityDate: date })}
-                      locale={ko}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label>비용 (원)</Label>
+                <Label>시작일 *</Label>
                 <Input
-                  type="number"
-                  value={activityForm.costAmount}
-                  onChange={(e) => setActivityForm({ ...activityForm, costAmount: e.target.value })}
-                  placeholder="0"
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>종료일</Label>
+                <Input
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>콘텐츠 URL</Label>
-              <Input
-                value={activityForm.contentUrl}
-                onChange={(e) => setActivityForm({ ...activityForm, contentUrl: e.target.value })}
-                placeholder="https://..."
-              />
-            </div>
-
-            {/* 보상 설정 섹션 */}
-            <div className="border-t pt-4 mt-2">
-              <div className="flex items-center gap-2 mb-4">
-                <Checkbox
-                  id="reward-enabled"
-                  checked={rewardTemplatesEnabled}
-                  onCheckedChange={(checked) => {
-                    setRewardTemplatesEnabled(!!checked)
-                    if (!checked) setRewardTemplates([])
-                  }}
-                />
-                <Label htmlFor="reward-enabled" className="text-base font-semibold cursor-pointer">
-                  보상 설정 활성화
-                </Label>
-              </div>
-
-              {rewardTemplatesEnabled && (
-                <div className="space-y-4 pl-4 border-l-2 border-primary/20">
-                  {/* 추천인 보상 */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-purple-700">추천인 보상</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => addRewardTemplate('referrer')}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        추가
-                      </Button>
-                    </div>
-                    {getTemplatesByRole('referrer').length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2">보상이 없습니다</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {getTemplatesByRole('referrer').map((template) => (
-                          <div key={template.index} className="flex items-center gap-2 p-2 rounded-lg bg-purple-50/50 border border-purple-100">
-                            <Select
-                              value={template.reward_type}
-                              onValueChange={(v) => updateRewardTemplate(template.index, 'reward_type', v)}
-                            >
-                              <SelectTrigger className="w-[100px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(NEW_REWARD_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select
-                              value={template.amount_type}
-                              onValueChange={(v) => updateRewardTemplate(template.index, 'amount_type', v)}
-                            >
-                              <SelectTrigger className="w-[80px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(AMOUNT_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              value={template.reward_amount}
-                              onChange={(e) => updateRewardTemplate(template.index, 'reward_amount', e.target.value)}
-                              className="w-[80px] h-8"
-                              placeholder="0"
-                            />
-                            <span className="text-xs text-muted-foreground w-6">
-                              {template.amount_type === 'percent' ? '%' : '원'}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => removeRewardTemplate(template.index)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 피추천인 보상 */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-indigo-700">피추천인 보상</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => addRewardTemplate('referee')}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        추가
-                      </Button>
-                    </div>
-                    {getTemplatesByRole('referee').length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2">보상이 없습니다</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {getTemplatesByRole('referee').map((template) => (
-                          <div key={template.index} className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50/50 border border-indigo-100">
-                            <Select
-                              value={template.reward_type}
-                              onValueChange={(v) => updateRewardTemplate(template.index, 'reward_type', v)}
-                            >
-                              <SelectTrigger className="w-[100px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(NEW_REWARD_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select
-                              value={template.amount_type}
-                              onValueChange={(v) => updateRewardTemplate(template.index, 'amount_type', v)}
-                            >
-                              <SelectTrigger className="w-[80px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(AMOUNT_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              value={template.reward_amount}
-                              onChange={(e) => updateRewardTemplate(template.index, 'reward_amount', e.target.value)}
-                              className="w-[80px] h-8"
-                              placeholder="0"
-                            />
-                            <span className="text-xs text-muted-foreground w-6">
-                              {template.amount_type === 'percent' ? '%' : '원'}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => removeRewardTemplate(template.index)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 참가자 보상 */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-cyan-700">참가자 보상</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => addRewardTemplate('participant')}
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        추가
-                      </Button>
-                    </div>
-                    {getTemplatesByRole('participant').length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2">보상이 없습니다</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {getTemplatesByRole('participant').map((template) => (
-                          <div key={template.index} className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50/50 border border-cyan-100">
-                            <Select
-                              value={template.reward_type}
-                              onValueChange={(v) => updateRewardTemplate(template.index, 'reward_type', v)}
-                            >
-                              <SelectTrigger className="w-[100px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(NEW_REWARD_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select
-                              value={template.amount_type}
-                              onValueChange={(v) => updateRewardTemplate(template.index, 'amount_type', v)}
-                            >
-                              <SelectTrigger className="w-[80px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(AMOUNT_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              value={template.reward_amount}
-                              onChange={(e) => updateRewardTemplate(template.index, 'reward_amount', e.target.value)}
-                              className="w-[80px] h-8"
-                              placeholder="0"
-                            />
-                            <span className="text-xs text-muted-foreground w-6">
-                              {template.amount_type === 'percent' ? '%' : '원'}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => removeRewardTemplate(template.index)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsActivityModalOpen(false)}>
-              취소
-            </Button>
-            <Button onClick={handleSaveActivity} disabled={savingActivity}>
-              {savingActivity ? <Loader2 className="w-4 h-4 animate-spin" /> : "저장"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 마케팅 활동 삭제 확인 다이얼로그 */}
-      <AlertDialog open={!!deleteActivityId} onOpenChange={() => setDeleteActivityId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>마케팅 활동 삭제</AlertDialogTitle>
-            <AlertDialogDescription>
-              이 마케팅 활동을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteActivity} className="bg-destructive text-destructive-foreground">
-              삭제
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* 추천 등록/수정 모달 */}
-      <Dialog open={isReferralModalOpen} onOpenChange={setIsReferralModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>
-              {editingReferral ? "추천 수정" : "추천 등록"}
-            </DialogTitle>
-            <DialogDescription>
-              추천 정보를 입력하세요.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>추천인 (기존 학생) *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start">
-                    {referralForm.referrer_student_id
-                      ? allStudents.find(s => s.id === referralForm.referrer_student_id)?.name
-                      : "추천인 선택"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-2">
-                  <Input
-                    placeholder="검색..."
-                    value={referrerSearchQuery}
-                    onChange={(e) => setReferrerSearchQuery(e.target.value)}
-                    className="mb-2"
-                  />
-                  <ScrollArea className="h-[200px]">
-                    {filteredReferrers.map((student) => (
-                      <div
-                        key={student.id}
-                        className="p-2 rounded cursor-pointer hover:bg-muted"
-                        onClick={() => {
-                          setReferralForm({ ...referralForm, referrer_student_id: student.id })
-                          setReferrerSearchQuery(student.name)
-                        }}
-                      >
-                        <span>{student.name}</span>
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({student.school_type || "미지정"} {student.grade || ""}학년)
-                        </span>
-                      </div>
-                    ))}
-                  </ScrollArea>
-                </PopoverContent>
-              </Popover>
-            </div>
 
             <div className="space-y-2">
-              <Label>피추천인 (신규 학생) *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start">
-                    {referralForm.referred_student_id
-                      ? allStudents.find(s => s.id === referralForm.referred_student_id)?.name
-                      : "피추천인 선택"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-2">
-                  <Input
-                    placeholder="검색..."
-                    value={referredSearchQuery}
-                    onChange={(e) => setReferredSearchQuery(e.target.value)}
-                    className="mb-2"
-                  />
-                  <ScrollArea className="h-[200px]">
-                    {filteredReferred.map((student) => (
-                      <div
-                        key={student.id}
-                        className="p-2 rounded cursor-pointer hover:bg-muted"
-                        onClick={() => {
-                          setReferralForm({ ...referralForm, referred_student_id: student.id })
-                          setReferredSearchQuery(student.name)
-                        }}
-                      >
-                        <span>{student.name}</span>
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({student.school_type || "미지정"} {student.grade || ""}학년)
-                        </span>
-                      </div>
-                    ))}
-                  </ScrollArea>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>추천 유형</Label>
-                <Select
-                  value={referralForm.referral_type}
-                  onValueChange={(v) => setReferralForm({ ...referralForm, referral_type: v as ReferralType })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(REFERRAL_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>추천일</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start">
-                      <CalendarIcon className="w-4 h-4 mr-2" />
-                      {format(referralForm.referral_date, "yyyy.MM.dd")}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={referralForm.referral_date}
-                      onSelect={(date) => date && setReferralForm({ ...referralForm, referral_date: date })}
-                      locale={ko}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>연결된 마케팅 활동</Label>
+              <Label>상태</Label>
               <Select
-                value={referralForm.marketing_activity_id}
-                onValueChange={(v) => setReferralForm({ ...referralForm, marketing_activity_id: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="마케팅 활동 선택 (선택사항)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">없음</SelectItem>
-                  {referralMarketingActivities.map((activity) => (
-                    <SelectItem key={activity.id} value={activity.id}>
-                      {activity.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>메모</Label>
-              <Textarea
-                value={referralForm.notes}
-                onChange={(e) => setReferralForm({ ...referralForm, notes: e.target.value })}
-                placeholder="추가 메모"
-                rows={2}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsReferralModalOpen(false)}>
-              취소
-            </Button>
-            <Button onClick={handleSaveReferral} disabled={savingReferral}>
-              {savingReferral ? <Loader2 className="w-4 h-4 animate-spin" /> : "저장"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 추천 삭제 확인 다이얼로그 */}
-      <AlertDialog open={!!deleteReferralId} onOpenChange={() => setDeleteReferralId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>추천 삭제</AlertDialogTitle>
-            <AlertDialogDescription>
-              이 추천을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteReferral} className="bg-destructive text-destructive-foreground">
-              삭제
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* 보상 지급 모달 */}
-      <Dialog open={isRewardModalOpen} onOpenChange={setIsRewardModalOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>보상 지급</DialogTitle>
-            <DialogDescription>
-              {rewardTargetReferral?.referrer_name_snapshot}님에게 보상을 지급합니다.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label>보상 유형</Label>
-              <Select
-                value={rewardForm.reward_type}
-                onValueChange={(v) => setRewardForm({ ...rewardForm, reward_type: v as RewardType })}
+                value={formData.status}
+                onValueChange={(v) => setFormData({ ...formData, status: v as CampaignStatus })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(REWARD_TYPE_LABELS).map(([value, label]) => (
+                  {Object.entries(CAMPAIGN_STATUS_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
                       {label}
                     </SelectItem>
@@ -1868,54 +1287,447 @@ export default function MarketingPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>보상 금액 (원) *</Label>
-              <Input
-                type="number"
-                value={rewardForm.reward_amount}
-                onChange={(e) => setRewardForm({ ...rewardForm, reward_amount: e.target.value })}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>지급일</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start">
-                    <CalendarIcon className="w-4 h-4 mr-2" />
-                    {format(rewardForm.reward_date, "yyyy.MM.dd")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={rewardForm.reward_date}
-                    onSelect={(date) => date && setRewardForm({ ...rewardForm, reward_date: date })}
-                    locale={ko}
+
+            {/* 홍보 활동 전용 필드 */}
+            {activeTab === "promo" && (
+              <>
+                <div className="space-y-2">
+                  <Label>채널</Label>
+                  <Select
+                    value={formData.channel}
+                    onValueChange={(v) => setFormData({ ...formData, channel: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="채널 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROMO_CHANNELS.map((ch) => (
+                        <SelectItem key={ch.value} value={ch.value}>
+                          {ch.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>비용 (원)</Label>
+                    <Input
+                      type="number"
+                      value={formData.cost_amount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, cost_amount: parseInt(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>도달 인원</Label>
+                    <Input
+                      type="number"
+                      value={formData.reach_count}
+                      onChange={(e) =>
+                        setFormData({ ...formData, reach_count: parseInt(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 고객 이벤트 전용 필드 */}
+            {activeTab === "event" && (
+              <>
+                <div className="space-y-2">
+                  <Label>혜택 유형</Label>
+                  <Select
+                    value={formData.reward_type}
+                    onValueChange={(v) => setFormData({ ...formData, reward_type: v as RewardType })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REWARD_TYPES.map((rt) => (
+                        <SelectItem key={rt.value} value={rt.value}>
+                          {rt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>혜택 유형</Label>
+                    <Select
+                      value={formData.reward_amount_type}
+                      onValueChange={(v) => setFormData({ ...formData, reward_amount_type: v as RewardAmountType })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REWARD_AMOUNT_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>
+                      {formData.reward_amount_type === "percent" ? "할인율 (%)" : "혜택 금액 (원)"}
+                    </Label>
+                    <Input
+                      type="number"
+                      value={formData.reward_amount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, reward_amount: parseInt(e.target.value) || 0 })
+                      }
+                      placeholder={formData.reward_amount_type === "percent" ? "예: 10" : "예: 10000"}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>혜택 설명</Label>
+                  <Input
+                    value={formData.reward_description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, reward_description: e.target.value })
+                    }
+                    placeholder="예: 추천인 현금 2만원, 피추천인 학원비 1만원"
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label>메모</Label>
-              <Textarea
-                value={rewardForm.reward_notes}
-                onChange={(e) => setRewardForm({ ...rewardForm, reward_notes: e.target.value })}
-                placeholder="보상 지급 관련 메모"
-                rows={2}
-              />
-            </div>
+                </div>
+              </>
+            )}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRewardModalOpen(false)}>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
               취소
             </Button>
-            <Button onClick={handleGiveReward} disabled={savingReferral}>
-              {savingReferral ? <Loader2 className="w-4 h-4 animate-spin" /> : "지급"}
+            <Button onClick={handleSaveCampaign}>
+              {editingCampaign ? "수정" : "생성"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ============ 참여자 추가 모달 ============ */}
+      <Dialog open={isParticipantModalOpen} onOpenChange={setIsParticipantModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>참여자 추가</DialogTitle>
+            <DialogDescription>
+              {selectedCampaign?.title}에 참여할 학생을 선택하세요
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* 이벤트 혜택 정보 표시 */}
+          {selectedCampaign && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <div className="text-sm text-amber-800">
+                <span className="font-medium">혜택: </span>
+                {selectedCampaign.reward_amount_type === "percent"
+                  ? `${selectedCampaign.reward_amount}% 할인`
+                  : `${selectedCampaign.reward_amount.toLocaleString()}원`}
+              </div>
+            </div>
+          )}
+
+          {/* 학생 검색 */}
+          <div className="space-y-2">
+            <Label>학생 검색</Label>
+            <Input
+              placeholder="이름으로 검색..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+            />
+          </div>
+
+          <ScrollArea className="h-[280px] border rounded-md p-3">
+            <div className="space-y-2">
+              {students
+                .filter((s) => !participants.some((p) => p.student_id === s.id))
+                .filter((s) => studentSearch === "" || s.name.includes(studentSearch))
+                .map((student) => (
+                  <div key={student.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={student.id}
+                      checked={selectedStudentIds.includes(student.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedStudentIds([...selectedStudentIds, student.id])
+                        } else {
+                          setSelectedStudentIds(selectedStudentIds.filter((id) => id !== student.id))
+                        }
+                      }}
+                    />
+                    <label htmlFor={student.id} className="text-sm cursor-pointer">
+                      {student.name}
+                    </label>
+                  </div>
+                ))}
+              {students.filter((s) => !participants.some((p) => p.student_id === s.id))
+                .filter((s) => studentSearch === "" || s.name.includes(studentSearch)).length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  검색 결과가 없습니다
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsParticipantModalOpen(false)}>
+              취소
+            </Button>
+            <Button onClick={handleAddParticipants} disabled={selectedStudentIds.length === 0}>
+              {selectedStudentIds.length}명 추가
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ 참여자 수정 모달 ============ */}
+      <Dialog open={!!editingParticipant} onOpenChange={(open) => !open && setEditingParticipant(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>참여자 수정</DialogTitle>
+            <DialogDescription>
+              {editingParticipant?.student_name_snapshot || "알 수 없음"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingParticipant && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>참여일</Label>
+                <Input
+                  type="date"
+                  value={editingParticipant.participated_at}
+                  onChange={(e) => setEditingParticipant({
+                    ...editingParticipant,
+                    participated_at: e.target.value
+                  })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>혜택 유형</Label>
+                  <Select
+                    value={editingParticipant.reward_amount_type}
+                    onValueChange={(v) => setEditingParticipant({
+                      ...editingParticipant,
+                      reward_amount_type: v as RewardAmountType
+                    })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REWARD_AMOUNT_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    {editingParticipant.reward_amount_type === "percent" ? "할인율 (%)" : "혜택 금액 (원)"}
+                  </Label>
+                  <Input
+                    type="number"
+                    value={editingParticipant.reward_amount}
+                    onChange={(e) => setEditingParticipant({
+                      ...editingParticipant,
+                      reward_amount: parseInt(e.target.value) || 0
+                    })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingParticipant(null)}>
+              취소
+            </Button>
+            <Button onClick={handleSaveParticipantEdit}>
+              저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ 캠페인 삭제 확인 ============ */}
+      <AlertDialog open={!!deleteCampaignId} onOpenChange={() => setDeleteCampaignId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>정말 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              이 작업은 되돌릴 수 없습니다. 관련된 참여자 정보도 함께 삭제됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCampaign}>삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ============ 할인 정책 생성/수정 모달 ============ */}
+      <Dialog open={isPolicyModalOpen} onOpenChange={setIsPolicyModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPolicy ? "할인 정책 수정" : "새 할인 정책"}
+            </DialogTitle>
+            <DialogDescription>
+              학원비에 적용할 할인 정책을 설정합니다
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>정책 이름 *</Label>
+              <Input
+                value={policyFormData.title}
+                onChange={(e) => setPolicyFormData({ ...policyFormData, title: e.target.value })}
+                placeholder="예: 형제 할인"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>정책 유형 *</Label>
+              <Select
+                value={policyFormData.policy_target}
+                onValueChange={(v) => setPolicyFormData({ ...policyFormData, policy_target: v as PolicyTarget })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(POLICY_TARGET_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {POLICY_TARGET_ICONS[value as PolicyTarget]} {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>설명</Label>
+              <Textarea
+                value={policyFormData.description}
+                onChange={(e) => setPolicyFormData({ ...policyFormData, description: e.target.value })}
+                placeholder="정책에 대한 상세 설명"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>할인 유형</Label>
+                <Select
+                  value={policyFormData.reward_amount_type}
+                  onValueChange={(v) => setPolicyFormData({ ...policyFormData, reward_amount_type: v as RewardAmountType })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REWARD_AMOUNT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  {policyFormData.reward_amount_type === "percent" ? "할인율 (%)" : "할인 금액 (원)"}
+                </Label>
+                <Input
+                  type="number"
+                  value={policyFormData.reward_amount}
+                  onChange={(e) =>
+                    setPolicyFormData({ ...policyFormData, reward_amount: parseInt(e.target.value) || 0 })
+                  }
+                  placeholder={policyFormData.reward_amount_type === "percent" ? "예: 5" : "예: 10000"}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>상태</Label>
+              <Select
+                value={policyFormData.status}
+                onValueChange={(v) => setPolicyFormData({ ...policyFormData, status: v as CampaignStatus })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CAMPAIGN_STATUS_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 형제 할인 안내 */}
+            {policyFormData.policy_target === "sibling" && (
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                <p className="text-sm text-blue-700">
+                  💡 형제 할인은 같은 학부모 전화번호로 등록된 재원 학생이 2명 이상일 때 자동으로 적용 대상이 됩니다.
+                </p>
+              </div>
+            )}
+
+            {/* 수학+과학 동시수강 할인 안내 */}
+            {policyFormData.policy_target === "dual_subject" && (
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                <p className="text-sm text-emerald-700">
+                  💡 수학(수학특강 포함)과 과학(과학특강 포함)을 동시에 수강하는 학생에게 과학 수강료 할인이 적용됩니다.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPolicyModalOpen(false)}>
+              취소
+            </Button>
+            <Button onClick={handleSavePolicy}>
+              {editingPolicy ? "수정" : "생성"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ 할인 정책 삭제 확인 ============ */}
+      <AlertDialog open={!!deletePolicyId} onOpenChange={() => setDeletePolicyId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>할인 정책을 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              이 작업은 되돌릴 수 없습니다. 해당 정책은 더 이상 적용할 수 없게 됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeletePolicy}>삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -238,6 +238,7 @@ export type MarketingChannel =
   | 'youtube'
   | 'cafe_naver'
   | 'cafe_other'
+  | 'cafe_mom'
   | 'kakao_channel'
   | 'paid_ads'
   | 'seminar'
@@ -325,6 +326,7 @@ export const CHANNEL_LABELS: Record<MarketingChannel, string> = {
   'youtube': '유튜브',
   'cafe_naver': '네이버 카페',
   'cafe_other': '기타 카페',
+  'cafe_mom': '맘카페',
   'kakao_channel': '카카오 채널',
   'paid_ads': '유료 광고',
   'seminar': '설명회',

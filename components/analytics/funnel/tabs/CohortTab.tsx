@@ -192,19 +192,27 @@ export function CohortTab({
         </div>
       )}
 
-      {/* 전환율 추이 + 상담/등록 건수 + YoY 통합 차트 */}
+      {/* 전환율 추이 + 상담/등록 건수 + YoY 통합 차트 (올해 vs 작년 비교) */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-xl border p-4">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-sm font-medium text-muted-foreground">월별 코호트 현황</h4>
-            <div className="flex items-center gap-4 text-xs">
+            <h4 className="text-sm font-medium text-muted-foreground">월별 코호트 현황 (최근 12개월, YoY 비교)</h4>
+            <div className="flex items-center gap-4 text-xs flex-wrap">
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#6366f1' }}></span>
-                <span className="text-muted-foreground">상담</span>
+                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#3b82f6' }}></span>
+                <span className="text-muted-foreground">올해 상담</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#93c5fd' }}></span>
+                <span className="text-muted-foreground">작년 상담</span>
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#14b8a6' }}></span>
-                <span className="text-muted-foreground">등록</span>
+                <span className="text-muted-foreground">올해 등록</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#5eead4' }}></span>
+                <span className="text-muted-foreground">작년 등록</span>
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-3 h-0.5 rounded" style={{ backgroundColor: '#f97316' }}></span>
@@ -212,12 +220,12 @@ export function CohortTab({
               </span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 40, left: -10 }}>
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={chartData} margin={{ top: 10, right: 10, bottom: 45, left: -10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis
                 dataKey="fullMonth"
-                height={55}
+                height={60}
                 tick={(props: { x: number; y: number; payload: { value: string } }) => {
                   const { x, y, payload } = props
                   const dataItem = chartData.find(d => d.fullMonth === payload.value)
@@ -234,7 +242,7 @@ export function CohortTab({
                         y={0}
                         dy={26}
                         textAnchor="middle"
-                        fill={hasYoY ? (isPositive ? '#10b981' : '#ef4444') : '#d1d5db'}
+                        fill={hasYoY ? (isPositive ? '#10b981' : '#ef4444') : '#9ca3af'}
                         fontSize={10}
                         fontWeight={500}
                       >
@@ -271,8 +279,18 @@ export function CohortTab({
                     <div className="bg-white shadow-lg border rounded-lg p-3 text-sm">
                       <p className="font-semibold mb-2">{data.fullMonth}</p>
                       <div className="space-y-1">
-                        <p style={{ color: '#6366f1' }}>신규 상담: {data.총원}명</p>
-                        <p style={{ color: '#14b8a6' }}>등록: {data.등록}명</p>
+                        <div className="flex items-center gap-2">
+                          <span style={{ color: '#3b82f6' }}>올해 상담: {data.총원}명</span>
+                          {data.prevYear총원 !== null && (
+                            <span style={{ color: '#93c5fd' }}>(작년: {data.prevYear총원}명)</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span style={{ color: '#14b8a6' }}>올해 등록: {data.등록}명</span>
+                          {data.prevYear등록 !== null && (
+                            <span style={{ color: '#5eead4' }}>(작년: {data.prevYear등록}명)</span>
+                          )}
+                        </div>
                         <p style={{ color: '#f97316' }}>전환율: {data.전환율}%</p>
                       </div>
                       {hasYoY && (
@@ -280,7 +298,7 @@ export function CohortTab({
                           <p className={isPositive ? "text-emerald-600 font-medium" : "text-red-600 font-medium"}>
                             YoY: {isPositive ? '+' : ''}{yoyChange}%p
                           </p>
-                          <p className="text-xs text-muted-foreground">전년 동월: {data.prevYearRate}%</p>
+                          <p className="text-xs text-muted-foreground">전년 동월 전환율: {data.prevYearRate}%</p>
                         </div>
                       )}
                       {data.isOngoing && (
@@ -290,10 +308,14 @@ export function CohortTab({
                   )
                 }}
               />
-              {/* 신규 상담 막대 (인디고) */}
-              <Bar yAxisId="left" dataKey="총원" name="신규상담" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={20} />
-              {/* 등록 막대 (틸) */}
-              <Bar yAxisId="left" dataKey="등록" name="등록" fill="#14b8a6" radius={[3, 3, 0, 0]} maxBarSize={20} />
+              {/* 올해 신규 상담 막대 (블루) */}
+              <Bar yAxisId="left" dataKey="총원" name="올해 상담" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={16} />
+              {/* 작년 신규 상담 막대 (연한 블루) */}
+              <Bar yAxisId="left" dataKey="prevYear총원" name="작년 상담" fill="#93c5fd" radius={[3, 3, 0, 0]} maxBarSize={16} />
+              {/* 올해 등록 막대 (진한 틸) */}
+              <Bar yAxisId="left" dataKey="등록" name="올해 등록" fill="#14b8a6" radius={[3, 3, 0, 0]} maxBarSize={16} />
+              {/* 작년 등록 막대 (연한 틸) */}
+              <Bar yAxisId="left" dataKey="prevYear등록" name="작년 등록" fill="#5eead4" radius={[3, 3, 0, 0]} maxBarSize={16} />
               {/* 전환율 라인 (오렌지) */}
               <Line
                 yAxisId="right"
@@ -338,7 +360,15 @@ export function CohortTab({
                 const isExpanded = expandedCohorts.has(cohortKey)
                 const daysBadge = getDaysBadge(cohort.avg_days_to_enroll)
                 const notEnrolled = cohort.total_students - cohort.enroll_total
-                const testedButNotEnrolled = cohort.test_total - Math.min(cohort.test_total, cohort.enroll_total)
+
+                // 학년별 구성 데이터에서 정확한 테스트 현황 계산
+                const gradeData = cohortGradeData[cohortKey]
+                const testedButNotEnrolled = gradeData
+                  ? gradeData.reduce((sum, g) => sum + g.with_test_count, 0)
+                  : null  // 데이터 없으면 null로 표시
+                const notTestedNotEnrolled = gradeData
+                  ? gradeData.reduce((sum, g) => sum + g.without_test_count, 0)
+                  : null
 
                 return (
                   <Collapsible key={cohortKey} open={isExpanded} onOpenChange={() => toggleCohortExpand(cohortKey, cohort.cohort_month, cohort.lead_source)}>
@@ -457,7 +487,9 @@ export function CohortTab({
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">테스트후 미등록</span>
-                                <span className="font-medium text-amber-600">{testedButNotEnrolled}명</span>
+                                <span className="font-medium text-amber-600">
+                                  {testedButNotEnrolled !== null ? `${testedButNotEnrolled}명` : '-'}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -478,14 +510,17 @@ export function CohortTab({
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">테스트X 이탈</span>
-                                <span className="font-medium text-gray-500">{notEnrolled - testedButNotEnrolled}명</span>
+                                <span className="font-medium text-gray-500">
+                                  {notTestedNotEnrolled !== null ? `${notTestedNotEnrolled}명` : '-'}
+                                </span>
                               </div>
                             </div>
                           </div>
 
                           {/* 미등록 학년별 구성 */}
                           <div>
-                            <p className="text-xs text-muted-foreground mb-2 font-medium">미등록 학년별 구성</p>
+                            <p className="text-xs text-muted-foreground mb-1 font-medium">미등록 학년별 구성</p>
+                            <p className="text-[10px] text-muted-foreground/70 mb-2">(테스트O/테스트X)</p>
                             {(() => {
                               const gradeData = cohortGradeData[cohortKey]
                               const isLoading = loadingCohortDetails.has(cohortKey)
@@ -520,7 +555,8 @@ export function CohortTab({
 
                           {/* 등록 학년별 구성 */}
                           <div>
-                            <p className="text-xs text-muted-foreground mb-2 font-medium">등록 학년별 구성</p>
+                            <p className="text-xs text-muted-foreground mb-1 font-medium">등록 학년별 구성</p>
+                            <p className="text-[10px] text-muted-foreground/70 mb-2">(즉시/지연)</p>
                             {(() => {
                               const enrolledGradeData = cohortEnrolledGradeData[cohortKey]
                               const isLoading = loadingCohortDetails.has(cohortKey)

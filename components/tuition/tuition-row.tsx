@@ -8,10 +8,22 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Save, ExternalLink } from "lucide-react"
+import { Trash2, Calendar, Save, ExternalLink, Gift, Users, ChevronDown } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { CLASS_TYPES, CLASS_TYPE_LABELS, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus } from "@/types/tuition"
 import { PaymentStatusBadge } from "@/components/payssam"
+import type { CampaignParticipant, Campaign } from "@/services/campaign-service"
+import {
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 
 interface TuitionRowProps {
   row: TuitionRowType
@@ -24,6 +36,17 @@ interface TuitionRowProps {
   onRefresh?: () => void // 데이터 새로고침 핸들러
   isReadOnly?: boolean
   isHistoryMode?: boolean // 이력 모드 여부
+  isDateColumnsCollapsed?: boolean // 연월+기간 컬럼 접힘 상태
+  // 할인 알림 정보
+  hasPendingRewards?: boolean // 마케팅 할인 대기 중
+  pendingRewardsCount?: number // 대기 중인 보상 수
+  hasSiblingCandidate?: boolean // 형제 할인 가능 (같은 학부모 전화번호)
+  // 학생별 대기중 이벤트 목록
+  pendingEvents?: CampaignParticipant[]
+  onApplyEvent?: (participantId: string, discountAmount: number) => void
+  // 할인 정책 목록
+  availablePolicies?: Campaign[]
+  onApplyPolicy?: (policy: Campaign, discountAmount: number) => void
 }
 
 export function TuitionRow({
@@ -36,7 +59,15 @@ export function TuitionRow({
   onSave,
   onRefresh,
   isReadOnly = false,
-  isHistoryMode = false
+  isHistoryMode = false,
+  isDateColumnsCollapsed = false,
+  hasPendingRewards = false,
+  pendingRewardsCount = 0,
+  hasSiblingCandidate = false,
+  pendingEvents = [],
+  onApplyEvent,
+  availablePolicies = [],
+  onApplyPolicy
 }: TuitionRowProps) {
   const router = useRouter()
 
@@ -88,31 +119,73 @@ export function TuitionRow({
     onChange?.(index, 'month', parseInt(month))
   }
 
-  // 형제할인 체크박스 변경 핸들러
-  const handleSiblingDiscountChange = (checked: boolean) => {
-    if (!onChange || isReadOnly) return
-    
-    // 상태 변경
-    onChange?.(index, 'isSibling', checked)
-    
-    // 할인 적용/해제에 따른 금액 자동 조정
-    const currentAmount = row.amount
-    let newAmount: number
-    
-    if (checked && !row.isSibling) {
-      // 할인 적용: 현재 금액에서 5% 할인
-      newAmount = Math.round(currentAmount * 0.95)
-      onChange?.(index, 'amount', newAmount)
-    } else if (!checked && row.isSibling) {
-      // 할인 해제: 현재 금액을 5% 할인된 금액으로 보고 원래 금액 계산
-      newAmount = Math.round(currentAmount / 0.95)
-      onChange?.(index, 'amount', newAmount)
-    }
-  }
-
   // 금액 포맷팅
   const formatAmount = (amount: number): string => {
     return amount.toLocaleString('ko-KR')
+  }
+
+  // 이벤트 할인 적용 핸들러
+  const handleApplyEvent = (event: CampaignParticipant) => {
+    if (!onChange || isReadOnly) return
+
+    // 할인 금액 계산
+    let discountAmount: number
+    const amountType = event.reward_amount_type || "fixed"
+
+    if (amountType === "percent") {
+      // 퍼센트 할인: 현재 금액 * (할인율 / 100)
+      discountAmount = Math.round(row.amount * (event.reward_amount / 100))
+    } else {
+      // 고정 금액 할인
+      discountAmount = event.reward_amount
+    }
+
+    // 금액 차감
+    const newAmount = Math.max(0, row.amount - discountAmount)
+    onChange(index, 'amount', newAmount)
+
+    // 비고에 이벤트 정보 추가
+    const eventTitle = (event.campaign as any)?.title || "이벤트"
+    const discountText = amountType === "percent"
+      ? `${event.reward_amount}% (${discountAmount.toLocaleString()}원)`
+      : `${discountAmount.toLocaleString()}원`
+    const notePrefix = row.note ? `${row.note} / ` : ""
+    onChange(index, 'note', `${notePrefix}${eventTitle} ${discountText} 적용`)
+
+    // 콜백 호출 (상태 업데이트용)
+    onApplyEvent?.(event.id, discountAmount)
+  }
+
+  // 할인 정책 적용 핸들러
+  const handleApplyPolicy = (policy: Campaign) => {
+    if (!onChange || isReadOnly) return
+
+    // 할인 금액 계산
+    let discountAmount: number
+    const amountType = policy.reward_amount_type || "fixed"
+
+    if (amountType === "percent") {
+      // 퍼센트 할인: 현재 금액 * (할인율 / 100)
+      discountAmount = Math.round(row.amount * (policy.reward_amount / 100))
+    } else {
+      // 고정 금액 할인
+      discountAmount = policy.reward_amount
+    }
+
+    // 금액 차감
+    const newAmount = Math.max(0, row.amount - discountAmount)
+    onChange(index, 'amount', newAmount)
+
+    // 비고에 정책 정보 추가
+    const policyTitle = policy.title || "할인정책"
+    const discountText = amountType === "percent"
+      ? `${policy.reward_amount}% (${discountAmount.toLocaleString()}원)`
+      : `${discountAmount.toLocaleString()}원`
+    const notePrefix = row.note ? `${row.note} / ` : ""
+    onChange(index, 'note', `${notePrefix}${policyTitle} ${discountText} 적용`)
+
+    // 콜백 호출 (상태 업데이트용)
+    onApplyPolicy?.(policy, discountAmount)
   }
 
   return (
@@ -145,41 +218,137 @@ export function TuitionRow({
       
       {/* 학생명 */}
       <td className="min-w-[100px] w-[12%] px-3 py-3">
-        <span className="font-medium text-slate-700 truncate" title={row.studentName}>
-          {row.studentName}
-        </span>
-      </td>
-      
-      {/* 연월 */}
-      <td className="min-w-[120px] w-[15%] px-3 py-3">
-        <div className="relative">
-          <Calendar className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <Input
-            type="month"
-            value={formatYearMonth()}
-            onChange={(e) => handleYearMonthChange(e.target.value)}
-            className="pl-8 text-sm border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 transition-colors"
-          />
-        </div>
-      </td>
-      
-      {/* 형제할인 */}
-      <td className="min-w-[80px] w-[10%] px-3 py-3 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <Checkbox
-            checked={row.isSibling || false}
-            onCheckedChange={handleSiblingDiscountChange}
-            disabled={isReadOnly}
-            className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
-          />
-          {row.isSibling && (
-            <Badge variant="outline" className="text-xs bg-orange-50 text-orange-600 border-orange-200">
-              5%
-            </Badge>
+        <div className="flex items-center gap-1.5">
+          {isHistoryMode ? (
+            <button
+              onClick={handleNavigateToDetail}
+              className="font-medium text-slate-700 truncate hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+              title={`${row.studentName} 상세 보기`}
+            >
+              {row.studentName}
+            </button>
+          ) : (
+            <span className="font-medium text-slate-700 truncate" title={row.studentName}>
+              {row.studentName}
+            </span>
+          )}
+          {/* 할인 적용 드롭다운 (이벤트 + 정책 통합) */}
+          {!isReadOnly && (pendingEvents.length > 0 || availablePolicies.length > 0) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                >
+                  <Gift className="w-3 h-3 mr-1" />
+                  할인 {pendingEvents.length + availablePolicies.length}
+                  <ChevronDown className="w-3 h-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                {/* 대기중 이벤트 */}
+                {pendingEvents.length > 0 && (
+                  <>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      🎁 이벤트 혜택
+                    </DropdownMenuLabel>
+                    {pendingEvents.map((event) => {
+                      const campaign = event.campaign as any
+                      const amountType = event.reward_amount_type || "fixed"
+                      const displayAmount = amountType === "percent"
+                        ? `${event.reward_amount}%`
+                        : `${event.reward_amount.toLocaleString()}원`
+
+                      return (
+                        <DropdownMenuItem
+                          key={event.id}
+                          onClick={() => handleApplyEvent(event)}
+                          className="flex flex-col items-start gap-1 cursor-pointer"
+                        >
+                          <div className="font-medium text-sm">
+                            {campaign?.title || "이벤트"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            할인: {displayAmount}
+                            {amountType === "percent" && (
+                              <span className="ml-1">
+                                (≈ {Math.round(row.amount * (event.reward_amount / 100)).toLocaleString()}원)
+                              </span>
+                            )}
+                          </div>
+                        </DropdownMenuItem>
+                      )
+                    })}
+                    {availablePolicies.length > 0 && <DropdownMenuSeparator />}
+                  </>
+                )}
+                {/* 할인 정책 */}
+                {availablePolicies.length > 0 && (
+                  <>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      📋 할인 정책
+                    </DropdownMenuLabel>
+                    {availablePolicies.map((policy) => {
+                      const amountType = policy.reward_amount_type || "fixed"
+                      const displayAmount = amountType === "percent"
+                        ? `${policy.reward_amount}%`
+                        : `${policy.reward_amount.toLocaleString()}원`
+
+                      return (
+                        <DropdownMenuItem
+                          key={policy.id}
+                          onClick={() => handleApplyPolicy(policy)}
+                          className="flex flex-col items-start gap-1 cursor-pointer"
+                        >
+                          <div className="font-medium text-sm">
+                            {policy.title}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            할인: {displayAmount}
+                            {amountType === "percent" && (
+                              <span className="ml-1">
+                                (≈ {Math.round(row.amount * (policy.reward_amount / 100)).toLocaleString()}원)
+                              </span>
+                            )}
+                          </div>
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </td>
       
+      {/* 연월 - 접힘 상태에 따라 표시 */}
+      {isDateColumnsCollapsed ? (
+        <td className="px-2 py-3">
+          <span className="text-xs text-slate-500">
+            {row.year}.{row.month.toString().padStart(2, '0')}
+            {row.periodStartDate && (
+              <span className="ml-1 text-slate-400">
+                ({row.periodStartDate.substring(5, 10)}~)
+              </span>
+            )}
+          </span>
+        </td>
+      ) : (
+        <td className="min-w-[120px] w-[15%] px-3 py-3">
+          <div className="relative">
+            <Calendar className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <Input
+              type="month"
+              value={formatYearMonth()}
+              onChange={(e) => handleYearMonthChange(e.target.value)}
+              className="pl-8 text-sm border-slate-200 focus:border-blue-400 focus:ring-blue-400/20 transition-colors"
+            />
+          </div>
+        </td>
+      )}
+
       {/* 수업유형 */}
       <td className="min-w-[100px] w-[12%] px-3 py-3">
         <Select
@@ -234,26 +403,28 @@ export function TuitionRow({
         </div>
       </td>
 
-      {/* 수업 기간 */}
-      <td className="min-w-[240px] px-2 py-3">
-        <div className="flex gap-1 items-center">
-          <Input
-            type="date"
-            value={row.periodStartDate || ''}
-            onChange={(e) => onChange?.(index, 'periodStartDate', e.target.value)}
-            className="h-8 text-xs w-28 border-slate-200 focus:border-blue-400"
-            disabled={isReadOnly}
-          />
-          <span className="text-xs text-slate-500">~</span>
-          <Input
-            type="date"
-            value={row.periodEndDate || ''}
-            onChange={(e) => onChange?.(index, 'periodEndDate', e.target.value)}
-            className="h-8 text-xs w-28 border-slate-200 focus:border-blue-400"
-            disabled={isReadOnly}
-          />
-        </div>
-      </td>
+      {/* 수업 기간 - 펼침 상태에서만 표시 */}
+      {!isDateColumnsCollapsed && (
+        <td className="min-w-[240px] px-2 py-3">
+          <div className="flex gap-1 items-center">
+            <Input
+              type="date"
+              value={row.periodStartDate || ''}
+              onChange={(e) => onChange?.(index, 'periodStartDate', e.target.value)}
+              className="h-8 text-xs w-28 border-slate-200 focus:border-blue-400"
+              disabled={isReadOnly}
+            />
+            <span className="text-xs text-slate-500">~</span>
+            <Input
+              type="date"
+              value={row.periodEndDate || ''}
+              onChange={(e) => onChange?.(index, 'periodEndDate', e.target.value)}
+              className="h-8 text-xs w-28 border-slate-200 focus:border-blue-400"
+              disabled={isReadOnly}
+            />
+          </div>
+        </td>
+      )}
 
       {/* 납부상태 */}
       <td className="min-w-[100px] w-[12%] px-3 py-3">
@@ -298,18 +469,11 @@ export function TuitionRow({
       {/* 청구 상태 (PaysSam) - 이력 모드에서만 표시 */}
       {isHistoryMode && (
         <td className="min-w-[100px] w-[10%] px-3 py-3">
-          <button
-            onClick={handleNavigateToDetail}
-            className="flex items-center gap-1.5 group/badge cursor-pointer hover:opacity-80 transition-opacity"
-            title="상세 보기"
-          >
-            <PaymentStatusBadge
-              status={row.paysSamRequestStatus || null}
-              size="sm"
-              showIcon={true}
-            />
-            <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover/badge:opacity-100 transition-opacity" />
-          </button>
+          <PaymentStatusBadge
+            status={row.paysSamRequestStatus || null}
+            size="sm"
+            showIcon={true}
+          />
         </td>
       )}
 

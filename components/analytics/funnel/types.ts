@@ -96,4 +96,8 @@ export interface ChartDataPoint {
   isOngoing: boolean
   yoyChange: number | null
   prevYearRate: number | undefined
+  // 작년 비교 데이터
+  prevYear총원: number | null
+  prevYear등록: number | null
+  prevYear전환율: number | null
 }

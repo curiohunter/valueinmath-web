@@ -284,11 +284,6 @@ export function TuitionSidebar({
                                               {student.grade}학년
                                             </Badge>
                                           )}
-                                          {student.has_sibling && (
-                                            <Badge variant="outline" className="text-xs text-orange-600">
-                                              형제할인
-                                            </Badge>
-                                          )}
                                         </div>
                                         <Button
                                           onClick={() => onAddStudent(cls.id, student.id)}

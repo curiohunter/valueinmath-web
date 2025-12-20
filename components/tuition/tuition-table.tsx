@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown, FileSpreadsheet } from "lucide-react"
+import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown, FileSpreadsheet, ChevronsLeftRight, ChevronsRightLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TuitionRow as TuitionTableRow } from "./tuition-row"
 import type { TuitionRow } from "@/types/tuition"
@@ -63,6 +63,15 @@ interface TuitionTableProps {
   onExport?: () => void
   // 데이터 새로고침 핸들러 (PaysSam 액션 후)
   onRefresh?: () => void
+  // 할인 알림 정보
+  pendingRewardsByStudent?: Record<string, any[]>  // studentId -> rewards[]
+  siblingCandidates?: Record<string, string[]>  // studentId -> [siblingStudentIds]
+  // 이벤트 적용 콜백
+  onApplyEvent?: (participantId: string, discountAmount: number) => void
+  // 할인 정책 목록 (학생별로 적용 가능한 정책)
+  policiesByStudent?: Record<string, any[]>  // studentId -> policies[]
+  // 정책 적용 콜백
+  onApplyPolicy?: (policy: any, discountAmount: number) => void
 }
 
 export function TuitionTable({
@@ -107,12 +116,19 @@ export function TuitionTable({
   teachers = [],
   onSearch,
   onExport,
-  onRefresh
+  onRefresh,
+  pendingRewardsByStudent = {},
+  siblingCandidates = {},
+  onApplyEvent,
+  policiesByStudent = {},
+  onApplyPolicy
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
   const [studentSearchTerm, setStudentSearchTerm] = useState("")
   const [selectMenuOpen, setSelectMenuOpen] = useState(false)
+  // 연월+기간 컬럼 접힘 상태 (기본: 접힘)
+  const [isDateColumnsCollapsed, setIsDateColumnsCollapsed] = useState(true)
 
   // 전체 필터된 데이터 건수 (페이지네이션 전)
   const filteredCount = totalFilteredCount ?? originalRows.length
@@ -522,24 +538,48 @@ export function TuitionTable({
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     학생명
                   </th>
-                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
-                    <div className="flex items-center gap-2">
-                      연월
-                      {!isReadOnly && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="w-6 h-6 p-0 hover:bg-blue-100 text-blue-600"
-                          onClick={() => onBulkApply?.('yearMonth')}
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-3 py-4 text-center font-semibold text-slate-700">
-                    형제할인
-                  </th>
+                  {/* 연월+기간 접힘 상태일 때 */}
+                  {isDateColumnsCollapsed ? (
+                    <th className="px-3 py-4 text-left font-semibold text-slate-700">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600"
+                        onClick={() => setIsDateColumnsCollapsed(false)}
+                        title="연월/기간 펼치기"
+                      >
+                        <ChevronsLeftRight className="w-3 h-3 mr-1" />
+                        날짜
+                      </Button>
+                    </th>
+                  ) : (
+                    <>
+                      <th className="px-3 py-4 text-left font-semibold text-slate-700">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-5 w-5 p-0 hover:bg-slate-200 text-slate-500"
+                            onClick={() => setIsDateColumnsCollapsed(true)}
+                            title="연월/기간 접기"
+                          >
+                            <ChevronsRightLeft className="w-3 h-3" />
+                          </Button>
+                          연월
+                          {!isReadOnly && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="w-6 h-6 p-0 hover:bg-blue-100 text-blue-600"
+                              onClick={() => onBulkApply?.('yearMonth')}
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </th>
+                    </>
+                  )}
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     <div className="flex items-center gap-2">
                       수업유형
@@ -570,27 +610,30 @@ export function TuitionTable({
                       )}
                     </div>
                   </th>
-                  <th className="px-3 py-4 text-left font-semibold text-slate-700">
-                    <div className="flex items-center gap-2">
-                      수업 기간
-                      {!isReadOnly && (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="w-6 h-6 p-0 hover:bg-blue-100 text-blue-600"
-                            onClick={() => {
-                              onBulkApply?.('periodStartDate');
-                              onBulkApply?.('periodEndDate');
-                            }}
-                            title="첫 번째 행의 날짜를 모든 행에 적용"
-                          >
-                            <ArrowDown className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </th>
+                  {/* 기간 컬럼 - 펼침 상태에서만 */}
+                  {!isDateColumnsCollapsed && (
+                    <th className="px-3 py-4 text-left font-semibold text-slate-700">
+                      <div className="flex items-center gap-2">
+                        수업 기간
+                        {!isReadOnly && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="w-6 h-6 p-0 hover:bg-blue-100 text-blue-600"
+                              onClick={() => {
+                                onBulkApply?.('periodStartDate');
+                                onBulkApply?.('periodEndDate');
+                              }}
+                              title="첫 번째 행의 날짜를 모든 행에 적용"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                  )}
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     <div className="flex items-center gap-2">
                       납부상태
@@ -634,21 +677,36 @@ export function TuitionTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((row, index) => (
-                  <TuitionTableRow
-                    key={`${row.classId}-${row.studentId}-${index}`}
-                    row={row}
-                    index={index}
-                    isSelected={selectedRows.includes(index)}
-                    onChange={onRowChange}
-                    onDelete={onRowDelete}
-                    onSelect={onRowSelect}
-                    onSave={onRowSave}
-                    onRefresh={onRefresh}
-                    isReadOnly={isReadOnly}
-                    isHistoryMode={isHistoryMode}
-                  />
-                ))}
+                {rows.map((row, index) => {
+                  const studentRewards = pendingRewardsByStudent[row.studentId] || []
+                  const hasPendingRewards = studentRewards.length > 0
+                  const hasSiblingCandidate = !!siblingCandidates[row.studentId]
+                  const studentPolicies = policiesByStudent[row.studentId] || []
+
+                  return (
+                    <TuitionTableRow
+                      key={`${row.classId}-${row.studentId}-${index}`}
+                      row={row}
+                      index={index}
+                      isSelected={selectedRows.includes(index)}
+                      onChange={onRowChange}
+                      onDelete={onRowDelete}
+                      onSelect={onRowSelect}
+                      onSave={onRowSave}
+                      onRefresh={onRefresh}
+                      isReadOnly={isReadOnly}
+                      isHistoryMode={isHistoryMode}
+                      isDateColumnsCollapsed={isDateColumnsCollapsed}
+                      hasPendingRewards={hasPendingRewards}
+                      pendingRewardsCount={studentRewards.length}
+                      hasSiblingCandidate={hasSiblingCandidate}
+                      pendingEvents={studentRewards}
+                      onApplyEvent={onApplyEvent}
+                      availablePolicies={studentPolicies}
+                      onApplyPolicy={onApplyPolicy}
+                    />
+                  )
+                })}
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={10} className="px-6 py-16 text-center">
@@ -676,7 +734,10 @@ export function TuitionTable({
                 {rows.length > 0 && (
                   <>
                     <div className="text-sm text-slate-600 border-l pl-6 border-slate-300">
-                      총 금액: <span className="font-bold text-lg text-blue-600">{rows.reduce((sum, row) => sum + row.amount, 0).toLocaleString()}원</span>
+                      총 금액: <span className="font-bold text-lg text-blue-600">{rows.filter(r => r.paymentStatus !== '분할청구').reduce((sum, row) => sum + row.amount, 0).toLocaleString()}원</span>
+                      {rows.filter(r => r.paymentStatus === '분할청구').length > 0 && (
+                        <span className="ml-1 text-xs text-slate-400">(분할납부 제외)</span>
+                      )}
                     </div>
                     <div className="text-sm text-slate-600 border-l pl-6 border-slate-300">
                       <span className="text-green-600">

@@ -39,6 +39,15 @@ import { toast } from "sonner"
 
 type Student = Database['public']['Tables']['students']['Row']
 
+// 코호트 월별 데이터 타입
+interface CohortMonthData {
+  month: string // "2024-12" 형식
+  consultations: number // 신규상담 수
+  enrollments: number // 등원 수
+  conversionRate: number // 전환율 (%)
+  yoyChange: string // YoY 변화 (예: "+5.2%", "-3.1%", "")
+}
+
 interface DashboardStats {
   activeStudents: number
   activeStudentsByDept: { [key: string]: number }
@@ -51,9 +60,11 @@ interface DashboardStats {
   testConversionRate: string
   newEnrollmentsThisMonth: number
   newEnrollmentsByDept: { [key: string]: number }
+  newEnrollmentStudents: { name: string; school_type: string | null; grade: number | null; department: string | null }[]
   enrollmentConversionRate: string
   withdrawalsThisMonth: number
   withdrawalsByDept: { [key: string]: number }
+  withdrawalStudents: { name: string; school_type: string | null; grade: number | null; department: string | null }[]
   withdrawalsYoY: string
   // 새로운 통계 추가
   pendingMakeups: number // 보강 미정
@@ -67,6 +78,8 @@ interface DashboardStats {
   consultationRequestsUnassigned: number // 미배정 상담요청
   consultationRequestsPending: number // 대기중 상담요청
   consultationRequestsCompleted: number // 완료 상담요청
+  // 코호트 기반 전환율 데이터
+  cohortData: CohortMonthData[] // 최근 3개월 코호트 데이터 (각 월별 YoY 포함)
 }
 
 export default function DashboardPage() {
@@ -89,9 +102,11 @@ export default function DashboardPage() {
     testConversionRate: "0%",
     newEnrollmentsThisMonth: 0,
     newEnrollmentsByDept: {},
+    newEnrollmentStudents: [],
     enrollmentConversionRate: "0%",
     withdrawalsThisMonth: 0,
     withdrawalsByDept: {},
+    withdrawalStudents: [],
     withdrawalsYoY: "+0%",
     pendingMakeups: 0,
     weeklyScheduledMakeups: 0,
@@ -103,7 +118,8 @@ export default function DashboardPage() {
     totalIncompleteTodos: 0,
     consultationRequestsUnassigned: 0,
     consultationRequestsPending: 0,
-    consultationRequestsCompleted: 0
+    consultationRequestsCompleted: 0,
+    cohortData: []
   })
   const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
@@ -293,14 +309,7 @@ export default function DashboardPage() {
       })
       const withdrawalsByDept = sortDepartments(withdrawalsByDeptRaw)
 
-      // 전환율 계산
-      const testConversionRate = consultationsData && consultationsData.length > 0
-        ? ((testsData?.length || 0) / consultationsData.length * 100).toFixed(1)
-        : "0"
-
-      const enrollmentConversionRate = consultationsData && consultationsData.length > 0
-        ? ((newEnrollments?.length || 0) / consultationsData.length * 100).toFixed(1)
-        : "0"
+      // 전환율은 코호트 분석 페이지에서 확인 (대시보드에서는 제거)
       
       // YoY 계산 (신규상담)
       let consultationsYoY = "0%"
@@ -439,6 +448,73 @@ export default function DashboardPage() {
         r => r.status === '완료'
       ).length || 0
 
+      // 코호트 기반 전환율 데이터 로드 (RPC 함수 사용)
+      let cohortData: CohortMonthData[] = []
+
+      try {
+        // 24개월 데이터 조회 (모든 월의 YoY 비교를 위해)
+        const twentyFourMonthsAgo = new Date()
+        twentyFourMonthsAgo.setMonth(twentyFourMonthsAgo.getMonth() - 24)
+        const startDate = `${twentyFourMonthsAgo.getFullYear()}-${String(twentyFourMonthsAgo.getMonth() + 1).padStart(2, '0')}-01`
+
+        const { data: cohortRawData, error: cohortError } = await supabase
+          .rpc("get_cohort_funnel_analysis", {
+            p_lead_source: null,
+            p_start_date: startDate,
+          })
+
+        if (!cohortError && cohortRawData) {
+          // 월별로 합산 (lead_source별로 나뉘어 있을 수 있으므로)
+          const monthMap = new Map<string, { consultations: number; enrollments: number; conversionRate: number }>()
+
+          cohortRawData.forEach((row: any) => {
+            const month = row.cohort_month
+            if (!monthMap.has(month)) {
+              monthMap.set(month, { consultations: 0, enrollments: 0, conversionRate: 0 })
+            }
+            const agg = monthMap.get(month)!
+            agg.consultations += row.total_students || 0
+            agg.enrollments += row.enroll_total || 0
+          })
+
+          // 전환율 계산
+          monthMap.forEach((data, month) => {
+            data.conversionRate = data.consultations > 0
+              ? Math.round((data.enrollments / data.consultations) * 1000) / 10
+              : 0
+          })
+
+          // 최근 3개월 데이터 추출 (각 월별 YoY 포함)
+          const sortedMonths = Array.from(monthMap.keys()).sort().reverse()
+          const recentMonths = sortedMonths.slice(0, 3)
+
+          cohortData = recentMonths.map(monthKey => {
+            const data = monthMap.get(monthKey)!
+
+            // YoY 계산: 해당 월 vs 작년 동월
+            const [year, month] = monthKey.split('-')
+            const prevYearMonth = `${parseInt(year) - 1}-${month}`
+            const prevYearData = monthMap.get(prevYearMonth)
+
+            let yoyChange = ""
+            if (prevYearData && prevYearData.conversionRate > 0) {
+              const change = Math.round((data.conversionRate - prevYearData.conversionRate) * 10) / 10
+              yoyChange = change >= 0 ? `+${change}%` : `${change}%`
+            }
+
+            return {
+              month: monthKey,
+              consultations: data.consultations,
+              enrollments: data.enrollments,
+              conversionRate: data.conversionRate,
+              yoyChange
+            }
+          })
+        }
+      } catch (cohortErr) {
+        console.error('코호트 데이터 로드 오류:', cohortErr)
+      }
+
       setStats({
         activeStudents: activeStudents?.length || 0,
         activeStudentsByDept,
@@ -448,12 +524,24 @@ export default function DashboardPage() {
         consultationsYoY,
         testsThisMonth: testsData?.length || 0,
         testsByDept,
-        testConversionRate: `${testConversionRate}%`,
+        testConversionRate: "", // 코호트 분석 페이지에서 확인
         newEnrollmentsThisMonth: newEnrollments?.length || 0,
         newEnrollmentsByDept,
-        enrollmentConversionRate: `${enrollmentConversionRate}%`,
+        newEnrollmentStudents: (newEnrollments || []).map(s => ({
+          name: s.name,
+          school_type: s.school_type,
+          grade: s.grade,
+          department: s.department
+        })),
+        enrollmentConversionRate: "", // 코호트 분석 페이지에서 확인
         withdrawalsThisMonth: withdrawals?.length || 0,
         withdrawalsByDept,
+        withdrawalStudents: (withdrawals || []).map(s => ({
+          name: s.name,
+          school_type: s.school_type,
+          grade: s.grade,
+          department: s.department
+        })),
         withdrawalsYoY,
         pendingMakeups,
         weeklyScheduledMakeups,
@@ -465,7 +553,8 @@ export default function DashboardPage() {
         totalIncompleteTodos,
         consultationRequestsUnassigned,
         consultationRequestsPending,
-        consultationRequestsCompleted
+        consultationRequestsCompleted,
+        cohortData
       })
 
     } catch (error) {

@@ -148,10 +148,16 @@ export async function createSchoolExamScores(formData: SchoolExamScoreFormData):
 
     const { error } = await supabase.from("school_exam_scores").insert(scoresData)
 
-    if (error) throw error
+    if (error) {
+      // 중복 키 오류 처리
+      if (error.code === '23505') {
+        throw new Error("이미 등록된 성적입니다. 동일한 학생/학교/연도/학기/시험유형/과목 조합은 중복 등록할 수 없습니다.")
+      }
+      throw error
+    }
 
     return { success: true }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating school exam scores:", error)
     throw error
   }

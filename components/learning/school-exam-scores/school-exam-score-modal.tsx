@@ -180,9 +180,10 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
       }
       onSuccess()
       handleClose()
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error ${editingScore ? "updating" : "creating"} scores:`, error)
-      toast.error(`성적 ${editingScore ? "수정" : "등록"}에 실패했습니다`)
+      const errorMessage = error?.message || `성적 ${editingScore ? "수정" : "등록"}에 실패했습니다`
+      toast.error(errorMessage)
     } finally {
       setIsSubmitting(false)
     }

@@ -22,7 +22,15 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, X } from "lucide-react";
+import { CalendarIcon, Plus, X, History, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -94,6 +102,76 @@ export function MakeupModal({
   
   // 다중 날짜 선택 모달
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
+  // 이전 기록 관련 상태
+  const [previousRecords, setPreviousRecords] = useState<Array<{
+    id: number;
+    makeup_date: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    content: string | null;
+  }>>([]);
+  const [loadingPrevRecords, setLoadingPrevRecords] = useState(false);
+  const [showAllRecords, setShowAllRecords] = useState(false);
+  const MAX_VISIBLE_RECORDS = 4;
+
+  // 이전 보강 기록 조회 (모달 열릴 때)
+  useEffect(() => {
+    const fetchPreviousRecords = async () => {
+      if (!isOpen || !studentInfo.studentId) return;
+
+      setLoadingPrevRecords(true);
+      setShowAllRecords(false); // 상태 초기화
+      try {
+        const { data, error } = await supabase
+          .from("makeup_classes")
+          .select("id, makeup_date, start_time, end_time, content")
+          .eq("student_id", studentInfo.studentId)
+          .not("start_time", "is", null)
+          .order("makeup_date", { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error("이전 보강 기록 조회 실패:", error);
+        } else {
+          // 중복 제거 (시간+내용 조합 기준)
+          const uniqueRecords = data?.reduce((acc, record) => {
+            const key = `${record.start_time}-${record.end_time}-${record.content || ''}`;
+            if (!acc.some((r: typeof record) => `${r.start_time}-${r.end_time}-${r.content || ''}` === key)) {
+              acc.push(record);
+            }
+            return acc;
+          }, [] as typeof data) || [];
+
+          setPreviousRecords(uniqueRecords);
+        }
+      } catch (error) {
+        console.error("이전 보강 기록 조회 오류:", error);
+      } finally {
+        setLoadingPrevRecords(false);
+      }
+    };
+
+    fetchPreviousRecords();
+  }, [isOpen, studentInfo.studentId, supabase]);
+
+  // 이전 기록 선택 핸들러
+  const handleSelectPreviousRecord = (record: typeof previousRecords[0]) => {
+    if (record.start_time) {
+      const [hour, minute] = record.start_time.split(':');
+      setStartHour(hour);
+      setStartMinute(minute);
+    }
+    if (record.end_time) {
+      const [hour, minute] = record.end_time.split(':');
+      setEndHour(hour);
+      setEndMinute(minute);
+    }
+    if (record.content) {
+      setContent(record.content);
+    }
+    toast.success("이전 기록이 적용되었습니다.");
+  };
 
   // 편집 모드일 때 데이터 초기화
   useEffect(() => {
@@ -750,6 +828,65 @@ export function MakeupModal({
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">시간</Label>
               <div className="col-span-3">
+                {/* 이전 기록 선택 */}
+                {previousRecords.length > 0 && (
+                  <div className="mb-3">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="w-full justify-between text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <History className="h-4 w-4" />
+                            <span>이전 기록에서 선택</span>
+                          </div>
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-80 max-h-72 overflow-y-auto" align="start" side="bottom">
+                        <DropdownMenuLabel>이전 보강 기록 (시간+내용 적용)</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {(showAllRecords ? previousRecords : previousRecords.slice(0, MAX_VISIBLE_RECORDS)).map((record) => (
+                          <DropdownMenuItem
+                            key={record.id}
+                            onClick={() => handleSelectPreviousRecord(record)}
+                            className="flex flex-col items-start py-2 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <span>
+                                {record.start_time?.slice(0, 5)} ~ {record.end_time?.slice(0, 5)}
+                              </span>
+                              {record.makeup_date && (
+                                <span className="text-xs text-gray-500">
+                                  ({record.makeup_date.slice(5, 10)})
+                                </span>
+                              )}
+                            </div>
+                            {record.content && (
+                              <span className="text-xs text-gray-500 truncate w-full mt-0.5">
+                                {record.content.length > 40
+                                  ? record.content.slice(0, 40) + "..."
+                                  : record.content}
+                              </span>
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                        {previousRecords.length > MAX_VISIBLE_RECORDS && !showAllRecords && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setShowAllRecords(true);
+                              }}
+                              className="justify-center text-blue-600 text-sm py-2"
+                            >
+                              +{previousRecords.length - MAX_VISIBLE_RECORDS}개 더보기
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   {/* 시작 시간 */}
                   <div>
