@@ -15,10 +15,10 @@ import { useClassesWithStudents, useTuitionMutate } from "@/hooks/use-tuition"
 import { useEmployees } from "@/hooks/use-employees"
 import { useNewConsultStudents } from "@/hooks/use-students"
 import StudentClassTabs from "@/components/students/StudentClassTabs"
-import { Download, ChevronLeft, ChevronRight, Gift, ArrowRight, AlertCircle } from "lucide-react"
+import { Download, ChevronLeft, ChevronRight, Gift, ArrowRight, AlertCircle, Users } from "lucide-react"
 import type { TuitionRow, TuitionFeeInput } from "@/types/tuition"
 import { createClient } from "@/lib/supabase/client"
-import { getPendingRewards } from "@/services/reward-service"
+import { getPendingRewards, markRewardApplied, getApplicablePolicies, type CampaignParticipant, type Campaign } from "@/services/campaign-service"
 
 // 해당 월의 첫날과 마지막 날 계산
 function getMonthDateRange(year: number, month: number) {
@@ -58,8 +58,18 @@ export default function TuitionPage() {
   // 사이드바 열림/닫힘 상태
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
-  // 미지급 마케팅 보상 수
+  // 미지급 마케팅 보상 (학생별)
   const [pendingRewardsCount, setPendingRewardsCount] = useState(0)
+  const [pendingRewardsByStudent, setPendingRewardsByStudent] = useState<Record<string, CampaignParticipant[]>>({})
+
+  // 형제 가능성 있는 학생들 (같은 parent_phone을 가진 재원 학생들)
+  const [siblingCandidates, setSiblingCandidates] = useState<Record<string, string[]>>({}) // studentId -> [siblingStudentIds]
+
+  // 학생별 적용 가능한 할인 정책
+  const [policiesByStudent, setPoliciesByStudent] = useState<Record<string, Campaign[]>>({})
+
+  // 적용 대기 중인 이벤트 ID (저장 시에만 'applied'로 변경)
+  const [pendingApplyEventIds, setPendingApplyEventIds] = useState<string[]>([])
 
   // 단일월 생성 모드 - 필터링 상태는 필요없음
 
@@ -83,17 +93,103 @@ export default function TuitionPage() {
 
   // 미지급 마케팅 보상(학원비 할인) 조회
   useEffect(() => {
-    const fetchPendingRewards = async () => {
+    const fetchPendingRewardsData = async () => {
       const supabase = createClient()
       try {
-        const rewards = await getPendingRewards(supabase, { rewardType: 'tuition_discount' })
-        setPendingRewardsCount(rewards.length)
+        const result = await getPendingRewards(supabase)
+        if (result.success && result.data) {
+          const rewards = result.data
+          setPendingRewardsCount(rewards.length)
+
+          // 학생별로 그룹화
+          const byStudent: Record<string, CampaignParticipant[]> = {}
+          for (const reward of rewards) {
+            if (!byStudent[reward.student_id]) {
+              byStudent[reward.student_id] = []
+            }
+            byStudent[reward.student_id].push(reward)
+          }
+          setPendingRewardsByStudent(byStudent)
+        }
       } catch (error) {
         console.error('Failed to fetch pending rewards:', error)
       }
     }
-    fetchPendingRewards()
+    fetchPendingRewardsData()
   }, [])
+
+  // 형제 가능성 있는 학생 조회 (같은 parent_phone + 재원 상태)
+  useEffect(() => {
+    const fetchSiblingCandidates = async () => {
+      const supabase = createClient()
+      try {
+        // 재원 학생 중 parent_phone이 있는 학생들 조회
+        const { data: students, error } = await supabase
+          .from('students')
+          .select('id, name, parent_phone')
+          .eq('status', '재원')
+          .not('parent_phone', 'is', null)
+
+        if (error) throw error
+        if (!students) return
+
+        // 같은 전화번호를 가진 학생들 그룹화
+        const phoneGroups: Record<string, string[]> = {}
+        for (const student of students) {
+          if (student.parent_phone) {
+            const phone = student.parent_phone.replace(/[^0-9]/g, '') // 숫자만 추출
+            if (!phoneGroups[phone]) {
+              phoneGroups[phone] = []
+            }
+            phoneGroups[phone].push(student.id)
+          }
+        }
+
+        // 2명 이상인 그룹만 형제 후보로 설정
+        const candidates: Record<string, string[]> = {}
+        for (const [phone, studentIds] of Object.entries(phoneGroups)) {
+          if (studentIds.length >= 2) {
+            for (const studentId of studentIds) {
+              // 자신을 제외한 형제 목록
+              candidates[studentId] = studentIds.filter(id => id !== studentId)
+            }
+          }
+        }
+        setSiblingCandidates(candidates)
+      } catch (error) {
+        console.error('Failed to fetch sibling candidates:', error)
+      }
+    }
+    fetchSiblingCandidates()
+  }, [])
+
+  // 학생별 적용 가능한 할인 정책 조회
+  useEffect(() => {
+    const fetchApplicablePolicies = async () => {
+      if (localRows.length === 0) {
+        setPoliciesByStudent({})
+        return
+      }
+
+      const supabase = createClient()
+      const studentIds = [...new Set(localRows.map(row => row.studentId))]
+      const policiesMap: Record<string, Campaign[]> = {}
+
+      for (const studentId of studentIds) {
+        try {
+          const result = await getApplicablePolicies(supabase, studentId)
+          if (result.success && result.data) {
+            policiesMap[studentId] = result.data
+          }
+        } catch (error) {
+          console.error(`Failed to fetch policies for student ${studentId}:`, error)
+        }
+      }
+
+      setPoliciesByStudent(policiesMap)
+    }
+    fetchApplicablePolicies()
+  }, [localRows])
 
   // 단일월 생성 모드: 로컬 데이터만 사용
   const displayRows = localRows
@@ -192,7 +288,7 @@ export default function TuitionPage() {
       // 중복 체크 제거 - 정규 수업도 중복 추가 가능
       if (true) {
         const amount = targetClass.monthly_fee || 50000 // 기본값 설정
-        const discountedAmount = student.has_sibling ? Math.floor(amount * 0.95) : amount
+        // 형제 할인 자동 적용 제거 - 할인정책 탭에서 수동 적용
 
         newRows.push({
           id: `temp-${Date.now()}-${student.id}`, // 임시 ID
@@ -202,9 +298,9 @@ export default function TuitionPage() {
           studentName: student.name,
           year,
           month,
-          isSibling: student.has_sibling || false,
+          isSibling: false, // 더 이상 자동 설정 안함
           classType: '정규',
-          amount: discountedAmount,
+          amount, // 할인 없이 원래 금액
           note: '',
           paymentStatus: '미납',
           periodStartDate: dateRange.start,
@@ -255,7 +351,7 @@ export default function TuitionPage() {
     // 같은 반에서도 중복 추가 가능 (정규/특강 구분은 테이블에서)
     if (true) {
       const amount = classType === '특강' ? 100000 : (targetClass.monthly_fee || 50000) // 특강은 기본 10만원
-      const discountedAmount = student.has_sibling && classType === '정규' ? Math.floor(amount * 0.95) : amount
+      // 형제 할인 자동 적용 제거 - 할인정책 탭에서 수동 적용
 
       const newRow: TuitionRow = {
         id: `temp-${Date.now()}-${student.id}`, // 임시 ID
@@ -265,9 +361,9 @@ export default function TuitionPage() {
         studentName: student.name,
         year,
         month,
-        isSibling: student.has_sibling || false,
+        isSibling: false, // 더 이상 자동 설정 안함
         classType,
-        amount: discountedAmount,
+        amount, // 할인 없이 원래 금액
         note: classType === '특강' ? '특강' : '',
         paymentStatus: '미납',
         periodStartDate: dateRange.start,
@@ -317,7 +413,7 @@ export default function TuitionPage() {
         studentName: student.name,
         year,
         month,
-        isSibling: student.has_sibling || false,
+        isSibling: false, // 더 이상 자동 설정 안함
         classType: '입학테스트비', // 입학테스트비로 분류
         amount: 10000, // 기본 입학테스트비 (수정 가능)
         note: '', // 현금/카드 결제 방법 입력용
@@ -388,13 +484,9 @@ export default function TuitionPage() {
           )
           
           if (!exists) {
-            let amount = classData.monthly_fee
-            
-            // 형제 할인 적용 (5%)
-            if (student.has_sibling) {
-              amount = Math.floor(amount * 0.95)
-            }
-            
+            const amount = classData.monthly_fee
+            // 형제 할인 자동 적용 제거 - 할인정책 탭에서 수동 적용
+
             newRows.push({
               id: `temp-${Date.now()}-${student.id}`, // 임시 ID
               classId: classData.id,
@@ -403,15 +495,15 @@ export default function TuitionPage() {
               studentName: student.name,
               year,
               month,
-              isSibling: student.has_sibling || false,
+              isSibling: false, // 더 이상 자동 설정 안함
               classType: '정규',
-              amount,
+              amount, // 할인 없이 원래 금액
               note: '',
               paymentStatus: '미납',
               periodStartDate: dateRange.start,
               periodEndDate: dateRange.end
             })
-            
+
             successCount++
           }
         }
@@ -467,7 +559,7 @@ export default function TuitionPage() {
   }, [selectedRows, toast])
 
   // 전체 삭제 핸들러 (UI에서만 삭제)
-  const handleDeleteAll = useCallback(() => {
+  const handleDeleteAll = useCallback(async () => {
     if (localRows.length === 0) {
       toast({
         title: "삭제할 항목 없음",
@@ -477,19 +569,42 @@ export default function TuitionPage() {
       return
     }
 
-    const confirmDelete = window.confirm(`정말 ${localRows.length}개의 학원비를 테이블에서 모두 제거하시겠습니까?`)
-    
+    const warningMessage = pendingApplyEventIds.length > 0
+      ? `정말 ${localRows.length}개의 학원비를 테이블에서 모두 제거하시겠습니까?\n\n⚠️ 적용 대기 중인 이벤트 ${pendingApplyEventIds.length}건이 원래 상태로 복구됩니다.`
+      : `정말 ${localRows.length}개의 학원비를 테이블에서 모두 제거하시겠습니까?`
+
+    const confirmDelete = window.confirm(warningMessage)
+
     if (confirmDelete) {
       const deleteCount = localRows.length
       setLocalRows([])
       setSelectedRows([])
-      
+
+      // 적용 대기 중인 이벤트가 있으면 미지급 보상 목록 다시 로드
+      if (pendingApplyEventIds.length > 0) {
+        setPendingApplyEventIds([])
+        // 미지급 보상 다시 조회
+        const supabase = createClient()
+        const result = await getPendingRewards(supabase)
+        if (result.success && result.data) {
+          setPendingRewardsCount(result.data.length)
+          const byStudent: Record<string, CampaignParticipant[]> = {}
+          for (const reward of result.data) {
+            if (!byStudent[reward.student_id]) {
+              byStudent[reward.student_id] = []
+            }
+            byStudent[reward.student_id].push(reward)
+          }
+          setPendingRewardsByStudent(byStudent)
+        }
+      }
+
       toast({
         title: "전체 삭제 완료",
-        description: `${deleteCount}개 항목이 테이블에서 제거되었습니다. 저장하지 않으면 복구됩니다.`,
+        description: `${deleteCount}개 항목이 테이블에서 제거되었습니다.`,
       })
     }
-  }, [localRows, toast])
+  }, [localRows, toast, pendingApplyEventIds])
 
   // 저장 핸들러
   const handleSave = useCallback(async () => {
@@ -523,11 +638,20 @@ export default function TuitionPage() {
       if (result.success) {
         // 기존 토스트들 모두 dismiss
         dismiss()
-        
+
+        // 대기 중인 이벤트들을 'applied'로 업데이트
+        if (pendingApplyEventIds.length > 0) {
+          const supabase = createClient()
+          for (const participantId of pendingApplyEventIds) {
+            await markRewardApplied(supabase, participantId)
+          }
+          setPendingApplyEventIds([])
+        }
+
         // 상태 업데이트 후 toast 호출
         setLocalRows([])
         setSelectedRows([])
-        
+
         // Sonner 토스트 사용 (더 안정적)
         sonnerToast.success(`저장 완료! ${dataToSave.length}개의 학원비가 저장되었습니다.`)
       } else {
@@ -544,32 +668,40 @@ export default function TuitionPage() {
         variant: "destructive"
       })
     }
-  }, [localRows, saveBulk, toast])
+  }, [localRows, saveBulk, toast, dismiss, pendingApplyEventIds])
 
+  // 이벤트 할인 적용 핸들러 (로컬에만 적용, 저장 시에 상태 업데이트)
+  const handleApplyEvent = useCallback((participantId: string, discountAmount: number) => {
+    // 적용 대기 목록에 추가
+    setPendingApplyEventIds(prev => {
+      if (prev.includes(participantId)) return prev
+      return [...prev, participantId]
+    })
+
+    // 미지급 보상 목록에서 제거 (UI에서만)
+    setPendingRewardsByStudent(prev => {
+      const updated = { ...prev }
+      for (const studentId in updated) {
+        updated[studentId] = updated[studentId].filter(r => r.id !== participantId)
+        if (updated[studentId].length === 0) {
+          delete updated[studentId]
+        }
+      }
+      return updated
+    })
+    setPendingRewardsCount(prev => Math.max(0, prev - 1))
+
+    sonnerToast.success(`이벤트 할인 ${discountAmount.toLocaleString()}원이 적용되었습니다. 저장하면 최종 반영됩니다.`)
+  }, [])
+
+  // 할인 정책 적용 핸들러
+  const handleApplyPolicy = useCallback((policy: Campaign, discountAmount: number) => {
+    sonnerToast.success(`${policy.title} ${discountAmount.toLocaleString()}원이 적용되었습니다. 저장하면 최종 반영됩니다.`)
+  }, [])
 
   return (
     <div className="space-y-6">
       <StudentClassTabs />
-
-      {/* 미지급 마케팅 보상 알림 배너 */}
-      {pendingRewardsCount > 0 && (
-        <Alert className="bg-amber-50 border-amber-200">
-          <Gift className="w-4 h-4 text-amber-600" />
-          <AlertDescription className="flex items-center justify-between w-full">
-            <span className="flex items-center gap-2 text-amber-800">
-              <AlertCircle className="w-4 h-4" />
-              미적용 마케팅 보상 {pendingRewardsCount}건이 있습니다
-            </span>
-            <Link
-              href="/analytics/marketing"
-              className="flex items-center gap-1 text-amber-700 hover:text-amber-900 font-medium text-sm"
-            >
-              마케팅 관리로 이동
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* 메인 콘텐츠 */}
       <div className="flex gap-6 relative">
@@ -608,6 +740,11 @@ export default function TuitionPage() {
             onSelectAll={handleSelectAll}
             isSidebarOpen={isSidebarOpen}
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            pendingRewardsByStudent={pendingRewardsByStudent}
+            siblingCandidates={siblingCandidates}
+            onApplyEvent={handleApplyEvent}
+            policiesByStudent={policiesByStudent}
+            onApplyPolicy={handleApplyPolicy}
           />
         </div>
       </div>

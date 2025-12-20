@@ -34,6 +34,8 @@ export function StudentsFilters({ onNewStudent }: { onNewStudent: () => void }) 
       } else {
         params.delete(name)
       }
+      // 필터 변경 시 항상 페이지를 1로 리셋
+      params.set("page", "1")
 
       return params.toString()
     },

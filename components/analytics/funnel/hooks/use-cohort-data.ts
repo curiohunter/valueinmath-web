@@ -156,38 +156,65 @@ export function useCohortData() {
     }
   }, [filteredCohortData])
 
-  // 차트 데이터 (YoY 포함)
+  // 차트 데이터 (YoY 포함, 최근 12개월만)
   const chartData = useMemo((): ChartDataPoint[] => {
-    const sorted = [...filteredCohortData].sort((a, b) => a.cohort_month.localeCompare(b.cohort_month))
+    // 전체 코호트 데이터에서 Map 생성 (전년 비교용)
+    const baseData = selectedLeadSource === "all" ? cohortAggregated : cohortData.filter(d => d.lead_source === selectedLeadSource)
 
-    const monthMap = new Map<string, number>()
-    sorted.forEach(c => {
-      monthMap.set(c.cohort_month, c.final_conversion_rate)
+    // 전체 데이터로 월별 맵 생성 (24개월 전체)
+    const fullMonthMap = new Map<string, CohortData>()
+    baseData.forEach(c => {
+      fullMonthMap.set(c.cohort_month, c)
     })
 
-    return sorted.map(c => {
-      const [year, month] = c.cohort_month.split('-')
-      const prevYearMonth = `${parseInt(year) - 1}-${month}`
-      const prevYearRate = monthMap.get(prevYearMonth)
+    // 최근 12개월 계산
+    const now = new Date()
+    const recentMonths: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      recentMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    }
+    recentMonths.reverse() // 오래된 순서대로 정렬
 
+    return recentMonths.map(monthKey => {
+      const [year, month] = monthKey.split('-')
+      const prevYearMonth = `${parseInt(year) - 1}-${month}`
+
+      const currentData = fullMonthMap.get(monthKey)
+      const prevYearData = fullMonthMap.get(prevYearMonth)
+
+      const 전환율 = currentData?.final_conversion_rate ?? 0
+      const 총원 = currentData?.total_students ?? 0
+      const 등록 = currentData?.enroll_total ?? 0
+      const isOngoing = currentData?.is_ongoing ?? false
+
+      // 작년 데이터
+      const prevYear전환율 = prevYearData?.final_conversion_rate ?? null
+      const prevYear총원 = prevYearData?.total_students ?? null
+      const prevYear등록 = prevYearData?.enroll_total ?? null
+
+      // YoY 변화 계산
       let yoyChange: number | null = null
-      if (prevYearRate !== undefined && prevYearRate > 0) {
-        yoyChange = Math.round((c.final_conversion_rate - prevYearRate) * 10) / 10
+      if (prevYear전환율 !== null && prevYear전환율 > 0) {
+        yoyChange = Math.round((전환율 - prevYear전환율) * 10) / 10
       }
 
       return {
-        month: c.cohort_month.slice(5),
-        fullMonth: c.cohort_month,
+        month: monthKey.slice(5),
+        fullMonth: monthKey,
         year: year,
-        전환율: c.final_conversion_rate,
-        총원: c.total_students,
-        등록: c.enroll_total,
-        isOngoing: c.is_ongoing,
+        전환율,
+        총원,
+        등록,
+        isOngoing,
         yoyChange,
-        prevYearRate,
+        prevYearRate: prevYear전환율 ?? undefined,
+        prevYear총원,
+        prevYear등록,
+        prevYear전환율,
       }
-    })
-  }, [filteredCohortData])
+    }).filter(d => d.총원 > 0 || d.prevYear총원 !== null) // 데이터가 있는 월만 표시
+  }, [cohortData, cohortAggregated, selectedLeadSource])
 
   // 유틸리티 함수들
   const getConversionColor = (rate: number, isOngoing: boolean) => {

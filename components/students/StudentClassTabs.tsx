@@ -30,6 +30,28 @@ export default function StudentClassTabs() {
         반 관리
       </Link>
       <Link
+        href="/students/consultations"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname.startsWith("/students/consultations")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        상담 관리
+      </Link>
+      <Link
+        href="/students/marketing"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname.startsWith("/students/marketing")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        마케팅
+      </Link>
+      <Link
         href="/students/tuition"
         className={clsx(
           "px-4 py-2 font-semibold",

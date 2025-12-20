@@ -22,13 +22,17 @@ const formatAmount = (amount: number) => {
 };
 
 // 통계 계산 함수
+// 분할납부(분할청구) 학생은 이미 이전 청구에서 계산되었으므로 총 금액에서 제외
 const calculateStats = (data: TuitionRow[]) => {
   const totalCount = data.length;
-  const totalAmount = data.reduce((sum, row) => sum + row.amount, 0);
   const paidRows = data.filter(row => row.paymentStatus === '완납');
   const unpaidRows = data.filter(row => row.paymentStatus === '미납');
   const partialRows = data.filter(row => row.paymentStatus === '분할청구');
-  
+
+  // 분할청구 제외한 총 금액 (분할납부는 이미 이전에 계산됨)
+  const nonPartialRows = data.filter(row => row.paymentStatus !== '분할청구');
+  const totalAmount = nonPartialRows.reduce((sum, row) => sum + row.amount, 0);
+
   return {
     totalCount,
     totalAmount,

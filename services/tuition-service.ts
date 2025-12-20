@@ -365,6 +365,7 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
     const { data: classesData, error: classesError } = await supabase
       .from("classes")
       .select("*")
+      .eq("is_active", true)
       .order("name", { ascending: true })
     
     if (classesError) {

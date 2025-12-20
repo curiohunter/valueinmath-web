@@ -8,8 +8,8 @@ import {
   BookOpen,
   ClipboardCheck,
   Calendar,
-  FileText,
-  Plus
+  Megaphone,
+  Zap
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -65,18 +65,18 @@ const quickAccessItems: QuickAccessItem[] = [
     color: "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400"
   },
   {
-    title: "월간 보고서",
-    href: "/learning/reports",
-    icon: FileText,
-    description: "운영 통계 및 보고서",
+    title: "마케팅 관리",
+    href: "/students/marketing",
+    icon: Megaphone,
+    description: "캠페인 및 이벤트 관리",
     color: "bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400"
   },
   {
-    title: "추가 예정",
-    href: "#",
-    icon: Plus,
-    description: "새로운 기능 준비 중",
-    color: "bg-gray-100/50 hover:bg-gray-100 text-gray-400 dark:bg-gray-800/50 dark:hover:bg-gray-800 cursor-not-allowed opacity-60"
+    title: "액션센터",
+    href: "/analytics/funnel-v2",
+    icon: Zap,
+    description: "퍼널 분석 및 액션",
+    color: "bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400"
   }
 ]
 

@@ -47,7 +47,7 @@ const formatTestDate = (dateString: string | null) => {
   const dateStr = dateString.slice(0, 19)
   const datePart = dateStr.slice(0, 10)
   const timePart = dateStr.slice(11, 16)
-  
+
   const [year, month, day] = datePart.split('-')
   return `${month}/${day} ${timePart}`
 }
@@ -76,9 +76,9 @@ export function EntranceTestTable({
   onEnrollmentDecision
 }: EntranceTestTableProps) {
   const [memoModalOpen, setMemoModalOpen] = useState(false)
-  const [selectedMemo, setSelectedMemo] = useState<{ title: string; content: string | null }>({ 
-    title: '', 
-    content: null 
+  const [selectedMemo, setSelectedMemo] = useState<{ title: string; content: string | null }>({
+    title: '',
+    content: null
   })
 
   const handleMemoClick = (studentName: string | undefined, memo: string | null) => {
@@ -145,8 +145,8 @@ export function EntranceTestTable({
                 {formatTestResult(test.test_result)}
               </TableCell>
               <TableCell>
-                <Badge 
-                  variant="secondary" 
+                <Badge
+                  variant="secondary"
                   className={`text-xs ${getTestStatusColor(test.status || '')}`}
                 >
                   {test.status}
@@ -157,7 +157,7 @@ export function EntranceTestTable({
                   onClick={() => handleMemoClick(test.student_name, test.notes)}
                   className="inline-flex items-center justify-center p-1 hover:bg-gray-100 rounded"
                 >
-                  <Eye 
+                  <Eye
                     className={`h-4 w-4 ${test.notes ? 'text-blue-600' : 'text-gray-400'}`}
                   />
                 </button>
@@ -177,8 +177,8 @@ export function EntranceTestTable({
                       </DropdownMenuItem>
                     )}
                     {onDelete && (
-                      <DropdownMenuItem 
-                        onClick={() => onDelete(test.id)} 
+                      <DropdownMenuItem
+                        onClick={() => onDelete(test.id)}
                         className="text-red-600"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -201,7 +201,7 @@ export function EntranceTestTable({
           ))}
         </TableBody>
       </Table>
-      
+
       <MemoDetailModal
         open={memoModalOpen}
         onOpenChange={setMemoModalOpen}

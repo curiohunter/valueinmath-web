@@ -6,7 +6,14 @@ export async function GET(request: NextRequest) {
     const supabase = await createServerClient()
     const { searchParams } = new URL(request.url)
     const leadSource = searchParams.get("lead_source") || null
-    const startDate = searchParams.get("start_date") || "2024-09-01"
+
+    // 기본값: 24개월 전 (모든 월의 YoY 비교를 위해)
+    const defaultStartDate = (() => {
+      const date = new Date()
+      date.setMonth(date.getMonth() - 24)
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+    })()
+    const startDate = searchParams.get("start_date") || defaultStartDate
 
     // 코호트 분석 데이터 조회
     const { data: cohortData, error } = await supabase

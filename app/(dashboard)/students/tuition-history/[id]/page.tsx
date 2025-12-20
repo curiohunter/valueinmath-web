@@ -17,19 +17,21 @@ import {
   RotateCcw,
   CreditCard,
   Ban,
-  Trash2,
   User,
-  GraduationCap,
   Phone,
-  Calendar,
   Receipt,
-  Clock,
   CheckCircle2,
   ExternalLink,
   Copy,
   History,
-  Scissors
+  Scissors,
 } from "lucide-react"
+import {
+  removeDiscountFromTuition,
+  type DiscountDetail,
+} from "@/services/campaign-service"
+import { TuitionDiscountSection } from "@/components/tuition/tuition-discount-section"
+import { TuitionEventSection } from "@/components/tuition/tuition-event-section"
 import { PaymentStatusBadge, PaymentMethodBadge } from "@/components/payssam"
 import { SplitInvoiceModal } from "@/components/payssam/split-invoice-modal"
 import type { PaysSamRequestStatus, PaymentStatus, ClassType } from "@/types/tuition"
@@ -139,6 +141,10 @@ export default function TuitionDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [splitModalOpen, setSplitModalOpen] = useState(false)
 
+  // 할인 관련 상태
+  const [discountDetails, setDiscountDetails] = useState<DiscountDetail[]>([])
+  const [discountLoading, setDiscountLoading] = useState(false)
+
   const tuitionId = params.id as string
 
   // 데이터 조회
@@ -178,11 +184,61 @@ export default function TuitionDetailPage() {
     }
   }
 
+  // 할인 데이터 조회 (discount_details JSONB에서 로드)
+  const fetchDiscounts = async () => {
+    if (!tuitionId) return
+
+    setDiscountLoading(true)
+    try {
+      const { data: tuitionData } = await supabase
+        .from("tuition_fees")
+        .select("discount_details")
+        .eq("id", tuitionId)
+        .single()
+
+      setDiscountDetails((tuitionData?.discount_details as DiscountDetail[]) || [])
+    } catch (error) {
+      console.error("할인 데이터 조회 오류:", error)
+    } finally {
+      setDiscountLoading(false)
+    }
+  }
+
+  // 할인 제거 핸들러
+  const handleRemoveDiscount = async (participantId: string) => {
+    const confirm = window.confirm("이 할인을 제거하시겠습니까?")
+    if (!confirm) return
+
+    setDiscountLoading(true)
+    try {
+      const result = await removeDiscountFromTuition(supabase, tuitionId, participantId)
+      if (result.success) {
+        toast.success("할인이 제거되었습니다")
+        await fetchDiscounts()
+        await fetchData()
+      } else {
+        toast.error(result.error || "할인 제거에 실패했습니다")
+      }
+    } catch (error: any) {
+      console.error("할인 제거 오류:", error)
+      toast.error(error.message || "할인 제거 중 오류가 발생했습니다")
+    } finally {
+      setDiscountLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (tuitionId && user) {
       fetchData()
     }
   }, [tuitionId, user])
+
+  // 데이터 로드 후 할인 정보 조회
+  useEffect(() => {
+    if (tuitionId && data) {
+      fetchDiscounts()
+    }
+  }, [tuitionId, data])
 
   // 청구서 발송
   const handleSendInvoice = async () => {
@@ -567,6 +623,28 @@ export default function TuitionDetailPage() {
               )}
             </div>
           </Card>
+
+          {/* 할인 내역 - 새로운 컴포넌트 사용 */}
+          <TuitionDiscountSection
+            discountDetails={discountDetails}
+            siblingDiscount={data.is_sibling}
+            siblingDiscountAmount={data.is_sibling ? Math.round(data.amount * 0.05 / 0.95) : 0}
+            loading={discountLoading}
+            onRemoveDiscount={handleRemoveDiscount}
+          />
+
+          {/* 이벤트 참여 관리 - 새로운 컴포넌트 */}
+          {data.students?.id && (
+            <TuitionEventSection
+              studentId={data.students.id}
+              studentName={studentName}
+              tuitionFeeId={tuitionId}
+              onDiscountApplied={async () => {
+                await fetchDiscounts()
+                await fetchData()
+              }}
+            />
+          )}
 
           {/* 이벤트 로그 */}
           {logs.length > 0 && (

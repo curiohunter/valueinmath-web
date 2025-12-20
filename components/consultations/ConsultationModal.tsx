@@ -30,8 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
 import { analyzeConsultation, isAnalyzableConsultationType } from "@/services/consultation-ai-service";
-import { getMarketingActivities, type MarketingActivity } from "@/services/marketing-service";
-import { CHANNEL_LABELS, type MarketingChannel } from "@/types/b2b-saas";
+// marketing_activities 테이블 삭제됨 - marketing_campaigns로 대체
 // B2B SaaS: 퍼널 이벤트는 DB 트리거에서 자동 기록됨 (trg_funnel_consultation)
 import type {
   ConsultationType,
@@ -120,10 +119,6 @@ export function ConsultationModal({
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
-  // Marketing Activity Selection (신규상담 only)
-  const [marketingActivities, setMarketingActivities] = useState<MarketingActivity[]>([]);
-  const [selectedMarketingActivityId, setSelectedMarketingActivityId] = useState<string>("");
-  
   // Time options
   const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
   const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
@@ -141,20 +136,6 @@ export function ConsultationModal({
     loadEmployees();
   }, []);
 
-  // Load active marketing activities (for 신규상담)
-  useEffect(() => {
-    const loadMarketingActivities = async () => {
-      try {
-        // 진행 중인 마케팅 활동 로드 (in_progress)
-        const activities = await getMarketingActivities(supabase, { status: 'in_progress' });
-        setMarketingActivities(activities);
-      } catch (error) {
-        console.error("마케팅 활동 로딩 실패:", error);
-      }
-    };
-    loadMarketingActivities();
-  }, []);
-  
   // Initialize form data when modal opens
   useEffect(() => {
     if (!isOpen) return; // Skip if modal is closed
@@ -200,7 +181,6 @@ export function ConsultationModal({
       setStatus("예정");
       setNextAction("");
       setNextDate(undefined);
-      setSelectedMarketingActivityId(""); // Reset marketing activity selection
     }
     
     // Set initial load flag after form initialization
@@ -366,11 +346,6 @@ export function ConsultationModal({
           counselor_name_snapshot: counselorName,
         };
 
-        // 신규상담일 때 마케팅 활동 연결
-        if (consultationType === "신규상담" && selectedMarketingActivityId) {
-          insertData.marketing_activity_id = selectedMarketingActivityId;
-        }
-
         const { data: newConsultation, error } = await supabase
           .from("consultations")
           .insert(insertData)
@@ -504,35 +479,6 @@ export function ConsultationModal({
             </div>
           </div>
 
-          {/* Row 1.5: Marketing Activity Selection (신규상담 only) */}
-          {consultationType === "신규상담" && !editingConsultation && marketingActivities.length > 0 && (
-            <div className="space-y-2">
-              <Label htmlFor="marketingActivity">
-                유입 경로 (마케팅 활동)
-                <span className="text-muted-foreground text-xs ml-2">선택사항</span>
-              </Label>
-              <Select
-                value={selectedMarketingActivityId || "none"}
-                onValueChange={(value) => setSelectedMarketingActivityId(value === "none" ? "" : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="마케팅 활동을 선택하세요" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">선택 안함</SelectItem>
-                  {marketingActivities.map(activity => (
-                    <SelectItem key={activity.id} value={activity.id}>
-                      [{CHANNEL_LABELS[activity.channel as MarketingChannel] || activity.channel}] {activity.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                어떤 마케팅 활동을 통해 유입되었는지 선택하면 전환율 분석에 도움됩니다.
-              </p>
-            </div>
-          )}
-          
           {/* Row 2: Date and Time - Improved Layout */}
           <div className="space-y-4">
             <div className="space-y-2">

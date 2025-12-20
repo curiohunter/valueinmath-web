@@ -69,12 +69,7 @@ export function Sidebar() {
       icon: Home,
     },
     {
-      title: "상담 관리",
-      href: "/consultations",
-      icon: MessageSquare,
-    },
-    {
-      title: "학생 관리",
+      title: "학원 관리",
       href: "/students",
       icon: Users,
     },

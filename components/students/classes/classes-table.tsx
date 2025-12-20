@@ -195,9 +195,15 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
-                        c.subject === '수학' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
+                        c.subject === '수학'
+                          ? 'bg-blue-100 text-blue-700'
+                          : c.subject === '수학특강'
+                          ? 'bg-violet-100 text-violet-700'
+                          : c.subject === '과학'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : c.subject === '과학특강'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-gray-100 text-gray-700'
                       }`}>
                         {c.subject}
                       </span>
