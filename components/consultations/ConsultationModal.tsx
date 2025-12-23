@@ -42,6 +42,17 @@ import type {
   formatDateTimeToKST
 } from "@/types/consultation";
 
+// 상담 결과 타입 및 라벨
+type ConsultationOutcome = "enrolled" | "test_scheduled" | "deferred" | "rejected" | "lost";
+
+const OUTCOME_LABELS: Record<ConsultationOutcome, string> = {
+  enrolled: "등록완료",
+  test_scheduled: "테스트 예약",
+  deferred: "추가 상담 필요",
+  rejected: "등록 거절",
+  lost: "연락두절",
+};
+
 // Map consultation type to calendar event type - 그냥 한글 그대로 사용
 const getEventTypeFromConsultationType = (consultationType: string): string => {
   // EventModal.tsx의 eventCategories와 동일한 value 사용
@@ -114,6 +125,7 @@ export function ConsultationModal({
     setEndMinute(endM.toString().padStart(2, '0'));
   }, [startHour, startMinute, editingConsultation, isInitialLoad]);
   const [status, setStatus] = useState<ConsultationStatus>("예정");
+  const [outcome, setOutcome] = useState<ConsultationOutcome | "">("");
   const [nextAction, setNextAction] = useState("");
   const [nextDate, setNextDate] = useState<Date | undefined>();
   const [loading, setLoading] = useState(false);
@@ -148,6 +160,7 @@ export function ConsultationModal({
       setCounselorId(editingConsultation.counselor_id);
       setContent(editingConsultation.content || "");
       setStatus(editingConsultation.status);
+      setOutcome((editingConsultation as any).outcome || "");
       setNextAction(editingConsultation.next_action || "");
       
       // Parse date and time
@@ -179,6 +192,7 @@ export function ConsultationModal({
       setCounselorId("");
       setContent("");
       setStatus("예정");
+      setOutcome("");
       setNextAction("");
       setNextDate(undefined);
     }
@@ -190,6 +204,12 @@ export function ConsultationModal({
   const handleSubmit = async () => {
     if (!consultationDate || !counselorId) {
       toast.error("필수 항목을 입력해주세요.");
+      return;
+    }
+
+    // 상태가 "완료"일 때 상담 결과 필수
+    if (status === "완료" && !outcome) {
+      toast.error("상담 결과를 선택해주세요.");
       return;
     }
     
@@ -226,6 +246,8 @@ export function ConsultationModal({
             counselor_id: counselorId,
             content: content || null,
             status,
+            outcome: status === "완료" && outcome ? outcome : null,
+            outcome_date: status === "완료" && outcome ? new Date().toISOString() : null,
             next_action: nextAction || null,
             next_date: nextDateTime,
             counselor_name_snapshot: counselorName,
@@ -340,6 +362,8 @@ export function ConsultationModal({
           counselor_id: counselorId,
           content: content || null,
           status,
+          outcome: status === "완료" && outcome ? outcome : null,
+          outcome_date: status === "완료" && outcome ? new Date().toISOString() : null,
           next_action: nextAction || null,
           next_date: nextDateTime,
           student_name_snapshot: studentInfo!.studentName,
@@ -583,7 +607,11 @@ export function ConsultationModal({
             
             <div className="space-y-2">
               <Label htmlFor="status">상태</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as ConsultationStatus)}>
+              <Select value={status} onValueChange={(v) => {
+                setStatus(v as ConsultationStatus);
+                // 상태가 완료가 아니면 outcome 초기화
+                if (v !== "완료") setOutcome("");
+              }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -595,6 +623,27 @@ export function ConsultationModal({
               </Select>
             </div>
           </div>
+
+          {/* 상담 결과 - 상태가 "완료"일 때만 표시 */}
+          {status === "완료" && (
+            <div className="space-y-2">
+              <Label htmlFor="outcome" className="flex items-center gap-1">
+                상담 결과 <span className="text-red-500">*</span>
+              </Label>
+              <Select value={outcome} onValueChange={(v) => setOutcome(v as ConsultationOutcome)}>
+                <SelectTrigger className={!outcome ? "border-red-300" : ""}>
+                  <SelectValue placeholder="상담 결과를 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(OUTCOME_LABELS) as [ConsultationOutcome, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           
           {/* Row 4: Content */}
           <div className="space-y-2">
