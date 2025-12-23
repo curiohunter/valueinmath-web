@@ -33,6 +33,19 @@ import { createClient } from "@/lib/supabase/client"
 // 상담 모달 import - 나중에 실제 파일로 교체
 import { ConsultationModal } from "@/components/consultations/ConsultationModal"
 
+// 퇴원 사유 목록
+const LEFT_REASON_OPTIONS = [
+  { value: "졸업", label: "졸업" },
+  { value: "성적불만", label: "성적불만" },
+  { value: "선생님불만", label: "선생님불만" },
+  { value: "시간불일치", label: "시간불일치" },
+  { value: "타학원이동", label: "타학원이동" },
+  { value: "이사", label: "이사" },
+  { value: "건강문제", label: "건강문제" },
+  { value: "휴식", label: "휴식" },
+  { value: "기타", label: "기타" },
+] as const
+
 // 기본 폼 타입 정의
 interface FormValues {
   name: string
@@ -50,6 +63,8 @@ interface FormValues {
   end_date: Date | null
   first_contact_date: Date | null
   notes: string | null
+  left_reason: string | null
+  left_reason_detail: string | null
 }
 
 
@@ -102,6 +117,8 @@ export function StudentFormModal({
       end_date: null,
       first_contact_date: getKoreanToday(), // 오늘 날짜를 기본값으로
       notes: "",
+      left_reason: null,
+      left_reason_detail: null,
     },
   })
 
@@ -115,6 +132,14 @@ export function StudentFormModal({
         const firstContactDate = student.first_contact_date ? new Date(student.first_contact_date) : null
 
         // 폼 값 설정
+        // left_reason 파싱 (기타: 상세내용 형식 처리)
+        let leftReason = student.left_reason || null
+        let leftReasonDetail: string | null = null
+        if (leftReason && leftReason.startsWith("기타:")) {
+          leftReasonDetail = leftReason.replace("기타:", "").trim()
+          leftReason = "기타"
+        }
+
         form.reset({
           name: student.name,
           student_phone: student.student_phone,
@@ -131,6 +156,8 @@ export function StudentFormModal({
           end_date: endDate,
           first_contact_date: firstContactDate,
           notes: student.notes,
+          left_reason: leftReason,
+          left_reason_detail: leftReasonDetail,
         })
         setEndDateError(null)
         setSavedStudentId(student.id)
@@ -157,6 +184,8 @@ export function StudentFormModal({
         end_date: null,
         first_contact_date: getKoreanToday(),
         notes: "",
+        left_reason: null,
+        left_reason_detail: null,
       })
       setEndDateError(null)
     }
@@ -246,6 +275,16 @@ export function StudentFormModal({
 
     setIsSubmitting(true)
     try {
+      // 퇴원 사유 처리 (기타인 경우 상세 내용 합침)
+      let leftReasonValue: string | null = null
+      if (values.status === "퇴원" && values.left_reason) {
+        if (values.left_reason === "기타" && values.left_reason_detail) {
+          leftReasonValue = `기타: ${values.left_reason_detail}`
+        } else {
+          leftReasonValue = values.left_reason
+        }
+      }
+
       const baseFormattedValues = {
         name: values.name,
         student_phone: values.student_phone || null,
@@ -262,6 +301,8 @@ export function StudentFormModal({
         end_date: values.end_date ? getKoreanDateString(values.end_date) : null,
         first_contact_date: values.first_contact_date ? getKoreanDateString(values.first_contact_date) : null,
         notes: values.notes || null,
+        left_reason: leftReasonValue,
+        left_at: values.status === "퇴원" && values.end_date ? getKoreanDateString(values.end_date) : null,
       }
 
       if (student) {
@@ -306,8 +347,16 @@ export function StudentFormModal({
       // Step 2로 이동
       setCurrentStep(2)
     } catch (error: any) {
-      const errorMessage = error?.message || error?.error || "알 수 없는 오류가 발생했습니다"
-      toast.error(`학생 정보 저장 실패: ${errorMessage}`)
+      const rawMessage = error?.message || error?.error || ""
+
+      // 중복 에러 처리
+      if (rawMessage.includes("students_name_parent_phone_unique") ||
+          rawMessage.includes("duplicate key")) {
+        toast.error("이미 동일한 이름과 학부모 연락처로 등록된 학생이 있습니다.")
+      } else {
+        const errorMessage = rawMessage || "알 수 없는 오류가 발생했습니다"
+        toast.error(`학생 정보 저장 실패: ${errorMessage}`)
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -633,6 +682,56 @@ export function StudentFormModal({
                         </FormItem>
                       )}
                     />
+
+                    {/* 퇴원 사유 (상태가 퇴원일 때만 표시) */}
+                    {status === "퇴원" && (
+                      <div className="space-y-3 p-4 rounded-lg border border-red-200 bg-red-50">
+                        <h4 className="text-sm font-medium text-red-800">퇴원 사유</h4>
+                        <FormField
+                          control={form.control}
+                          name="left_reason"
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select onValueChange={field.onChange} value={field.value || undefined}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="퇴원 사유 선택" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {LEFT_REASON_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* 기타 선택 시 상세 입력 */}
+                        {form.watch("left_reason") === "기타" && (
+                          <FormField
+                            control={form.control}
+                            name="left_reason_detail"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input
+                                    placeholder="상세 사유를 입력하세요"
+                                    {...field}
+                                    value={field.value || ""}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* 날짜 정보 */}
