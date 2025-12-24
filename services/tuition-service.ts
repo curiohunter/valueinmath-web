@@ -263,6 +263,11 @@ export async function saveTuitionFee(
         period_end_date: data.period_end_date || null,
         student_name_snapshot: studentData?.name || null,
         class_name_snapshot: classData?.name || null,
+        // 할인 관련 필드
+        base_amount: data.base_amount || null,
+        total_discount: data.total_discount || 0,
+        discount_details: data.discount_details || [],
+        final_amount: data.final_amount || null,
       }, {
         onConflict: "class_id,student_id,year,month,class_type"
       })
@@ -327,6 +332,11 @@ export async function saveTuitionFees(
       period_end_date: data.period_end_date || null,
       student_name_snapshot: studentNameMap.get(data.student_id) || null,
       class_name_snapshot: data.class_id ? classNameMap.get(data.class_id) || null : null,
+      // 할인 관련 필드
+      base_amount: data.base_amount || null,
+      total_discount: data.total_discount || 0,
+      discount_details: data.discount_details || [],
+      final_amount: data.final_amount || null,
     }))
     
     // UNIQUE 제약조건이 제거되었으므로 insert 사용

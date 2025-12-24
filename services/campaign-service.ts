@@ -461,10 +461,10 @@ export async function applyRewardToTuition(
     return { success: false, error: "이미 적용된 혜택입니다" }
   }
 
-  // 2. 학원비 정보 조회
+  // 2. 학원비 정보 조회 (note, base_amount, total_discount 포함)
   const { data: tuitionFee, error: tError } = await supabase
     .from("tuition_fees")
-    .select("discount_details, amount")
+    .select("discount_details, amount, base_amount, total_discount, note")
     .eq("id", tuitionFeeId)
     .single()
 
@@ -474,17 +474,24 @@ export async function applyRewardToTuition(
 
   // 3. 할인 금액 계산 (퍼센트 할인 지원)
   const amountType = participant.reward_amount_type || "fixed"
+  // 기존 base_amount가 있으면 그것을 기준으로, 없으면 현재 amount 기준
+  const baseAmount = tuitionFee.base_amount || tuitionFee.amount
   let discountAmount: number
 
   if (amountType === "percent") {
-    // 퍼센트 할인: 현재 학원비 * (할인율 / 100)
-    discountAmount = Math.round(tuitionFee.amount * (participant.reward_amount / 100))
+    // 퍼센트 할인: base_amount 기준
+    discountAmount = Math.round(baseAmount * (participant.reward_amount / 100))
   } else {
     // 고정 금액 할인
     discountAmount = participant.reward_amount
   }
 
   // 4. discount_details에 추가
+  const eventTitle = (participant.campaign as any)?.title || "이벤트"
+  const discountDescription = amountType === "percent"
+    ? `${eventTitle} (${participant.reward_amount}%)`
+    : eventTitle
+
   const currentDetails: DiscountDetail[] = tuitionFee.discount_details || []
   const newDiscount: DiscountDetail = {
     type: "event",
@@ -492,15 +499,30 @@ export async function applyRewardToTuition(
     amount_type: amountType,
     campaign_id: participant.campaign_id,
     participant_id: participantId,
-    description: amountType === "percent"
-      ? `${(participant.campaign as any)?.title || "이벤트"} (${participant.reward_amount}%)`
-      : (participant.campaign as any)?.title || "이벤트 할인",
+    description: discountDescription,
   }
 
+  // 5. 업데이트할 값 계산
+  const newTotalDiscount = (tuitionFee.total_discount || 0) + discountAmount
+  const newFinalAmount = baseAmount - newTotalDiscount
+
+  // 6. note 업데이트 (할인 정보 추가)
+  const discountText = amountType === "percent"
+    ? `${participant.reward_amount}% (${discountAmount.toLocaleString()}원)`
+    : `${discountAmount.toLocaleString()}원`
+  const notePrefix = tuitionFee.note ? `${tuitionFee.note} / ` : ""
+  const newNote = `${notePrefix}${eventTitle} ${discountText} 적용`
+
+  // 7. DB 업데이트
   const { error: updateError } = await supabase
     .from("tuition_fees")
     .update({
       discount_details: [...currentDetails, newDiscount],
+      base_amount: baseAmount,
+      total_discount: newTotalDiscount,
+      amount: newFinalAmount,
+      final_amount: newFinalAmount,
+      note: newNote,
     })
     .eq("id", tuitionFeeId)
 
@@ -509,7 +531,7 @@ export async function applyRewardToTuition(
     return { success: false, error: updateError.message }
   }
 
-  // 4. 참여자 상태 업데이트
+  // 8. 참여자 상태 업데이트
   const { error: statusError } = await supabase
     .from("campaign_participants")
     .update({
@@ -680,10 +702,10 @@ export async function removeDiscountFromTuition(
   tuitionFeeId: string,
   participantId: string
 ): Promise<{ success: boolean; error?: string }> {
-  // 1. 학원비 조회
+  // 1. 학원비 조회 (note, amount, total_discount도 포함)
   const { data: tuitionFee, error: tError } = await supabase
     .from("tuition_fees")
-    .select("discount_details")
+    .select("discount_details, note, amount, base_amount, total_discount")
     .eq("id", tuitionFeeId)
     .single()
 
@@ -691,33 +713,106 @@ export async function removeDiscountFromTuition(
     return { success: false, error: "학원비를 찾을 수 없습니다" }
   }
 
-  // 2. discount_details에서 해당 할인 제거
+  // 2. discount_details에서 해당 할인 찾기 및 제거
   const currentDetails: DiscountDetail[] = tuitionFee.discount_details || []
-  const updatedDetails = currentDetails.filter(
-    (d) => d.participant_id !== participantId
+  const removedDiscount = currentDetails.find(
+    (d) => d.participant_id === participantId || d.campaign_id === participantId
   )
 
+  if (!removedDiscount) {
+    return { success: false, error: "해당 할인을 찾을 수 없습니다" }
+  }
+
+  const updatedDetails = currentDetails.filter(
+    (d) => d.participant_id !== participantId && d.campaign_id !== participantId
+  )
+
+  // 3. 금액 복원 계산
+  const discountAmount = removedDiscount.amount || 0
+  const newAmount = (tuitionFee.amount || 0) + discountAmount
+  const newTotalDiscount = Math.max(0, (tuitionFee.total_discount || 0) - discountAmount)
+
+  // 4. note에서 할인 정보만 정확히 제거 (다른 메모는 유지)
+  let newNote = tuitionFee.note || ""
+  if (newNote) {
+    // 제거할 할인 정보 식별을 위한 키워드 준비
+    const discountDesc = removedDiscount.description || ""
+    // description에서 기본 제목 추출 (괄호 부분 제거)
+    // 예: "형제할인 (10%)" → "형제할인", "동시수강 과학 할인" → "동시수강 과학 할인"
+    const baseTitle = discountDesc.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    // 할인 금액 포맷 (쉼표 포함)
+    const amountFormatted = discountAmount.toLocaleString()
+
+    // 슬래시(/)만 구분자로 사용 (앞뒤 공백 유무 상관없이 처리)
+    // 예: "할인 적용 / 기타메모", "할인 적용/기타", "할인 적용 /기타" 모두 처리
+    const parts = newNote.split(/\s*\/\s*/)
+    const separator = ' / '
+
+    const filteredParts = parts.filter(part => {
+      const trimmedPart = part.trim()
+
+      // 빈 문자열은 제거
+      if (!trimmedPart) return false
+
+      // "적용"으로 끝나는 할인 관련 메모인지 확인
+      if (trimmedPart.endsWith('적용')) {
+        // 방법 1: 기본 제목으로 매칭 (예: "동시수강 과학 할인 20,000원 적용")
+        if (baseTitle) {
+          const escapedTitle = baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          // 제목으로 시작하거나 제목을 포함하는 경우
+          if (new RegExp(`^${escapedTitle}`, 'i').test(trimmedPart) ||
+              trimmedPart.includes(baseTitle)) {
+            return false // 해당 할인 제거
+          }
+        }
+
+        // 방법 2: 할인 금액으로 매칭 (예: "xxx 20,000원 적용")
+        if (amountFormatted && trimmedPart.includes(amountFormatted + '원')) {
+          return false // 해당 할인 제거
+        }
+      }
+
+      // 매칭되지 않으면 유지
+      return true
+    })
+
+    newNote = filteredParts.join(separator).trim()
+
+    // 앞뒤 구분자 정리
+    newNote = newNote.replace(/^[\s\/]+|[\s\/]+$/g, '').trim()
+  }
+
+  // 5. DB 업데이트
   const { error: updateError } = await supabase
     .from("tuition_fees")
-    .update({ discount_details: updatedDetails })
+    .update({
+      discount_details: updatedDetails,
+      amount: newAmount,
+      total_discount: newTotalDiscount,
+      final_amount: newAmount,
+      note: newNote || null,
+    })
     .eq("id", tuitionFeeId)
 
   if (updateError) {
     return { success: false, error: updateError.message }
   }
 
-  // 3. 참여자 상태 되돌리기
-  const { error: statusError } = await supabase
-    .from("campaign_participants")
-    .update({
-      reward_status: "pending",
-      reward_applied_tuition_id: null,
-      reward_paid_at: null,
-    })
-    .eq("id", participantId)
+  // 6. 참여자 상태 되돌리기 (이벤트 할인인 경우에만)
+  if (removedDiscount?.participant_id) {
+    const { error: statusError } = await supabase
+      .from("campaign_participants")
+      .update({
+        reward_status: "pending",
+        reward_applied_tuition_id: null,
+        reward_paid_at: null,
+      })
+      .eq("id", participantId)
 
-  if (statusError) {
-    return { success: false, error: statusError.message }
+    if (statusError) {
+      console.warn("참여자 상태 업데이트 실패:", statusError.message)
+      // 참여자 업데이트 실패해도 할인 제거는 성공으로 처리
+    }
   }
 
   return { success: true }
@@ -783,7 +878,9 @@ export async function getApplicablePolicies(
     // 학생 정보가 없으면 일반 정책만 반환
     return {
       success: true,
-      data: policies.filter((p) => p.policy_target !== "sibling"),
+      data: policies.filter(
+        (p) => p.policy_target !== "sibling" && p.policy_target !== "dual_subject"
+      ),
     }
   }
 
@@ -799,15 +896,135 @@ export async function getApplicablePolicies(
     hasSibling = (count || 0) >= 2
   }
 
-  // 4. 적용 가능한 정책 필터링
+  // 4. 동시수강 할인 적용 가능 여부 확인 (수학 + 과학 수강 시)
+  let hasDualSubject = false
+  const { data: enrolledClasses } = await supabase
+    .from("class_students")
+    .select("class:classes(name, subject)")
+    .eq("student_id", studentId)
+
+  if (enrolledClasses && enrolledClasses.length > 0) {
+    const subjects = enrolledClasses
+      .map((ec) => {
+        const classData = ec.class as unknown as { name: string; subject: string } | null
+        return classData?.subject || ""
+      })
+      .filter(Boolean)
+
+    // 수학 관련 과목: "수학", "수학특강"
+    const hasMath = subjects.some((subject) => subject.includes("수학"))
+    // 과학 관련 과목: "과학", "과학특강"
+    const hasScience = subjects.some((subject) => subject.includes("과학"))
+    hasDualSubject = hasMath && hasScience
+  }
+
+  // 5. 적용 가능한 정책 필터링
   const applicablePolicies = policies.filter((policy) => {
     if (policy.policy_target === "sibling") {
       return hasSibling
+    }
+    if (policy.policy_target === "dual_subject") {
+      return hasDualSubject
     }
     return true // 다른 정책은 항상 적용 가능
   })
 
   return { success: true, data: applicablePolicies }
+}
+
+// 여러 학생에 대해 적용 가능한 정책을 한번에 조회 (배치 버전 - 성능 최적화)
+export async function getApplicablePoliciesBatch(
+  supabase: SupabaseClient,
+  studentIds: string[]
+): Promise<{ success: boolean; data?: Record<string, Campaign[]>; error?: string }> {
+  if (studentIds.length === 0) {
+    return { success: true, data: {} }
+  }
+
+  // 1. 활성 정책 조회 (한 번만)
+  const { data: policies, error: pError } = await supabase
+    .from("marketing_campaigns")
+    .select("*")
+    .eq("campaign_type", "policy")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+
+  if (pError) {
+    console.error("[CampaignService] getApplicablePoliciesBatch error:", pError)
+    return { success: false, error: pError.message }
+  }
+
+  if (!policies || policies.length === 0) {
+    // 정책이 없으면 모든 학생에게 빈 배열
+    const emptyResult: Record<string, Campaign[]> = {}
+    studentIds.forEach(id => { emptyResult[id] = [] })
+    return { success: true, data: emptyResult }
+  }
+
+  // 2. 모든 학생 정보 한번에 조회
+  const { data: students } = await supabase
+    .from("students")
+    .select("id, parent_phone")
+    .in("id", studentIds)
+
+  const studentMap = new Map<string, string | null>()
+  students?.forEach(s => studentMap.set(s.id, s.parent_phone))
+
+  // 3. 형제 여부 판단을 위해 parent_phone별 재원 학생 수 조회
+  const parentPhones = [...new Set(students?.map(s => s.parent_phone).filter(Boolean) || [])]
+  const siblingCounts = new Map<string, number>()
+
+  if (parentPhones.length > 0) {
+    const { data: siblingData } = await supabase
+      .from("students")
+      .select("parent_phone")
+      .in("parent_phone", parentPhones)
+      .eq("status", "재원")
+
+    siblingData?.forEach(s => {
+      if (s.parent_phone) {
+        siblingCounts.set(s.parent_phone, (siblingCounts.get(s.parent_phone) || 0) + 1)
+      }
+    })
+  }
+
+  // 4. 모든 학생의 수강 과목 한번에 조회
+  const { data: allEnrollments } = await supabase
+    .from("class_students")
+    .select("student_id, class:classes(subject)")
+    .in("student_id", studentIds)
+
+  const studentSubjects = new Map<string, Set<string>>()
+  allEnrollments?.forEach(e => {
+    const subject = (e.class as any)?.subject || ""
+    if (subject) {
+      if (!studentSubjects.has(e.student_id)) {
+        studentSubjects.set(e.student_id, new Set())
+      }
+      studentSubjects.get(e.student_id)!.add(subject)
+    }
+  })
+
+  // 5. 각 학생별로 적용 가능한 정책 필터링
+  const result: Record<string, Campaign[]> = {}
+
+  for (const studentId of studentIds) {
+    const parentPhone = studentMap.get(studentId)
+    const hasSibling = parentPhone ? (siblingCounts.get(parentPhone) || 0) >= 2 : false
+
+    const subjects = studentSubjects.get(studentId) || new Set()
+    const hasMath = [...subjects].some(s => s.includes("수학"))
+    const hasScience = [...subjects].some(s => s.includes("과학"))
+    const hasDualSubject = hasMath && hasScience
+
+    result[studentId] = policies.filter(policy => {
+      if (policy.policy_target === "sibling") return hasSibling
+      if (policy.policy_target === "dual_subject") return hasDualSubject
+      return true
+    })
+  }
+
+  return { success: true, data: result }
 }
 
 // 정책을 학원비에 적용 (로컬 discount_details용 - 저장 전 UI 업데이트)
@@ -926,6 +1143,101 @@ export async function deletePolicy(
   if (error) {
     console.error("[CampaignService] deletePolicy error:", error)
     return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}
+
+// 정책을 기존 학원비에 적용 (이력 페이지용 - DB 직접 업데이트)
+export async function applyPolicyToTuition(
+  supabase: SupabaseClient,
+  policyId: string,
+  tuitionFeeId: string
+): Promise<{ success: boolean; error?: string }> {
+  // 1. 정책 정보 조회
+  const { data: policy, error: pError } = await supabase
+    .from("marketing_campaigns")
+    .select("*")
+    .eq("id", policyId)
+    .eq("campaign_type", "policy")
+    .single()
+
+  if (pError || !policy) {
+    return { success: false, error: "정책을 찾을 수 없습니다" }
+  }
+
+  // 2. 학원비 정보 조회 (note 포함)
+  const { data: tuitionFee, error: tError } = await supabase
+    .from("tuition_fees")
+    .select("discount_details, amount, base_amount, total_discount, note")
+    .eq("id", tuitionFeeId)
+    .single()
+
+  if (tError || !tuitionFee) {
+    return { success: false, error: "학원비를 찾을 수 없습니다" }
+  }
+
+  // 3. 이미 적용된 정책인지 확인
+  const currentDetails: DiscountDetail[] = tuitionFee.discount_details || []
+  const alreadyApplied = currentDetails.some((d) => d.campaign_id === policyId)
+
+  if (alreadyApplied) {
+    return { success: false, error: "이미 적용된 할인 정책입니다" }
+  }
+
+  // 4. 할인 금액 계산
+  const amountType = policy.reward_amount_type || "fixed"
+  // 기존 base_amount가 있으면 그것을 기준으로, 없으면 현재 amount 기준
+  const baseAmount = tuitionFee.base_amount || tuitionFee.amount
+  let discountAmount: number
+
+  if (amountType === "percent") {
+    discountAmount = Math.round(baseAmount * (policy.reward_amount / 100))
+  } else {
+    discountAmount = policy.reward_amount
+  }
+
+  // 5. 새 discount_detail 생성
+  const policyTitle = policy.title || "할인정책"
+  const discountDescription = amountType === "percent"
+    ? `${policyTitle} (${policy.reward_amount}%)`
+    : policyTitle
+
+  const newDiscount: DiscountDetail = {
+    type: "policy",
+    amount: discountAmount,
+    amount_type: amountType,
+    campaign_id: policyId,
+    description: discountDescription,
+  }
+
+  // 6. 업데이트할 값 계산
+  const newTotalDiscount = (tuitionFee.total_discount || 0) + discountAmount
+  const newFinalAmount = baseAmount - newTotalDiscount
+
+  // 7. note 업데이트 (할인 정보 추가)
+  const discountText = amountType === "percent"
+    ? `${policy.reward_amount}% (${discountAmount.toLocaleString()}원)`
+    : `${discountAmount.toLocaleString()}원`
+  const notePrefix = tuitionFee.note ? `${tuitionFee.note} / ` : ""
+  const newNote = `${notePrefix}${policyTitle} ${discountText} 적용`
+
+  // 8. DB 업데이트
+  const { error: updateError } = await supabase
+    .from("tuition_fees")
+    .update({
+      discount_details: [...currentDetails, newDiscount],
+      base_amount: baseAmount,
+      total_discount: newTotalDiscount,
+      amount: newFinalAmount,
+      final_amount: newFinalAmount,
+      note: newNote,
+    })
+    .eq("id", tuitionFeeId)
+
+  if (updateError) {
+    console.error("[CampaignService] applyPolicyToTuition update error:", updateError)
+    return { success: false, error: updateError.message }
   }
 
   return { success: true }

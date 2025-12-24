@@ -2,23 +2,43 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/auth/server'
 import OpenAI from 'openai'
 import { getModelPricing, calculateCost, getLLMConfig } from '@/lib/llm-client'
+import { isFunnelConsultationType, isChurnConsultationType } from '@/services/consultation-ai-service'
+import { recordUsage } from '@/lib/ai-rate-limiter'
 
 // 환경변수에서 모델 설정 가져오기 (gpt-4o-mini 기본값)
 const getModel = () => getLLMConfig().model
-const ALLOWED_HURDLES = ['schedule_conflict', 'competitor_comparison', 'student_refusal', 'distance', 'timing_defer', 'price', 'none'] as const
+
+// 퍼널용 허용 값
+const ALLOWED_FUNNEL_HURDLES = ['schedule_conflict', 'competitor_comparison', 'student_refusal', 'distance', 'timing_defer', 'price', 'none'] as const
 const ALLOWED_READINESS = ['high', 'medium', 'low'] as const
 const ALLOWED_DECISION_MAKERS = ['parent', 'student', 'both'] as const
+
+// 재원생용 허용 값
+const ALLOWED_CHURN_HURDLES = ['emotional_distress', 'peer_relationship', 'curriculum_dissatisfaction', 'lack_of_attention', 'academic_stagnation', 'competitor_comparison', 'schedule_conflict', 'none'] as const
+const ALLOWED_CHURN_RISKS = ['critical', 'high', 'medium', 'low', 'none'] as const
+
+// 공통
 const ALLOWED_SENTIMENTS = ['very_positive', 'positive', 'neutral', 'negative'] as const
 
-type HurdleType = typeof ALLOWED_HURDLES[number]
+type FunnelHurdleType = typeof ALLOWED_FUNNEL_HURDLES[number]
+type ChurnHurdleType = typeof ALLOWED_CHURN_HURDLES[number]
 type ReadinessType = typeof ALLOWED_READINESS[number]
 type DecisionMakerType = typeof ALLOWED_DECISION_MAKERS[number]
+type ChurnRiskType = typeof ALLOWED_CHURN_RISKS[number]
 type SentimentType = typeof ALLOWED_SENTIMENTS[number]
 
-interface AnalysisResult {
-  hurdle: HurdleType
+// 퍼널 분석 결과
+interface FunnelAnalysisResult {
+  hurdle: FunnelHurdleType
   readiness: ReadinessType
   decision_maker: DecisionMakerType
+  sentiment: SentimentType
+}
+
+// 재원생 이탈 분석 결과
+interface ChurnAnalysisResult {
+  hurdle: ChurnHurdleType
+  churn_risk: ChurnRiskType
   sentiment: SentimentType
 }
 
@@ -60,7 +80,41 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.OPENAI_API_KEY,
     })
 
-    const systemPrompt = `당신은 학원 상담 내용을 분석하는 전문가입니다.
+    // 상담 유형에 따라 다른 프롬프트 사용
+    const isChurnType = isChurnConsultationType(consultationType || '')
+
+    // 재원생용 프롬프트 (정기상담, 입학후상담, 퇴원상담)
+    const churnSystemPrompt = `당신은 학원 재원생 상담 내용을 분석하여 이탈 위험을 판단하는 전문가입니다.
+상담 내용을 읽고 다음 3가지 카테고리로 분류해주세요:
+
+1. hurdle (우려사항): 학생/학부모가 느끼는 문제나 불만
+   - emotional_distress: 우울, 불안, 스트레스, 힘들다, 지침 등 심리적 어려움
+   - peer_relationship: 친구, 또래, 반 분위기, 위축, 관계 문제
+   - curriculum_dissatisfaction: 진도 느림/빠름, 수업 방식 불만, 경쟁 원함
+   - lack_of_attention: 선생님 관심 부족, 케어 부족, 다른 학생만 봐줌
+   - academic_stagnation: 성적 안오름, 실력 정체, 점수가 안나옴
+   - competitor_comparison: 타학원 비교, 옮기고 싶다, 다른 학원
+   - schedule_conflict: 시간표 문제, 지각, 거리, 통학 어려움
+   - none: 특별한 우려사항 없음 (정상적인 학습 상담)
+
+2. churn_risk (이탈 위험도): 퇴원 가능성 판단
+   - critical: 퇴원 의사 명확, 타학원 언급, 그만두겠다, 심각한 심리 문제
+   - high: 강한 불만 표출, 문제 해결 요구, 이탈 가능성 높음
+   - medium: 경미한 불만, 모니터링 필요
+   - low: 양호, 특별한 이상 없음
+   - none: 매우 만족, 긍정적 피드백
+
+3. sentiment (상담 분위기): 전반적인 상담 분위기
+   - very_positive: 매우 만족, 감사 표현
+   - positive: 긍정적, 좋은 피드백
+   - neutral: 중립적, 정보 교환 위주
+   - negative: 불만족, 문제 제기, 부정적
+
+반드시 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
+예시: {"hurdle": "none", "churn_risk": "low", "sentiment": "positive"}`
+
+    // 퍼널용 프롬프트 (신규상담, 입테유도, 입테후상담, 등록유도)
+    const funnelSystemPrompt = `당신은 학원 상담 내용을 분석하는 전문가입니다.
 상담 내용을 읽고 다음 4가지 카테고리로 분류해주세요:
 
 1. hurdle (장애요인): 등록/계속을 방해하는 요소
@@ -91,6 +145,8 @@ export async function POST(request: NextRequest) {
 반드시 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
 예시: {"hurdle": "none", "readiness": "high", "decision_maker": "parent", "sentiment": "positive"}`
 
+    const systemPrompt = isChurnType ? churnSystemPrompt : funnelSystemPrompt
+
     const userPrompt = `상담 유형: ${consultationType || '일반상담'}
 학생: ${studentName || '미상'}
 
@@ -115,34 +171,66 @@ ${content}
     const tokensOutput = completion.usage?.completion_tokens || 0
     const responseText = completion.choices[0]?.message?.content?.trim() || '{}'
 
-    let analysis: AnalysisResult
     let parseSuccess = true
-    try {
-      analysis = JSON.parse(responseText)
-    } catch {
-      console.error('Failed to parse AI response:', responseText)
-      parseSuccess = false
-      analysis = { hurdle: 'none', readiness: 'medium', decision_maker: 'parent', sentiment: 'neutral' }
+    let validatedAnalysis: Record<string, string>
+
+    if (isChurnType) {
+      // 재원생용 분석 결과 처리
+      let analysis: ChurnAnalysisResult
+      try {
+        analysis = JSON.parse(responseText)
+      } catch {
+        console.error('Failed to parse AI response:', responseText)
+        parseSuccess = false
+        analysis = { hurdle: 'none', churn_risk: 'low', sentiment: 'neutral' }
+      }
+
+      // ENUM 값 검증
+      validatedAnalysis = {
+        hurdle: ALLOWED_CHURN_HURDLES.includes(analysis.hurdle as ChurnHurdleType) ? analysis.hurdle : 'none',
+        churn_risk: ALLOWED_CHURN_RISKS.includes(analysis.churn_risk as ChurnRiskType) ? analysis.churn_risk : 'low',
+        sentiment: ALLOWED_SENTIMENTS.includes(analysis.sentiment as SentimentType) ? analysis.sentiment : 'neutral',
+      }
+    } else {
+      // 퍼널용 분석 결과 처리
+      let analysis: FunnelAnalysisResult
+      try {
+        analysis = JSON.parse(responseText)
+      } catch {
+        console.error('Failed to parse AI response:', responseText)
+        parseSuccess = false
+        analysis = { hurdle: 'none', readiness: 'medium', decision_maker: 'parent', sentiment: 'neutral' }
+      }
+
+      // ENUM 값 검증
+      validatedAnalysis = {
+        hurdle: ALLOWED_FUNNEL_HURDLES.includes(analysis.hurdle as FunnelHurdleType) ? analysis.hurdle : 'none',
+        readiness: ALLOWED_READINESS.includes(analysis.readiness as ReadinessType) ? analysis.readiness : 'medium',
+        decision_maker: ALLOWED_DECISION_MAKERS.includes(analysis.decision_maker as DecisionMakerType) ? analysis.decision_maker : 'parent',
+        sentiment: ALLOWED_SENTIMENTS.includes(analysis.sentiment as SentimentType) ? analysis.sentiment : 'neutral',
+      }
     }
 
-    // ENUM 값 검증
-    const validatedAnalysis = {
-      hurdle: ALLOWED_HURDLES.includes(analysis.hurdle as HurdleType) ? analysis.hurdle : 'none',
-      readiness: ALLOWED_READINESS.includes(analysis.readiness as ReadinessType) ? analysis.readiness : 'medium',
-      decision_maker: ALLOWED_DECISION_MAKERS.includes(analysis.decision_maker as DecisionMakerType) ? analysis.decision_maker : 'parent',
-      sentiment: ALLOWED_SENTIMENTS.includes(analysis.sentiment as SentimentType) ? analysis.sentiment : 'neutral',
+    // DB 업데이트 데이터 구성
+    const updateData: Record<string, unknown> = {
+      ai_hurdle: validatedAnalysis.hurdle,
+      ai_sentiment: validatedAnalysis.sentiment,
+      ai_analyzed_at: new Date().toISOString(),
+    }
+
+    if (isChurnType) {
+      // 재원생용: churn_risk 추가
+      updateData.ai_churn_risk = validatedAnalysis.churn_risk
+    } else {
+      // 퍼널용: readiness, decision_maker 추가
+      updateData.ai_readiness = validatedAnalysis.readiness
+      updateData.ai_decision_maker = validatedAnalysis.decision_maker
     }
 
     // DB 업데이트
     const { error: updateError } = await supabase
       .from('consultations')
-      .update({
-        ai_hurdle: validatedAnalysis.hurdle,
-        ai_readiness: validatedAnalysis.readiness,
-        ai_decision_maker: validatedAnalysis.decision_maker,
-        ai_sentiment: validatedAnalysis.sentiment,
-        ai_analyzed_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', consultationId)
 
     if (updateError) {
@@ -177,6 +265,11 @@ ${content}
     }).then(({ error }) => {
       if (error) console.error('Failed to log AI usage:', error)
     })
+
+    // Rate Limiter에 사용량 기록 (사용량 관리 페이지 연동)
+    if (employeeId) {
+      recordUsage(supabase, { userId: employeeId, costUsd: cost }).catch(console.error)
+    }
 
     if (updateError) {
       return NextResponse.json({ error: 'Failed to update consultation' }, { status: 500 })

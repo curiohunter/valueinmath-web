@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
-import { analyzeConsultation, isAnalyzableConsultationType } from "@/services/consultation-ai-service";
+import { analyzeConsultation, isAnalyzableConsultationType, isFunnelConsultationType } from "@/services/consultation-ai-service";
 // marketing_activities 테이블 삭제됨 - marketing_campaigns로 대체
 // B2B SaaS: 퍼널 이벤트는 DB 트리거에서 자동 기록됨 (trg_funnel_consultation)
 import type {
@@ -207,8 +207,8 @@ export function ConsultationModal({
       return;
     }
 
-    // 상태가 "완료"일 때 상담 결과 필수
-    if (status === "완료" && !outcome) {
+    // 상태가 "완료"일 때 상담 결과 필수 (퍼널 상담만)
+    if (status === "완료" && !outcome && isFunnelConsultationType(consultationType)) {
       toast.error("상담 결과를 선택해주세요.");
       return;
     }
@@ -341,13 +341,13 @@ export function ConsultationModal({
 
         // B2B SaaS: 퍼널 이벤트는 DB 트리거(trg_funnel_consultation)에서 자동 기록됨
 
-        // AI 태깅 분석 (비동기 - fire and forget) - 퍼널 상담만
-        if (content && content.trim().length >= 10 && isAnalyzableConsultationType(consultationType)) {
+        // AI 태깅 분석 (비동기 - fire and forget) - 완료된 상담만
+        if (status === "완료" && content && content.trim().length >= 10 && isAnalyzableConsultationType(consultationType)) {
           analyzeConsultation(
             editingConsultation.id,
             content,
             consultationType,
-            studentInfo?.studentName
+            editingConsultation.student_name_snapshot || studentInfo?.studentName
           ).catch(console.error)
         }
 
@@ -432,8 +432,8 @@ export function ConsultationModal({
 
         // B2B SaaS: 퍼널 이벤트는 DB 트리거(trg_funnel_consultation)에서 자동 기록됨
 
-        // AI 태깅 분석 (비동기 - fire and forget) - 퍼널 상담만
-        if (newConsultation && content && content.trim().length >= 10 && isAnalyzableConsultationType(consultationType)) {
+        // AI 태깅 분석 (비동기 - fire and forget) - 완료된 상담만
+        if (newConsultation && status === "완료" && content && content.trim().length >= 10 && isAnalyzableConsultationType(consultationType)) {
           analyzeConsultation(
             newConsultation.id,
             content,
@@ -624,8 +624,8 @@ export function ConsultationModal({
             </div>
           </div>
 
-          {/* 상담 결과 - 상태가 "완료"일 때만 표시 */}
-          {status === "완료" && (
+          {/* 상담 결과 - 퍼널 상담이고 상태가 "완료"일 때만 표시 */}
+          {status === "완료" && isFunnelConsultationType(consultationType) && (
             <div className="space-y-2">
               <Label htmlFor="outcome" className="flex items-center gap-1">
                 상담 결과 <span className="text-red-500">*</span>

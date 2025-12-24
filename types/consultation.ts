@@ -15,10 +15,20 @@ export type ConsultationInsert = Database['public']['Tables']['consultations']['
 export type ConsultationUpdate = Database['public']['Tables']['consultations']['Update'];
 
 // AI 분석 태그 타입
-export type ConsultationHurdle = 'schedule_conflict' | 'competitor_comparison' | 'student_refusal' | 'distance' | 'timing_defer' | 'price' | 'none';
+export type ConsultationHurdle =
+  // 퍼널용 (신규상담, 입테유도, 입테후상담, 등록유도)
+  | 'schedule_conflict' | 'competitor_comparison' | 'student_refusal'
+  | 'distance' | 'timing_defer' | 'price' | 'none'
+  // 재원생용 (정기상담, 입학후상담, 퇴원상담)
+  | 'emotional_distress' | 'peer_relationship' | 'curriculum_dissatisfaction'
+  | 'lack_of_attention' | 'academic_stagnation';
+
 export type ConsultationReadiness = 'high' | 'medium' | 'low';
 export type ConsultationDecisionMaker = 'parent' | 'student' | 'both';
 export type ConsultationSentiment = 'very_positive' | 'positive' | 'neutral' | 'negative';
+
+// 이탈 위험도 (재원생용)
+export type ConsultationChurnRisk = 'critical' | 'high' | 'medium' | 'low' | 'none';
 
 // Extended consultation type with relationships
 export interface Consultation extends ConsultationRow {
@@ -31,6 +41,7 @@ export interface Consultation extends ConsultationRow {
   ai_readiness?: ConsultationReadiness | null;
   ai_decision_maker?: ConsultationDecisionMaker | null;
   ai_sentiment?: ConsultationSentiment | null;
+  ai_churn_risk?: ConsultationChurnRisk | null;
   ai_analyzed_at?: string | null;
 }
 

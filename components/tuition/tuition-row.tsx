@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Save, ExternalLink, Gift, Users, ChevronDown } from "lucide-react"
+import { Trash2, Calendar, Save, ExternalLink, Gift, Users, ChevronDown, Check, Tag } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { CLASS_TYPES, CLASS_TYPE_LABELS, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus } from "@/types/tuition"
+import { CLASS_TYPES, CLASS_TYPE_LABELS, PAYMENT_STATUS, type TuitionRow as TuitionRowType, type ClassType, type PaymentStatus, type AppliedDiscount } from "@/types/tuition"
 import { PaymentStatusBadge } from "@/components/payssam"
 import type { CampaignParticipant, Campaign } from "@/services/campaign-service"
 import {
@@ -47,6 +47,8 @@ interface TuitionRowProps {
   // 할인 정책 목록
   availablePolicies?: Campaign[]
   onApplyPolicy?: (policy: Campaign, discountAmount: number) => void
+  // 할인 취소 핸들러
+  onCancelDiscount?: (index: number, discountId: string) => void
 }
 
 export function TuitionRow({
@@ -67,7 +69,8 @@ export function TuitionRow({
   pendingEvents = [],
   onApplyEvent,
   availablePolicies = [],
-  onApplyPolicy
+  onApplyPolicy,
+  onCancelDiscount
 }: TuitionRowProps) {
   const router = useRouter()
 
@@ -126,7 +129,23 @@ export function TuitionRow({
 
   // 이벤트 할인 적용 핸들러
   const handleApplyEvent = (event: CampaignParticipant) => {
+    // 이력 모드에서는 API를 직접 호출 (로컬 상태 변경 없이)
+    if (isHistoryMode) {
+      // 이미 적용된 할인인지 확인
+      if (row.appliedDiscounts?.some(d => d.id === event.id)) {
+        return // 이미 적용됨
+      }
+      // 콜백 호출 (index, participantId 형태로)
+      onApplyEvent?.(index, event.id)
+      return
+    }
+
     if (!onChange || isReadOnly) return
+
+    // 이미 적용된 할인인지 확인
+    if (row.appliedDiscounts?.some(d => d.id === event.id)) {
+      return // 이미 적용됨
+    }
 
     // 할인 금액 계산
     let discountAmount: number
@@ -140,12 +159,29 @@ export function TuitionRow({
       discountAmount = event.reward_amount
     }
 
+    // 원본 금액 저장 (첫 할인 적용 시에만)
+    if (!row.originalAmount) {
+      onChange(index, 'originalAmount', row.amount)
+    }
+
     // 금액 차감
     const newAmount = Math.max(0, row.amount - discountAmount)
     onChange(index, 'amount', newAmount)
 
-    // 비고에 이벤트 정보 추가
+    // 적용된 할인 추적
     const eventTitle = (event.campaign as any)?.title || "이벤트"
+    const newDiscount: AppliedDiscount = {
+      id: event.id,
+      type: 'event',
+      title: eventTitle,
+      amount: discountAmount,
+      amountType: amountType as 'fixed' | 'percent',
+      rawValue: event.reward_amount
+    }
+    const currentDiscounts = row.appliedDiscounts || []
+    onChange(index, 'appliedDiscounts', [...currentDiscounts, newDiscount])
+
+    // 비고에 이벤트 정보 추가
     const discountText = amountType === "percent"
       ? `${event.reward_amount}% (${discountAmount.toLocaleString()}원)`
       : `${discountAmount.toLocaleString()}원`
@@ -158,7 +194,23 @@ export function TuitionRow({
 
   // 할인 정책 적용 핸들러
   const handleApplyPolicy = (policy: Campaign) => {
+    // 이력 모드에서는 API를 직접 호출 (로컬 상태 변경 없이)
+    if (isHistoryMode) {
+      // 이미 적용된 할인인지 확인
+      if (row.appliedDiscounts?.some(d => d.id === policy.id)) {
+        return // 이미 적용됨
+      }
+      // 콜백 호출 (index, policyId 형태로)
+      onApplyPolicy?.(index, policy.id)
+      return
+    }
+
     if (!onChange || isReadOnly) return
+
+    // 이미 적용된 할인인지 확인
+    if (row.appliedDiscounts?.some(d => d.id === policy.id)) {
+      return // 이미 적용됨
+    }
 
     // 할인 금액 계산
     let discountAmount: number
@@ -172,12 +224,29 @@ export function TuitionRow({
       discountAmount = policy.reward_amount
     }
 
+    // 원본 금액 저장 (첫 할인 적용 시에만)
+    if (!row.originalAmount) {
+      onChange(index, 'originalAmount', row.amount)
+    }
+
     // 금액 차감
     const newAmount = Math.max(0, row.amount - discountAmount)
     onChange(index, 'amount', newAmount)
 
-    // 비고에 정책 정보 추가
+    // 적용된 할인 추적
     const policyTitle = policy.title || "할인정책"
+    const newDiscount: AppliedDiscount = {
+      id: policy.id,
+      type: 'policy',
+      title: policyTitle,
+      amount: discountAmount,
+      amountType: amountType as 'fixed' | 'percent',
+      rawValue: policy.reward_amount
+    }
+    const currentDiscounts = row.appliedDiscounts || []
+    onChange(index, 'appliedDiscounts', [...currentDiscounts, newDiscount])
+
+    // 비고에 정책 정보 추가
     const discountText = amountType === "percent"
       ? `${policy.reward_amount}% (${discountAmount.toLocaleString()}원)`
       : `${discountAmount.toLocaleString()}원`
@@ -186,6 +255,46 @@ export function TuitionRow({
 
     // 콜백 호출 (상태 업데이트용)
     onApplyPolicy?.(policy, discountAmount)
+  }
+
+  // 할인 취소 핸들러
+  const handleCancelDiscount = (discountId: string) => {
+    // 이력 모드에서는 API를 직접 호출 (로컬 상태 변경 없이)
+    if (isHistoryMode) {
+      onCancelDiscount?.(index, discountId)
+      return
+    }
+
+    if (!onChange || isReadOnly) return
+
+    const discountToRemove = row.appliedDiscounts?.find(d => d.id === discountId)
+    if (!discountToRemove) return
+
+    // 금액 복원
+    const newAmount = row.amount + discountToRemove.amount
+    onChange(index, 'amount', newAmount)
+
+    // 적용된 할인에서 제거
+    const updatedDiscounts = row.appliedDiscounts?.filter(d => d.id !== discountId) || []
+    onChange(index, 'appliedDiscounts', updatedDiscounts)
+
+    // 비고에서 해당 할인 정보 제거
+    if (row.note) {
+      const discountText = discountToRemove.amountType === "percent"
+        ? `${discountToRemove.rawValue}% (${discountToRemove.amount.toLocaleString()}원)`
+        : `${discountToRemove.amount.toLocaleString()}원`
+      const pattern = new RegExp(`\\s*/\\s*${discountToRemove.title}\\s*${discountText}\\s*적용|${discountToRemove.title}\\s*${discountText}\\s*적용\\s*/\\s*|${discountToRemove.title}\\s*${discountText}\\s*적용`, 'g')
+      const newNote = row.note.replace(pattern, '').trim()
+      onChange(index, 'note', newNote)
+    }
+
+    // 모든 할인이 제거되면 원본 금액 필드 초기화
+    if (updatedDiscounts.length === 0) {
+      onChange(index, 'originalAmount', undefined)
+    }
+
+    // 콜백 호출
+    onCancelDiscount?.(index, discountId)
   }
 
   return (
@@ -217,37 +326,64 @@ export function TuitionRow({
       </td>
       
       {/* 학생명 */}
-      <td className="min-w-[100px] w-[12%] px-3 py-3">
-        <div className="flex items-center gap-1.5">
-          {isHistoryMode ? (
-            <button
-              onClick={handleNavigateToDetail}
-              className="font-medium text-slate-700 truncate hover:text-blue-600 hover:underline cursor-pointer transition-colors"
-              title={`${row.studentName} 상세 보기`}
-            >
-              {row.studentName}
-            </button>
-          ) : (
-            <span className="font-medium text-slate-700 truncate" title={row.studentName}>
-              {row.studentName}
-            </span>
-          )}
-          {/* 할인 적용 드롭다운 (이벤트 + 정책 통합) */}
-          {!isReadOnly && (pendingEvents.length > 0 || availablePolicies.length > 0) && (
+      <td className="min-w-[100px] w-[10%] px-3 py-3">
+        {isHistoryMode ? (
+          <button
+            onClick={handleNavigateToDetail}
+            className="font-medium text-slate-700 truncate hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+            title={`${row.studentName} 상세 보기`}
+          >
+            {row.studentName}
+          </button>
+        ) : (
+          <span className="font-medium text-slate-700 truncate" title={row.studentName}>
+            {row.studentName}
+          </span>
+        )}
+      </td>
+
+      {/* 할인 컬럼 */}
+      <td className="min-w-[100px] w-[10%] px-2 py-3">
+        {(() => {
+          const hasAvailableDiscounts = pendingEvents.length > 0 || availablePolicies.length > 0
+          const appliedCount = row.appliedDiscounts?.length || 0
+          const totalDiscount = row.appliedDiscounts?.reduce((sum, d) => sum + d.amount, 0) || 0
+
+          // 할인 가능한 것도 없고 적용된 것도 없으면 - 표시
+          if (!hasAvailableDiscounts && appliedCount === 0) {
+            return <span className="text-slate-400 text-sm">-</span>
+          }
+
+          return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                  disabled={isReadOnly}
+                  className={cn(
+                    "h-7 px-2 text-xs font-medium",
+                    appliedCount > 0
+                      ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                      : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200"
+                  )}
                 >
-                  <Gift className="w-3 h-3 mr-1" />
-                  할인 {pendingEvents.length + availablePolicies.length}
+                  {appliedCount > 0 ? (
+                    <>
+                      <Tag className="w-3 h-3 mr-1" />
+                      -{totalDiscount.toLocaleString()}원
+                    </>
+                  ) : (
+                    <>
+                      <Gift className="w-3 h-3 mr-1" />
+                      할인선택
+                    </>
+                  )}
                   <ChevronDown className="w-3 h-3 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
-                {/* 대기중 이벤트 */}
+              <DropdownMenuContent align="start" className="w-72">
+                {/* 이벤트 혜택 */}
                 {pendingEvents.length > 0 && (
                   <>
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
@@ -255,6 +391,7 @@ export function TuitionRow({
                     </DropdownMenuLabel>
                     {pendingEvents.map((event) => {
                       const campaign = event.campaign as any
+                      const isApplied = row.appliedDiscounts?.some(d => d.id === event.id)
                       const amountType = event.reward_amount_type || "fixed"
                       const displayAmount = amountType === "percent"
                         ? `${event.reward_amount}%`
@@ -263,20 +400,16 @@ export function TuitionRow({
                       return (
                         <DropdownMenuItem
                           key={event.id}
-                          onClick={() => handleApplyEvent(event)}
-                          className="flex flex-col items-start gap-1 cursor-pointer"
+                          onClick={() => isApplied ? handleCancelDiscount(event.id) : handleApplyEvent(event)}
+                          className="flex items-center justify-between cursor-pointer"
                         >
-                          <div className="font-medium text-sm">
-                            {campaign?.title || "이벤트"}
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">{campaign?.title || "이벤트"}</span>
+                            <span className="text-xs text-muted-foreground">
+                              할인: {displayAmount}
+                            </span>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            할인: {displayAmount}
-                            {amountType === "percent" && (
-                              <span className="ml-1">
-                                (≈ {Math.round(row.amount * (event.reward_amount / 100)).toLocaleString()}원)
-                              </span>
-                            )}
-                          </div>
+                          {isApplied && <Check className="w-4 h-4 text-green-600" />}
                         </DropdownMenuItem>
                       )
                     })}
@@ -290,6 +423,7 @@ export function TuitionRow({
                       📋 할인 정책
                     </DropdownMenuLabel>
                     {availablePolicies.map((policy) => {
+                      const isApplied = row.appliedDiscounts?.some(d => d.id === policy.id)
                       const amountType = policy.reward_amount_type || "fixed"
                       const displayAmount = amountType === "percent"
                         ? `${policy.reward_amount}%`
@@ -298,29 +432,48 @@ export function TuitionRow({
                       return (
                         <DropdownMenuItem
                           key={policy.id}
-                          onClick={() => handleApplyPolicy(policy)}
-                          className="flex flex-col items-start gap-1 cursor-pointer"
+                          onClick={() => isApplied ? handleCancelDiscount(policy.id) : handleApplyPolicy(policy)}
+                          className="flex items-center justify-between cursor-pointer"
                         >
-                          <div className="font-medium text-sm">
-                            {policy.title}
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">{policy.title}</span>
+                            <span className="text-xs text-muted-foreground">
+                              할인: {displayAmount}
+                            </span>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            할인: {displayAmount}
-                            {amountType === "percent" && (
-                              <span className="ml-1">
-                                (≈ {Math.round(row.amount * (policy.reward_amount / 100)).toLocaleString()}원)
-                              </span>
-                            )}
-                          </div>
+                          {isApplied && <Check className="w-4 h-4 text-green-600" />}
                         </DropdownMenuItem>
                       )
                     })}
                   </>
                 )}
+                {/* 적용된 할인이 있지만 더 이상 선택 가능한 할인이 없는 경우도 표시 */}
+                {appliedCount > 0 && pendingEvents.length === 0 && availablePolicies.length === 0 && (
+                  <>
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      ✅ 적용된 할인
+                    </DropdownMenuLabel>
+                    {row.appliedDiscounts?.map((discount) => (
+                      <DropdownMenuItem
+                        key={discount.id}
+                        onClick={() => handleCancelDiscount(discount.id)}
+                        className="flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm">{discount.title}</span>
+                          <span className="text-xs text-muted-foreground">
+                            -{discount.amount.toLocaleString()}원
+                          </span>
+                        </div>
+                        <Check className="w-4 h-4 text-green-600" />
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
-        </div>
+          )
+        })()}
       </td>
       
       {/* 연월 - 접힘 상태에 따라 표시 */}
