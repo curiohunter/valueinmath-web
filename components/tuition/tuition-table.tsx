@@ -1,12 +1,13 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown, FileSpreadsheet, ChevronsLeftRight, ChevronsRightLeft } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowDown, FileText, Trash2, RotateCcw, ChevronLeft, ChevronRight, Search, ChevronDown, FileSpreadsheet, ChevronsLeftRight, ChevronsRightLeft, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TuitionRow as TuitionTableRow } from "./tuition-row"
 import type { TuitionRow } from "@/types/tuition"
@@ -66,12 +67,14 @@ interface TuitionTableProps {
   // 할인 알림 정보
   pendingRewardsByStudent?: Record<string, any[]>  // studentId -> rewards[]
   siblingCandidates?: Record<string, string[]>  // studentId -> [siblingStudentIds]
-  // 이벤트 적용 콜백
-  onApplyEvent?: (participantId: string, discountAmount: number) => void
+  // 이벤트 적용 콜백 (creation mode: participantId와 금액, history mode: index와 participantId)
+  onApplyEvent?: (arg1: any, arg2: any) => void
   // 할인 정책 목록 (학생별로 적용 가능한 정책)
   policiesByStudent?: Record<string, any[]>  // studentId -> policies[]
-  // 정책 적용 콜백
-  onApplyPolicy?: (policy: any, discountAmount: number) => void
+  // 정책 적용 콜백 (creation mode: policy와 금액, history mode: index와 policyId)
+  onApplyPolicy?: (arg1: any, arg2: any) => void
+  // 할인 취소 콜백
+  onCancelDiscount?: (index: number, discountId: string) => void
 }
 
 export function TuitionTable({
@@ -121,7 +124,8 @@ export function TuitionTable({
   siblingCandidates = {},
   onApplyEvent,
   policiesByStudent = {},
-  onApplyPolicy
+  onApplyPolicy,
+  onCancelDiscount
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -129,6 +133,11 @@ export function TuitionTable({
   const [selectMenuOpen, setSelectMenuOpen] = useState(false)
   // 연월+기간 컬럼 접힘 상태 (기본: 접힘)
   const [isDateColumnsCollapsed, setIsDateColumnsCollapsed] = useState(true)
+  // 사용자 지정 기간 모드
+  const [isCustomRange, setIsCustomRange] = useState(false)
+  // 사용자 지정 기간용 임시 상태
+  const [customFrom, setCustomFrom] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
+  const [customTo, setCustomTo] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
 
   // 전체 필터된 데이터 건수 (페이지네이션 전)
   const filteredCount = totalFilteredCount ?? originalRows.length
@@ -153,50 +162,346 @@ export function TuitionTable({
             <h2 className="text-lg font-semibold text-gray-800">학원비 관리</h2>
           </div>
           {isHistoryMode ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="학생명, 반명, 비고로 검색..."
-                  value={searchTerm}
-                  onChange={(e) => onSearchChange?.(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div>
-                <Input
-                  type="month"
-                  value={dateRange?.from ? dateRange.from.substring(0, 7) : ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value) {
-                      onDateRangeChange?.({ ...dateRange!, from: value + "-01" });
-                    } else {
-                      onDateRangeChange?.({ ...dateRange!, from: "" });
-                    }
+            <div className="flex flex-col gap-3">
+              {/* 월 네비게이션 바 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 이전달 버튼 */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // 현재 선택된 월에서 1개월 전으로 이동
+                    const currentFrom = dateRange?.from ? new Date(dateRange.from) : new Date()
+                    const prevMonth = new Date(currentFrom.getFullYear(), currentFrom.getMonth() - 1, 1)
+                    const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate()
+                    const from = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`
+                    const to = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${lastDay}`
+                    onDateRangeChange?.({ from, to })
+                    setIsCustomRange(false)
                   }}
-                  placeholder="시작 연월"
-                  className="text-sm"
-                />
-              </div>
-              <div>
-                <Input
-                  type="month"
-                  value={dateRange?.to ? dateRange.to.substring(0, 7) : ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value) {
-                      const [year, month] = value.split('-').map(Number);
-                      const lastDay = new Date(year, month, 0).getDate();
-                      onDateRangeChange?.({ ...dateRange!, to: `${value}-${lastDay.toString().padStart(2, '0')}` });
-                    } else {
-                      onDateRangeChange?.({ ...dateRange!, to: "" });
-                    }
+                  className="h-9 px-3"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  전달
+                </Button>
+
+                {/* 현재 월 표시 + 클릭 시 월 선택 팝오버 */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-9 px-4 min-w-[140px] font-medium bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                    >
+                      <Calendar className="w-4 h-4 mr-2" />
+                      {dateRange?.from ? (() => {
+                        const fromYear = parseInt(dateRange.from.substring(0, 4))
+                        const fromMonth = parseInt(dateRange.from.substring(5, 7))
+                        const toYear = dateRange.to ? parseInt(dateRange.to.substring(0, 4)) : fromYear
+                        const toMonth = dateRange.to ? parseInt(dateRange.to.substring(5, 7)) : fromMonth
+
+                        // 같은 월이면 단일 월 표시
+                        if (fromYear === toYear && fromMonth === toMonth) {
+                          return `${fromYear}년 ${fromMonth}월`
+                        }
+                        // 다른 월이면 범위 표시
+                        return `${fromYear}.${fromMonth} ~ ${toYear}.${toMonth}`
+                      })() : "월 선택"}
+                      <ChevronDown className="w-4 h-4 ml-2" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-3" align="start">
+                    <div className="space-y-3">
+                      {/* 연도 선택 */}
+                      <div className="flex items-center justify-between">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const currentYear = dateRange?.from ? parseInt(dateRange.from.substring(0, 4)) : new Date().getFullYear()
+                            const currentMonth = dateRange?.from ? parseInt(dateRange.from.substring(5, 7)) : new Date().getMonth() + 1
+                            const newYear = currentYear - 1
+                            const lastDay = new Date(newYear, currentMonth, 0).getDate()
+                            onDateRangeChange?.({
+                              from: `${newYear}-${String(currentMonth).padStart(2, '0')}-01`,
+                              to: `${newYear}-${String(currentMonth).padStart(2, '0')}-${lastDay}`
+                            })
+                          }}
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <span className="font-semibold text-lg">
+                          {dateRange?.from ? dateRange.from.substring(0, 4) : new Date().getFullYear()}년
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const currentYear = dateRange?.from ? parseInt(dateRange.from.substring(0, 4)) : new Date().getFullYear()
+                            const currentMonth = dateRange?.from ? parseInt(dateRange.from.substring(5, 7)) : new Date().getMonth() + 1
+                            const newYear = currentYear + 1
+                            const lastDay = new Date(newYear, currentMonth, 0).getDate()
+                            onDateRangeChange?.({
+                              from: `${newYear}-${String(currentMonth).padStart(2, '0')}-01`,
+                              to: `${newYear}-${String(currentMonth).padStart(2, '0')}-${lastDay}`
+                            })
+                          }}
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* 월 그리드 (3x4) */}
+                      <div className="grid grid-cols-4 gap-1">
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
+                          const currentYear = dateRange?.from ? parseInt(dateRange.from.substring(0, 4)) : new Date().getFullYear()
+                          const selectedMonth = dateRange?.from ? parseInt(dateRange.from.substring(5, 7)) : 0
+                          const isSelected = selectedMonth === month
+                          const isCurrentMonth = new Date().getFullYear() === currentYear && new Date().getMonth() + 1 === month
+
+                          return (
+                            <Button
+                              key={month}
+                              variant={isSelected ? "default" : "ghost"}
+                              size="sm"
+                              className={cn(
+                                "h-9",
+                                isSelected && "bg-blue-600 text-white hover:bg-blue-700",
+                                isCurrentMonth && !isSelected && "border border-blue-300 text-blue-600"
+                              )}
+                              onClick={() => {
+                                const lastDay = new Date(currentYear, month, 0).getDate()
+                                onDateRangeChange?.({
+                                  from: `${currentYear}-${String(month).padStart(2, '0')}-01`,
+                                  to: `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
+                                })
+                                setIsCustomRange(false)
+                              }}
+                            >
+                              {month}월
+                            </Button>
+                          )
+                        })}
+                      </div>
+
+                      {/* 빠른 선택 프리셋 */}
+                      <div className="border-t pt-2 flex gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            const today = new Date()
+                            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                            onDateRangeChange?.({
+                              from: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`,
+                              to: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${lastDay}`
+                            })
+                            setIsCustomRange(false)
+                          }}
+                        >
+                          이번달
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            const today = new Date()
+                            const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                            const lastDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).getDate()
+                            onDateRangeChange?.({
+                              from: `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`,
+                              to: `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-${lastDay}`
+                            })
+                            setIsCustomRange(false)
+                          }}
+                        >
+                          지난달
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            const today = new Date()
+                            const threeMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, 1)
+                            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+                            onDateRangeChange?.({
+                              from: `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}-01`,
+                              to: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${lastDay}`
+                            })
+                            setIsCustomRange(true) // 기간 범위이므로 true
+                            setCustomFrom({ year: threeMonthsAgo.getFullYear(), month: threeMonthsAgo.getMonth() + 1 })
+                            setCustomTo({ year: today.getFullYear(), month: today.getMonth() + 1 })
+                          }}
+                        >
+                          최근 3개월
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* 다음달 버튼 */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // 현재 선택된 월에서 1개월 후로 이동
+                    const currentTo = dateRange?.to ? new Date(dateRange.to) : new Date()
+                    const nextMonth = new Date(currentTo.getFullYear(), currentTo.getMonth() + 1, 1)
+                    const lastDay = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()
+                    const from = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`
+                    const to = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-${lastDay}`
+                    onDateRangeChange?.({ from, to })
+                    setIsCustomRange(false)
                   }}
-                  placeholder="종료 연월"
-                  className="text-sm"
-                />
+                  className="h-9 px-3"
+                >
+                  다음달
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+
+                <span className="text-gray-300 mx-1">|</span>
+
+                {/* 사용자 지정 기간 버튼 */}
+                <Button
+                  variant={isCustomRange ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    if (!isCustomRange) {
+                      // 현재 dateRange로 초기화
+                      if (dateRange?.from) {
+                        setCustomFrom({
+                          year: parseInt(dateRange.from.substring(0, 4)),
+                          month: parseInt(dateRange.from.substring(5, 7))
+                        })
+                      }
+                      if (dateRange?.to) {
+                        setCustomTo({
+                          year: parseInt(dateRange.to.substring(0, 4)),
+                          month: parseInt(dateRange.to.substring(5, 7))
+                        })
+                      }
+                    }
+                    setIsCustomRange(!isCustomRange)
+                  }}
+                  className={cn(
+                    "h-9 px-3",
+                    isCustomRange && "bg-indigo-600 hover:bg-indigo-700"
+                  )}
+                >
+                  <ChevronsLeftRight className="w-4 h-4 mr-1" />
+                  기간 지정
+                </Button>
               </div>
+
+              {/* 사용자 지정 기간 선택 UI */}
+              {isCustomRange && (
+                <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <span className="text-sm text-gray-600 font-medium">기간:</span>
+
+                  {/* 시작 연월 */}
+                  <div className="flex items-center gap-1">
+                    <Select
+                      value={String(customFrom.year)}
+                      onValueChange={(year) => setCustomFrom(prev => ({ ...prev, year: parseInt(year) }))}
+                    >
+                      <SelectTrigger className="w-[85px] h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
+                          <SelectItem key={year} value={String(year)}>{year}년</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={String(customFrom.month)}
+                      onValueChange={(month) => setCustomFrom(prev => ({ ...prev, month: parseInt(month) }))}
+                    >
+                      <SelectTrigger className="w-[70px] h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                          <SelectItem key={month} value={String(month)}>{month}월</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <span className="text-gray-400">~</span>
+
+                  {/* 종료 연월 */}
+                  <div className="flex items-center gap-1">
+                    <Select
+                      value={String(customTo.year)}
+                      onValueChange={(year) => setCustomTo(prev => ({ ...prev, year: parseInt(year) }))}
+                    >
+                      <SelectTrigger className="w-[85px] h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
+                          <SelectItem key={year} value={String(year)}>{year}년</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={String(customTo.month)}
+                      onValueChange={(month) => setCustomTo(prev => ({ ...prev, month: parseInt(month) }))}
+                    >
+                      <SelectTrigger className="w-[70px] h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                          <SelectItem key={month} value={String(month)}>{month}월</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 적용 버튼 */}
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const fromLastDay = new Date(customFrom.year, customFrom.month, 0).getDate()
+                      const toLastDay = new Date(customTo.year, customTo.month, 0).getDate()
+                      onDateRangeChange?.({
+                        from: `${customFrom.year}-${String(customFrom.month).padStart(2, '0')}-01`,
+                        to: `${customTo.year}-${String(customTo.month).padStart(2, '0')}-${toLastDay}`
+                      })
+                    }}
+                    className="h-8 px-4 bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    적용
+                  </Button>
+
+                  {/* 닫기 버튼 */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsCustomRange(false)}
+                    className="h-8 px-2 text-gray-500"
+                  >
+                    ✕
+                  </Button>
+                </div>
+              )}
+
+              {/* 필터 행 */}
+              <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 items-center">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="학생명, 반명, 비고로 검색..."
+                    value={searchTerm}
+                    onChange={(e) => onSearchChange?.(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
               <div>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -436,6 +741,7 @@ export function TuitionTable({
                 </Button>
               </div>
             </div>
+            </div>
           ) : null}
           {(searchTerm || paymentStatusFilter !== "all" || (classTypeFilter && classTypeFilter !== "all")) && (
             <div className="mt-3">
@@ -537,6 +843,9 @@ export function TuitionTable({
                   </th>
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     학생명
+                  </th>
+                  <th className="px-2 py-4 text-left font-semibold text-slate-700">
+                    할인
                   </th>
                   {/* 연월+기간 접힘 상태일 때 */}
                   {isDateColumnsCollapsed ? (
@@ -652,6 +961,7 @@ export function TuitionTable({
                   <th className="px-3 py-4 text-left font-semibold text-slate-700">
                     <div className="flex items-center gap-2">
                       비고
+                      <span className="text-[10px] text-slate-400 font-normal">(구분: /)</span>
                       {!isReadOnly && (
                         <Button
                           size="sm"
@@ -704,12 +1014,13 @@ export function TuitionTable({
                       onApplyEvent={onApplyEvent}
                       availablePolicies={studentPolicies}
                       onApplyPolicy={onApplyPolicy}
+                      onCancelDiscount={onCancelDiscount}
                     />
                   )
                 })}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-6 py-16 text-center">
+                    <td colSpan={11} className="px-6 py-16 text-center">
                       <div className="text-slate-300 text-6xl mb-4">💰</div>
                       <div className="text-lg font-medium text-slate-500 mb-2">
                         학원비 데이터가 없습니다

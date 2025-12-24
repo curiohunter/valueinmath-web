@@ -12,7 +12,17 @@ import { Input } from "@/components/ui/input";
 import { TuitionTable } from "@/components/tuition/tuition-table";
 import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw, CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput } from "@/types/tuition";
+import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput, AppliedDiscount } from "@/types/tuition";
+import {
+  removeDiscountFromTuition,
+  applyPolicyToTuition,
+  applyRewardToTuition,
+  getApplicablePoliciesBatch,
+  getPendingRewards,
+  type DiscountDetail,
+  type Campaign,
+  type CampaignParticipant
+} from "@/services/campaign-service";
 import { exportTuitionToExcelWithPhone } from "@/lib/excel-export";
 import { SendInvoiceModal, PointBalance } from "@/components/payssam";
 
@@ -87,6 +97,10 @@ export default function TuitionHistoryPage() {
   // isCreatingInvoices는 1단계 워크플로우 통합으로 제거됨 (isSendingInvoices로 대체)
   const [isSendingInvoices, setIsSendingInvoices] = useState(false);
   const [isProcessingOfflinePayment, setIsProcessingOfflinePayment] = useState(false);
+
+  // 할인 정책 관련 상태
+  const [policiesByStudent, setPoliciesByStudent] = useState<Record<string, Campaign[]>>({});
+  const [pendingRewardsByStudent, setPendingRewardsByStudent] = useState<Record<string, CampaignParticipant[]>>({});
 
   // 반 이름 매핑 및 선생님 정보 fetch (초기 로드)
   useEffect(() => {
@@ -181,6 +195,34 @@ export default function TuitionHistoryPage() {
     setDateRange({ from: firstDay, to: lastDayStr });
   }, []);
 
+  // 할인 정책 및 대기 중인 이벤트 보상 fetch
+  async function fetchDiscountData(studentIds: string[]) {
+    try {
+      // 1. 학생별 적용 가능한 정책 조회
+      const policiesResult = await getApplicablePoliciesBatch(supabase, studentIds);
+      if (policiesResult.success && policiesResult.data) {
+        setPoliciesByStudent(policiesResult.data);
+      }
+
+      // 2. 대기 중인 이벤트 보상 조회 (pending 상태만)
+      const rewardsResult = await getPendingRewards(supabase);
+      if (rewardsResult.success && rewardsResult.data) {
+        // 학생 ID별로 그룹화
+        const rewardsByStudent: Record<string, CampaignParticipant[]> = {};
+        rewardsResult.data.forEach(reward => {
+          const studentId = reward.student_id;
+          if (!rewardsByStudent[studentId]) {
+            rewardsByStudent[studentId] = [];
+          }
+          rewardsByStudent[studentId].push(reward);
+        });
+        setPendingRewardsByStudent(rewardsByStudent);
+      }
+    } catch (error) {
+      console.error("할인 정책 데이터 조회 에러:", error);
+    }
+  }
+
   // 데이터 페칭 함수
   async function fetchTuitionHistoryWithFilters(resetPage: boolean = true) {
     setLoading(true);
@@ -207,6 +249,9 @@ export default function TuitionHistoryPage() {
           payssam_short_url,
           payssam_sent_at,
           payssam_paid_at,
+          base_amount,
+          total_discount,
+          discount_details,
           classes!left(name),
           students!left(name, status)
         `);
@@ -271,11 +316,22 @@ export default function TuitionHistoryPage() {
         // class_type이 '입학테스트비'인지 확인 (공백 제거하여 비교)
         const isEntranceTest = item.class_type?.trim() === '입학테스트비';
         const isRetired = !isEntranceTest && studentStatus && !studentStatus.includes('재원');
-        
+
         // 반명 처리: 입학테스트비인 경우 "입학테스트비", 아니면 기존 반명 또는 "(반 정보 없음)"
-        const className = isEntranceTest ? '입학테스트비' : 
+        const className = isEntranceTest ? '입학테스트비' :
                          ((item.classes as any)?.name || '(반 정보 없음)');
-        
+
+        // discount_details JSONB를 appliedDiscounts로 변환
+        const discountDetails = (item.discount_details || []) as DiscountDetail[];
+        const appliedDiscounts: AppliedDiscount[] = discountDetails.map((d: DiscountDetail) => ({
+          id: d.participant_id || d.campaign_id || `discount-${Math.random()}`,
+          type: d.type === 'event' ? 'event' : 'policy',
+          title: d.description || (d.type === 'sibling' ? '형제 할인' : '할인'),
+          amount: d.amount,
+          amountType: d.amount_type || 'fixed',
+          rawValue: d.amount,
+        }));
+
         return {
           id: item.id,
           classId: item.class_id,
@@ -298,6 +354,9 @@ export default function TuitionHistoryPage() {
           paysSamShortUrl: item.payssam_short_url || null,
           paysSamSentAt: item.payssam_sent_at || null,
           paysSamPaidAt: item.payssam_paid_at || null,
+          // 할인 필드
+          appliedDiscounts: appliedDiscounts.length > 0 ? appliedDiscounts : undefined,
+          originalAmount: item.base_amount || undefined,
         };
       });
 
@@ -314,10 +373,16 @@ export default function TuitionHistoryPage() {
       setData(transformedData);
       setOriginalData(JSON.parse(JSON.stringify(transformedData))); // 깊은 복사
       setHasUnsavedChanges(false); // 데이터 로드 시 변경사항 없음
-      
+
       // resetPage가 true일 때만 페이지를 1로 리셋
       if (resetPage) {
         setPage(1);
+      }
+
+      // 할인 정책 데이터 로드 (학생 ID 기반)
+      const uniqueStudentIds = [...new Set(transformedData.map(row => row.studentId).filter(Boolean))];
+      if (uniqueStudentIds.length > 0) {
+        fetchDiscountData(uniqueStudentIds);
       }
     } catch (e) {
       console.error("데이터 fetch 에러:", e);
@@ -483,14 +548,94 @@ export default function TuitionHistoryPage() {
     }
   };
 
+  // 할인 취소 핸들러 (이력 모드에서 DB에서 할인 제거)
+  const handleCancelDiscount = async (index: number, discountId: string) => {
+    if (index >= paginatedData.length) return;
+
+    const row = paginatedData[index];
+    const confirm = window.confirm("이 할인을 제거하시겠습니까?");
+    if (!confirm) return;
+
+    try {
+      // removeDiscountFromTuition API 호출
+      const result = await removeDiscountFromTuition(supabase, row.id, discountId);
+
+      if (result.success) {
+        toast.success("할인이 제거되었습니다.");
+        // 데이터 새로고침
+        fetchTuitionHistoryWithFilters(false);
+      } else {
+        toast.error(result.error || "할인 제거에 실패했습니다.");
+      }
+    } catch (error: any) {
+      console.error("할인 제거 오류:", error);
+      toast.error(error.message || "할인 제거 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 정책 적용 핸들러 (이력 모드에서 DB에 할인 추가)
+  const handleApplyPolicy = async (index: number, policyId: string) => {
+    if (index >= paginatedData.length) return;
+
+    const row = paginatedData[index];
+    const policy = policiesByStudent[row.studentId]?.find(p => p.id === policyId);
+    if (!policy) {
+      toast.error("정책을 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      const result = await applyPolicyToTuition(supabase, policyId, row.id);
+
+      if (result.success) {
+        toast.success(`${policy.title} 할인이 적용되었습니다.`);
+        // 데이터 새로고침
+        fetchTuitionHistoryWithFilters(false);
+      } else {
+        toast.error(result.error || "할인 적용에 실패했습니다.");
+      }
+    } catch (error: any) {
+      console.error("할인 적용 오류:", error);
+      toast.error(error.message || "할인 적용 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 이벤트 보상 적용 핸들러 (이력 모드에서 DB에 할인 추가)
+  const handleApplyEvent = async (index: number, participantId: string) => {
+    if (index >= paginatedData.length) return;
+
+    const row = paginatedData[index];
+    const rewards = pendingRewardsByStudent[row.studentId] || [];
+    const reward = rewards.find(r => r.id === participantId);
+    if (!reward) {
+      toast.error("이벤트 보상을 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      const result = await applyRewardToTuition(supabase, participantId, row.id);
+
+      if (result.success) {
+        toast.success("이벤트 보상이 적용되었습니다.");
+        // 데이터 새로고침
+        fetchTuitionHistoryWithFilters(false);
+      } else {
+        toast.error(result.error || "이벤트 보상 적용에 실패했습니다.");
+      }
+    } catch (error: any) {
+      console.error("이벤트 보상 적용 오류:", error);
+      toast.error(error.message || "이벤트 보상 적용 중 오류가 발생했습니다.");
+    }
+  };
+
   // 행 선택 핸들러
   const handleRowSelect = (index: number, selected: boolean) => {
     // paginatedData의 실제 row ID를 사용하여 선택 관리
     if (index >= paginatedData.length) return;
-    
+
     const row = paginatedData[index];
     const globalIndex = data.findIndex(item => item.id === row.id);
-    
+
     if (selected) {
       setSelectedRows([...selectedRows, globalIndex]);
     } else {
@@ -1011,6 +1156,11 @@ export default function TuitionHistoryPage() {
             onSearch={handleSearch}
             onExport={handleExport}
             onRefresh={() => fetchTuitionHistoryWithFilters(false)}
+            onCancelDiscount={handleCancelDiscount}
+            policiesByStudent={policiesByStudent}
+            pendingRewardsByStudent={pendingRewardsByStudent}
+            onApplyPolicy={handleApplyPolicy}
+            onApplyEvent={handleApplyEvent}
           />
           
         </div>

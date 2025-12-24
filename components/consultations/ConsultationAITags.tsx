@@ -2,15 +2,17 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Bot, AlertCircle, User, Smile, TrendingUp } from "lucide-react"
-import { AI_TAG_LABELS, AI_TAG_COLORS, AI_TAG_DESCRIPTIONS } from "@/services/consultation-ai-service"
+import { Bot, AlertCircle, User, Smile, TrendingUp, AlertTriangle } from "lucide-react"
+import { AI_TAG_LABELS, AI_TAG_COLORS, AI_TAG_DESCRIPTIONS, isChurnConsultationType } from "@/services/consultation-ai-service"
 
 interface ConsultationAITagsProps {
   hurdle?: string | null
   readiness?: string | null
   decisionMaker?: string | null
   sentiment?: string | null
+  churnRisk?: string | null  // 재원생 이탈 위험도
   analyzedAt?: string | null
+  consultationType?: string | null  // 상담 유형
   compact?: boolean // 컴팩트 모드 (아이콘만 표시)
 }
 
@@ -19,7 +21,9 @@ export function ConsultationAITags({
   readiness,
   decisionMaker,
   sentiment,
+  churnRisk,
   analyzedAt,
+  consultationType,
   compact = false,
 }: ConsultationAITagsProps) {
   // AI 분석이 아직 안됐으면 아무것도 표시하지 않음
@@ -27,44 +31,79 @@ export function ConsultationAITags({
     return null
   }
 
-  const tags = [
-    {
-      key: 'hurdle',
-      value: hurdle,
-      icon: AlertCircle,
-      label: '장애요인',
-      labels: AI_TAG_LABELS.hurdle,
-      colors: AI_TAG_COLORS.hurdle,
-      descriptions: AI_TAG_DESCRIPTIONS.hurdle,
-    },
-    {
-      key: 'readiness',
-      value: readiness,
-      icon: TrendingUp,
-      label: '등록 준비도',
-      labels: AI_TAG_LABELS.readiness,
-      colors: AI_TAG_COLORS.readiness,
-      descriptions: AI_TAG_DESCRIPTIONS.readiness,
-    },
-    {
-      key: 'decision_maker',
-      value: decisionMaker,
-      icon: User,
-      label: '의사결정자',
-      labels: AI_TAG_LABELS.decision_maker,
-      colors: AI_TAG_COLORS.decision_maker,
-      descriptions: AI_TAG_DESCRIPTIONS.decision_maker,
-    },
-    {
-      key: 'sentiment',
-      value: sentiment,
-      icon: Smile,
-      label: '상담 분위기',
-      labels: AI_TAG_LABELS.sentiment,
-      colors: AI_TAG_COLORS.sentiment,
-      descriptions: AI_TAG_DESCRIPTIONS.sentiment,
-    },
-  ]
+  // 재원생 상담인지 확인
+  const isChurnType = consultationType ? isChurnConsultationType(consultationType) : false
+
+  // 재원생 상담: hurdle, churn_risk, sentiment 표시
+  // 퍼널 상담: hurdle, readiness, decision_maker, sentiment 표시
+  const tags = isChurnType
+    ? [
+        {
+          key: 'churn_risk',
+          value: churnRisk,
+          icon: AlertTriangle,
+          label: '이탈 위험도',
+          labels: AI_TAG_LABELS.churn_risk,
+          colors: AI_TAG_COLORS.churn_risk,
+          descriptions: AI_TAG_DESCRIPTIONS.churn_risk,
+        },
+        {
+          key: 'hurdle',
+          value: hurdle,
+          icon: AlertCircle,
+          label: '우려사항',
+          labels: AI_TAG_LABELS.hurdle,
+          colors: AI_TAG_COLORS.hurdle,
+          descriptions: AI_TAG_DESCRIPTIONS.hurdle,
+        },
+        {
+          key: 'sentiment',
+          value: sentiment,
+          icon: Smile,
+          label: '상담 분위기',
+          labels: AI_TAG_LABELS.sentiment,
+          colors: AI_TAG_COLORS.sentiment,
+          descriptions: AI_TAG_DESCRIPTIONS.sentiment,
+        },
+      ]
+    : [
+        {
+          key: 'hurdle',
+          value: hurdle,
+          icon: AlertCircle,
+          label: '장애요인',
+          labels: AI_TAG_LABELS.hurdle,
+          colors: AI_TAG_COLORS.hurdle,
+          descriptions: AI_TAG_DESCRIPTIONS.hurdle,
+        },
+        {
+          key: 'readiness',
+          value: readiness,
+          icon: TrendingUp,
+          label: '등록 준비도',
+          labels: AI_TAG_LABELS.readiness,
+          colors: AI_TAG_COLORS.readiness,
+          descriptions: AI_TAG_DESCRIPTIONS.readiness,
+        },
+        {
+          key: 'decision_maker',
+          value: decisionMaker,
+          icon: User,
+          label: '의사결정자',
+          labels: AI_TAG_LABELS.decision_maker,
+          colors: AI_TAG_COLORS.decision_maker,
+          descriptions: AI_TAG_DESCRIPTIONS.decision_maker,
+        },
+        {
+          key: 'sentiment',
+          value: sentiment,
+          icon: Smile,
+          label: '상담 분위기',
+          labels: AI_TAG_LABELS.sentiment,
+          colors: AI_TAG_COLORS.sentiment,
+          descriptions: AI_TAG_DESCRIPTIONS.sentiment,
+        },
+      ]
 
   // 유효한 태그만 필터링
   const validTags = tags.filter(tag => tag.value && tag.value !== 'none')

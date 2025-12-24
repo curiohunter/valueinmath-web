@@ -21,6 +21,16 @@ export const CLASS_TYPE_LABELS: Record<ClassType, string> = {
 export const PAYMENT_STATUS = ['미납', '완납', '분할청구'] as const
 export type PaymentStatus = typeof PAYMENT_STATUS[number]
 
+// 적용된 할인 추적 인터페이스
+export interface AppliedDiscount {
+  id: string  // 고유 ID (policy id 또는 event participant id)
+  type: 'policy' | 'event'  // 할인 유형
+  title: string  // 할인 제목
+  amount: number  // 할인 금액
+  amountType: 'fixed' | 'percent'  // 금액 유형
+  rawValue: number  // 원본 값 (퍼센트일 경우 퍼센트 값)
+}
+
 // PaysSam 청구 상태
 // 참고: 'created'는 레거시 상태. 1단계 워크플로우 적용으로 pending → sent로 직접 전환됨.
 export const PAYSSAM_REQUEST_STATUS = ['pending', 'created', 'sent', 'paid', 'failed', 'cancelled', 'destroyed'] as const
@@ -91,6 +101,19 @@ export interface TuitionRow {
   paysSamShortUrl?: string | null
   paysSamSentAt?: string | null
   paysSamPaidAt?: string | null
+  // 할인 추적 필드 (생성 모드에서만 사용)
+  appliedDiscounts?: AppliedDiscount[]
+  originalAmount?: number  // 할인 적용 전 원본 금액
+}
+
+// 할인 상세 정보 (DB 저장용)
+export interface DiscountDetailInput {
+  type: 'policy' | 'event' | 'manual'
+  amount: number
+  amount_type: 'fixed' | 'percent'
+  campaign_id?: string
+  participant_id?: string
+  description?: string
 }
 
 // 학원비 생성/수정을 위한 입력 인터페이스
@@ -106,6 +129,11 @@ export interface TuitionFeeInput {
   payment_status?: PaymentStatus
   period_start_date?: string
   period_end_date?: string
+  // 할인 관련 필드
+  base_amount?: number
+  total_discount?: number
+  discount_details?: DiscountDetailInput[]
+  final_amount?: number
 }
 
 // 반별 학생 정보

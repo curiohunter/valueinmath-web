@@ -5,7 +5,7 @@
 
 import { createClient } from "@/lib/supabase/client"
 
-// AI 분석 결과 타입
+// AI 분석 결과 타입 (퍼널용)
 export interface ConsultationAIAnalysis {
   hurdle: 'schedule_conflict' | 'competitor_comparison' | 'student_refusal' | 'distance' | 'timing_defer' | 'price' | 'none'
   readiness: 'high' | 'medium' | 'low'
@@ -13,9 +13,17 @@ export interface ConsultationAIAnalysis {
   sentiment: 'very_positive' | 'positive' | 'neutral' | 'negative'
 }
 
+// AI 분석 결과 타입 (재원생용)
+export interface ConsultationChurnAnalysis {
+  hurdle: 'emotional_distress' | 'peer_relationship' | 'curriculum_dissatisfaction' | 'lack_of_attention' | 'academic_stagnation' | 'competitor_comparison' | 'schedule_conflict' | 'none'
+  churn_risk: 'critical' | 'high' | 'medium' | 'low' | 'none'
+  sentiment: 'very_positive' | 'positive' | 'neutral' | 'negative'
+}
+
 // 태그 한글 라벨
 export const AI_TAG_LABELS = {
   hurdle: {
+    // 퍼널용
     schedule_conflict: '시간표 충돌',
     competitor_comparison: '타학원 비교',
     student_refusal: '학생 거부',
@@ -23,6 +31,19 @@ export const AI_TAG_LABELS = {
     timing_defer: '시기 연기',
     price: '비용 문제',
     none: '없음',
+    // 재원생용
+    emotional_distress: '심리/정서 문제',
+    peer_relationship: '또래/관계 문제',
+    curriculum_dissatisfaction: '진도/커리큘럼 불만',
+    lack_of_attention: '관심/케어 부족',
+    academic_stagnation: '성적 정체',
+  },
+  churn_risk: {
+    critical: '매우 위험',
+    high: '위험',
+    medium: '주의',
+    low: '양호',
+    none: '안전',
   },
   readiness: {
     high: '높음',
@@ -45,6 +66,7 @@ export const AI_TAG_LABELS = {
 // 태그 상세 설명 (툴팁용)
 export const AI_TAG_DESCRIPTIONS = {
   hurdle: {
+    // 퍼널용
     schedule_conflict: '다른 학원 시간과 겹치거나 일정 조율이 어려움',
     competitor_comparison: '다른 학원과 비교 중이거나 타학원 경험 언급',
     student_refusal: '학생 본인이 학원 다니기를 거부하거나 꺼려함',
@@ -52,6 +74,19 @@ export const AI_TAG_DESCRIPTIONS = {
     timing_defer: '지금은 아니고 나중에 시작하겠다고 미룸',
     price: '수강료가 부담되거나 가격 협상 요청',
     none: '특별한 등록 장애요인 없음',
+    // 재원생용
+    emotional_distress: '우울, 불안, 스트레스 등 심리적 어려움 호소',
+    peer_relationship: '친구, 또래, 반 분위기 관련 불만이나 어려움',
+    curriculum_dissatisfaction: '진도가 느리거나 빠름, 수업 방식 불만',
+    lack_of_attention: '선생님 관심 부족, 케어 부족 느낌',
+    academic_stagnation: '성적이 오르지 않음, 실력 향상 정체',
+  },
+  churn_risk: {
+    critical: '즉시 개입 필요, 퇴원 의사 명확하거나 심각한 문제',
+    high: '주의 관찰 필요, 불만족 또는 이탈 가능성 높음',
+    medium: '모니터링 필요, 경미한 우려사항 있음',
+    low: '양호한 상태, 특별한 이상 없음',
+    none: '안전, 만족도 높고 문제 없음',
   },
   readiness: {
     high: '등록 의사가 명확하고 거의 확정된 상태',
@@ -71,28 +106,62 @@ export const AI_TAG_DESCRIPTIONS = {
   },
 } as const
 
-// AI 분석 대상 상담 유형 (퍼널 관련 상담만)
-export const AI_ANALYZABLE_TYPES = [
+// AI 분석 대상 상담 유형 (퍼널 관련 상담)
+export const AI_FUNNEL_TYPES = [
   '신규상담',
   '입테유도',
   '입테후상담',
   '등록유도',
 ] as const
 
+// AI 분석 대상 상담 유형 (재원생 이탈 분석)
+export const AI_CHURN_TYPES = [
+  '정기상담',
+  '입학후상담',
+  '퇴원상담',
+] as const
+
+// 전체 AI 분석 가능 상담 유형
+export const AI_ANALYZABLE_TYPES = [...AI_FUNNEL_TYPES, ...AI_CHURN_TYPES] as const
+
 // 분석 대상인지 확인
 export function isAnalyzableConsultationType(type: string): boolean {
   return AI_ANALYZABLE_TYPES.includes(type as typeof AI_ANALYZABLE_TYPES[number])
 }
 
+// 퍼널 분석 대상인지 확인
+export function isFunnelConsultationType(type: string): boolean {
+  return AI_FUNNEL_TYPES.includes(type as typeof AI_FUNNEL_TYPES[number])
+}
+
+// 재원생 이탈 분석 대상인지 확인
+export function isChurnConsultationType(type: string): boolean {
+  return AI_CHURN_TYPES.includes(type as typeof AI_CHURN_TYPES[number])
+}
+
 // 태그 색상
 export const AI_TAG_COLORS = {
   hurdle: {
+    // 퍼널용
     schedule_conflict: 'bg-orange-100 text-orange-700',
     competitor_comparison: 'bg-purple-100 text-purple-700',
     student_refusal: 'bg-red-100 text-red-700',
     distance: 'bg-blue-100 text-blue-700',
     timing_defer: 'bg-amber-100 text-amber-700',
     price: 'bg-pink-100 text-pink-700',
+    none: 'bg-gray-100 text-gray-700',
+    // 재원생용
+    emotional_distress: 'bg-rose-100 text-rose-700',
+    peer_relationship: 'bg-violet-100 text-violet-700',
+    curriculum_dissatisfaction: 'bg-amber-100 text-amber-700',
+    lack_of_attention: 'bg-orange-100 text-orange-700',
+    academic_stagnation: 'bg-yellow-100 text-yellow-700',
+  },
+  churn_risk: {
+    critical: 'bg-red-100 text-red-700',
+    high: 'bg-orange-100 text-orange-700',
+    medium: 'bg-amber-100 text-amber-700',
+    low: 'bg-green-100 text-green-700',
     none: 'bg-gray-100 text-gray-700',
   },
   readiness: {

@@ -283,7 +283,9 @@ export function ConsultationHistoryTab({
                       readiness={(consultation as any).ai_readiness}
                       decisionMaker={(consultation as any).ai_decision_maker}
                       sentiment={(consultation as any).ai_sentiment}
+                      churnRisk={(consultation as any).ai_churn_risk}
                       analyzedAt={(consultation as any).ai_analyzed_at}
+                      consultationType={consultation.type}
                       compact
                     />
                   </TableCell>

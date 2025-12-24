@@ -16,9 +16,9 @@ import { useEmployees } from "@/hooks/use-employees"
 import { useNewConsultStudents } from "@/hooks/use-students"
 import StudentClassTabs from "@/components/students/StudentClassTabs"
 import { Download, ChevronLeft, ChevronRight, Gift, ArrowRight, AlertCircle, Users } from "lucide-react"
-import type { TuitionRow, TuitionFeeInput } from "@/types/tuition"
+import type { TuitionRow, TuitionFeeInput, DiscountDetailInput } from "@/types/tuition"
 import { createClient } from "@/lib/supabase/client"
-import { getPendingRewards, markRewardApplied, getApplicablePolicies, type CampaignParticipant, type Campaign } from "@/services/campaign-service"
+import { getPendingRewards, markRewardApplied, getApplicablePoliciesBatch, type CampaignParticipant, type Campaign } from "@/services/campaign-service"
 
 // 해당 월의 첫날과 마지막 날 계산
 function getMonthDateRange(year: number, month: number) {
@@ -173,20 +173,16 @@ export default function TuitionPage() {
 
       const supabase = createClient()
       const studentIds = [...new Set(localRows.map(row => row.studentId))]
-      const policiesMap: Record<string, Campaign[]> = {}
 
-      for (const studentId of studentIds) {
-        try {
-          const result = await getApplicablePolicies(supabase, studentId)
-          if (result.success && result.data) {
-            policiesMap[studentId] = result.data
-          }
-        } catch (error) {
-          console.error(`Failed to fetch policies for student ${studentId}:`, error)
+      try {
+        // 배치로 한번에 조회 (성능 최적화)
+        const result = await getApplicablePoliciesBatch(supabase, studentIds)
+        if (result.success && result.data) {
+          setPoliciesByStudent(result.data)
         }
+      } catch (error) {
+        console.error("Failed to fetch policies:", error)
       }
-
-      setPoliciesByStudent(policiesMap)
     }
     fetchApplicablePolicies()
   }, [localRows])
@@ -619,19 +615,45 @@ export default function TuitionPage() {
 
     try {
       // 임시 ID를 가진 항목들을 실제 데이터로 변환
-      const dataToSave: TuitionFeeInput[] = localRows.map(row => ({
-        class_id: row.classId,
-        student_id: row.studentId,
-        year: row.year,
-        month: row.month,
-        is_sibling: row.isSibling,
-        class_type: row.classType,
-        amount: row.amount,
-        note: row.note || undefined,
-        payment_status: row.paymentStatus,
-        period_start_date: row.periodStartDate,
-        period_end_date: row.periodEndDate
-      }))
+      const dataToSave: TuitionFeeInput[] = localRows.map(row => {
+        // 할인 정보가 있으면 discount_details 생성
+        const hasDiscounts = row.appliedDiscounts && row.appliedDiscounts.length > 0
+        const totalDiscount = hasDiscounts
+          ? row.appliedDiscounts!.reduce((sum, d) => sum + d.amount, 0)
+          : 0
+        const baseAmount = hasDiscounts ? row.amount + totalDiscount : row.amount
+
+        // AppliedDiscount를 DiscountDetailInput으로 변환
+        const discountDetails: DiscountDetailInput[] | undefined = hasDiscounts
+          ? row.appliedDiscounts!.map(d => ({
+              type: d.type as 'policy' | 'event',
+              amount: d.amount,
+              amount_type: d.amountType,
+              campaign_id: d.type === 'policy' ? d.id : undefined,
+              participant_id: d.type === 'event' ? d.id : undefined,
+              description: d.title
+            }))
+          : undefined
+
+        return {
+          class_id: row.classId,
+          student_id: row.studentId,
+          year: row.year,
+          month: row.month,
+          is_sibling: row.isSibling,
+          class_type: row.classType,
+          amount: row.amount,
+          note: row.note || undefined,
+          payment_status: row.paymentStatus,
+          period_start_date: row.periodStartDate,
+          period_end_date: row.periodEndDate,
+          // 할인 관련 필드
+          base_amount: hasDiscounts ? baseAmount : undefined,
+          total_discount: hasDiscounts ? totalDiscount : undefined,
+          discount_details: discountDetails,
+          final_amount: hasDiscounts ? row.amount : undefined
+        }
+      })
 
       const result = await saveBulk(dataToSave)
       
@@ -699,6 +721,13 @@ export default function TuitionPage() {
     sonnerToast.success(`${policy.title} ${discountAmount.toLocaleString()}원이 적용되었습니다. 저장하면 최종 반영됩니다.`)
   }, [])
 
+  // 할인 취소 핸들러
+  const handleCancelDiscount = useCallback((index: number, discountId: string) => {
+    // 취소된 이벤트 ID를 pendingApplyEventIds에서도 제거
+    setPendingApplyEventIds(prev => prev.filter(id => id !== discountId))
+    sonnerToast.info(`할인이 취소되었습니다.`)
+  }, [])
+
   return (
     <div className="space-y-6">
       <StudentClassTabs />
@@ -745,6 +774,7 @@ export default function TuitionPage() {
             onApplyEvent={handleApplyEvent}
             policiesByStudent={policiesByStudent}
             onApplyPolicy={handleApplyPolicy}
+            onCancelDiscount={handleCancelDiscount}
           />
         </div>
       </div>
