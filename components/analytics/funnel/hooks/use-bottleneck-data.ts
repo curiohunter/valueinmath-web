@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
-import type { Bottleneck, BottleneckDetail } from "../types"
+import type { Bottleneck, BottleneckDetail, StageDuration } from "../types"
 
 export function useBottleneckData() {
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>([])
   const [bottleneckDetails, setBottleneckDetails] = useState<BottleneckDetail[]>([])
   const [successPattern, setSuccessPattern] = useState<BottleneckDetail | null>(null)
+  const [stageDurations, setStageDurations] = useState<StageDuration[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadData = async () => {
@@ -19,6 +20,7 @@ export function useBottleneckData() {
         setBottlenecks(data.data || [])
         setBottleneckDetails(data.details || [])
         setSuccessPattern(data.successPattern || null)
+        setStageDurations(data.stageDurations || [])
       }
     } catch (error) {
       console.error("Failed to load bottleneck data:", error)
@@ -64,14 +66,23 @@ export function useBottleneckData() {
     return points.length > 0 ? points : ["현재 적절한 수준입니다"]
   }
 
+  // 구간별 평균 소요일 조회
+  const getStageDuration = (fromStage: string | null, toStage: string): StageDuration | undefined => {
+    return stageDurations.find(
+      d => d.fromStage === fromStage && d.toStage === toStage
+    )
+  }
+
   return {
     bottlenecks,
     bottleneckDetails,
     successPattern,
+    stageDurations,
     loading,
     loadData,
     getBottleneckDetail,
     getConsultationStatus,
     getActionPoints,
+    getStageDuration,
   }
 }

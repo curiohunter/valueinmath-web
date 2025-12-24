@@ -1,16 +1,17 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Phone, MessageSquare, Users, TrendingUp, CheckCircle2, AlertTriangle, XCircle } from "lucide-react"
-import type { Bottleneck, BottleneckDetail } from "../types"
+import { Phone, MessageSquare, Users, TrendingUp, CheckCircle2, AlertTriangle, XCircle, Clock, ArrowRight } from "lucide-react"
+import type { Bottleneck, BottleneckDetail, StageDuration } from "../types"
 
 interface BottleneckTabProps {
   bottlenecks: Bottleneck[]
   bottleneckDetails: BottleneckDetail[]
   successPattern: BottleneckDetail | null
+  stageDurations: StageDuration[]
 }
 
-export function BottleneckTab({ bottlenecks, bottleneckDetails, successPattern }: BottleneckTabProps) {
+export function BottleneckTab({ bottlenecks, bottleneckDetails, successPattern, stageDurations }: BottleneckTabProps) {
   // 병목 단계에 해당하는 상세 데이터 찾기
   const getDetailForStage = (stageName: string): BottleneckDetail | null => {
     const stageMapping: Record<string, string> = {
@@ -28,6 +29,19 @@ export function BottleneckTab({ bottlenecks, bottleneckDetails, successPattern }
     if (ratio < 0.8) return { status: "warning", color: "text-amber-600", bg: "bg-amber-50", label: "부족" }
     if (ratio <= 1.2) return { status: "normal", color: "text-gray-600", bg: "bg-gray-50", label: "적정" }
     return { status: "excess", color: "text-blue-600", bg: "bg-blue-50", label: "기준 초과" }
+  }
+
+  // 주요 구간 전환 순서
+  const stageTransitions = [
+    { from: null, to: "문의", label: "최초 유입" },
+    { from: "문의", to: "상담중", label: "문의 → 상담중" },
+    { from: "상담중", to: "테스트완료", label: "상담중 → 테스트완료" },
+    { from: "테스트완료", to: "등록완료", label: "테스트완료 → 등록완료" },
+  ]
+
+  // 구간별 소요일 조회
+  const getStageDuration = (fromStage: string | null, toStage: string) => {
+    return stageDurations.find(d => d.fromStage === fromStage && d.toStage === toStage)
   }
 
   // 액션 포인트 생성
@@ -93,6 +107,33 @@ export function BottleneckTab({ bottlenecks, bottleneckDetails, successPattern }
                 <Users className="h-4 w-4 text-emerald-600" />
                 <span>대면 <strong>{successPattern.avgVisit}회</strong></span>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 구간별 평균 소요일 */}
+        {stageDurations.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-blue-700 font-semibold mb-3">
+              <Clock className="h-5 w-5" />
+              구간별 평균 소요일
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {stageTransitions.slice(1).map((transition, idx) => {
+                const duration = getStageDuration(transition.from, transition.to)
+                if (!duration) return null
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    {idx > 0 && <ArrowRight className="h-4 w-4 text-blue-400" />}
+                    <div className="bg-white rounded-lg px-3 py-2 border border-blue-200">
+                      <div className="text-xs text-muted-foreground">{transition.label}</div>
+                      <div className="font-semibold text-blue-700">
+                        {duration.avgDays}일 <span className="text-xs font-normal text-muted-foreground">({duration.count}명)</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

@@ -17,6 +17,13 @@ export interface BottleneckDetail {
   dropoutRate: number
 }
 
+export interface StageDuration {
+  fromStage: string | null
+  toStage: string
+  count: number
+  avgDays: number
+}
+
 export interface LeadSourceMetrics {
   source: string
   firstContacts: number
