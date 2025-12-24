@@ -18,6 +18,13 @@ export interface BottleneckDetail {
   dropoutRate: number
 }
 
+export interface StageDuration {
+  fromStage: string | null
+  toStage: string
+  count: number
+  avgDays: number
+}
+
 export async function GET() {
   try {
     const supabase = await createServerClient()
@@ -63,11 +70,40 @@ export async function GET() {
     // 등록 성공 패턴 (비교용)
     const successPattern = stageDetails.find(d => d.stage === '등록완료')
 
+    // 구간별 평균 소요일 (funnel_events에서 조회)
+    const { data: stageDurations } = await supabase
+      .from('funnel_events')
+      .select('from_stage, to_stage, days_since_previous')
+      .not('days_since_previous', 'is', null)
+
+    // 구간별 집계
+    const durationMap = new Map<string, { total: number; count: number }>()
+    if (stageDurations) {
+      for (const event of stageDurations) {
+        const key = `${event.from_stage || 'NULL'}→${event.to_stage}`
+        const existing = durationMap.get(key) || { total: 0, count: 0 }
+        existing.total += event.days_since_previous || 0
+        existing.count += 1
+        durationMap.set(key, existing)
+      }
+    }
+
+    const stageDurationData: StageDuration[] = Array.from(durationMap.entries()).map(([key, value]) => {
+      const [from, to] = key.split('→')
+      return {
+        fromStage: from === 'NULL' ? null : from,
+        toStage: to,
+        count: value.count,
+        avgDays: Math.round((value.total / value.count) * 10) / 10,
+      }
+    }).sort((a, b) => b.count - a.count)
+
     return NextResponse.json({
       success: true,
       data: bottlenecks,
       details: stageDetails,
       successPattern,
+      stageDurations: stageDurationData,
     })
 
   } catch (error) {

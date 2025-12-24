@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default async function PendingApprovalPage() {
   const supabase = await createServerClient()
-  
+
   // 사용자 확인 (getUser로 변경 - 더 안전)
   const {
     data: { user },
@@ -34,6 +34,20 @@ export default async function PendingApprovalPage() {
 
   // 직원이면서 승인된 경우 대시보드로 리디렉션
   if (employee?.approval_status === "approved") {
+    redirect("/dashboard")
+  }
+
+  // 프로필이 이미 승인된 경우 (학생/학부모 포함)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("approval_status, role")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.approval_status === "approved") {
+    if (profile.role === "student" || profile.role === "parent") {
+      redirect("/portal")
+    }
     redirect("/dashboard")
   }
 
@@ -72,8 +86,8 @@ export default async function PendingApprovalPage() {
 
       {!registration ? (
         // 등록 신청이 없는 경우 - 등록 폼 표시
-        <RegistrationForm 
-          user={user} 
+        <RegistrationForm
+          user={user}
         />
       ) : (
         // 등록 신청이 있는 경우 - 대기 상태 표시

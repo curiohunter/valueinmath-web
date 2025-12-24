@@ -1053,6 +1053,9 @@ export type Database = {
       consultations: {
         Row: {
           ai_analyzed_at: string | null
+          ai_churn_risk:
+            | Database["public"]["Enums"]["consultation_churn_risk"]
+            | null
           ai_decision_maker:
             | Database["public"]["Enums"]["consultation_decision_maker"]
             | null
@@ -1087,6 +1090,9 @@ export type Database = {
         }
         Insert: {
           ai_analyzed_at?: string | null
+          ai_churn_risk?:
+            | Database["public"]["Enums"]["consultation_churn_risk"]
+            | null
           ai_decision_maker?:
             | Database["public"]["Enums"]["consultation_decision_maker"]
             | null
@@ -1123,6 +1129,9 @@ export type Database = {
         }
         Update: {
           ai_analyzed_at?: string | null
+          ai_churn_risk?:
+            | Database["public"]["Enums"]["consultation_churn_risk"]
+            | null
           ai_decision_maker?:
             | Database["public"]["Enums"]["consultation_decision_maker"]
             | null
@@ -2190,6 +2199,7 @@ export type Database = {
           email: string | null
           id: string
           name: string | null
+          phone: string | null
           position: string | null
           role: string | null
           student_id: string | null
@@ -2203,6 +2213,7 @@ export type Database = {
           email?: string | null
           id: string
           name?: string | null
+          phone?: string | null
           position?: string | null
           role?: string | null
           student_id?: string | null
@@ -2216,6 +2227,7 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          phone?: string | null
           position?: string | null
           role?: string | null
           student_id?: string | null
@@ -2519,6 +2531,45 @@ export type Database = {
           },
         ]
       }
+      seasonal_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          month: number
+          target_grades: string[] | null
+          target_school_types: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          month: number
+          target_grades?: string[] | null
+          target_school_types?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          month?: number
+          target_grades?: string[] | null
+          target_school_types?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       student_risk_scores: {
         Row: {
           achievement_score: number | null
@@ -2602,7 +2653,6 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by_type: string | null
-          days_in_funnel: number | null
           department: string | null
           end_date: string | null
           first_contact_date: string | null
@@ -2629,7 +2679,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           created_by_type?: string | null
-          days_in_funnel?: number | null
           department?: string | null
           end_date?: string | null
           first_contact_date?: string | null
@@ -2656,7 +2705,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           created_by_type?: string | null
-          days_in_funnel?: number | null
           department?: string | null
           end_date?: string | null
           first_contact_date?: string | null
@@ -3573,6 +3621,7 @@ export type Database = {
         Args: { input_text: string }
         Returns: string
       }
+      parse_discount_from_note: { Args: { note_text: string }; Returns: Json }
       save_at_risk_snapshot: { Args: never; Returns: undefined }
       save_monthly_academy_stats: { Args: never; Returns: undefined }
       save_monthly_snapshot: { Args: never; Returns: undefined }
@@ -3593,6 +3642,7 @@ export type Database = {
         | "multi_touch"
       claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"
       claude_report_type: "monthly" | "quarterly" | "yearly" | "custom"
+      consultation_churn_risk: "critical" | "high" | "medium" | "low" | "none"
       consultation_decision_maker: "parent" | "student" | "both"
       consultation_hurdle:
         | "schedule_conflict"
@@ -3602,6 +3652,11 @@ export type Database = {
         | "timing_defer"
         | "price"
         | "none"
+        | "emotional_distress"
+        | "peer_relationship"
+        | "curriculum_dissatisfaction"
+        | "lack_of_attention"
+        | "academic_stagnation"
       consultation_method_enum: "대면" | "전화" | "문자"
       consultation_outcome_type:
         | "enrolled"
@@ -3845,6 +3900,7 @@ export const Constants = {
       ],
       claude_analysis_type: ["trend", "financial", "marketing", "student_mgmt"],
       claude_report_type: ["monthly", "quarterly", "yearly", "custom"],
+      consultation_churn_risk: ["critical", "high", "medium", "low", "none"],
       consultation_decision_maker: ["parent", "student", "both"],
       consultation_hurdle: [
         "schedule_conflict",
@@ -3854,6 +3910,11 @@ export const Constants = {
         "timing_defer",
         "price",
         "none",
+        "emotional_distress",
+        "peer_relationship",
+        "curriculum_dissatisfaction",
+        "lack_of_attention",
+        "academic_stagnation",
       ],
       consultation_method_enum: ["대면", "전화", "문자"],
       consultation_outcome_type: [
@@ -3974,4 +4035,3 @@ export const Constants = {
     },
   },
 } as const
-

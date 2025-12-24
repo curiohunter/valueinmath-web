@@ -43,6 +43,7 @@ export function FunnelAnalysisPage() {
             bottlenecks={bottleneckHook.bottlenecks}
             bottleneckDetails={bottleneckHook.bottleneckDetails}
             successPattern={bottleneckHook.successPattern}
+            stageDurations={bottleneckHook.stageDurations}
           />
 
           {/* 리드소스 분석 탭 카드 */}

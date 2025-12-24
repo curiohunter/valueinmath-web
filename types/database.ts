@@ -367,6 +367,124 @@ export type Database = {
           },
         ]
       }
+      campaign_participants: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          participated_at: string | null
+          referrer_name_snapshot: string | null
+          referrer_student_id: string | null
+          reward_amount: number | null
+          reward_amount_type: string | null
+          reward_applied_tuition_id: string | null
+          reward_notes: string | null
+          reward_paid_at: string | null
+          reward_status: string | null
+          student_id: string
+          student_name_snapshot: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          participated_at?: string | null
+          referrer_name_snapshot?: string | null
+          referrer_student_id?: string | null
+          reward_amount?: number | null
+          reward_amount_type?: string | null
+          reward_applied_tuition_id?: string | null
+          reward_notes?: string | null
+          reward_paid_at?: string | null
+          reward_status?: string | null
+          student_id: string
+          student_name_snapshot?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          participated_at?: string | null
+          referrer_name_snapshot?: string | null
+          referrer_student_id?: string | null
+          reward_amount?: number | null
+          reward_amount_type?: string | null
+          reward_applied_tuition_id?: string | null
+          reward_notes?: string | null
+          reward_paid_at?: string | null
+          reward_status?: string | null
+          student_id?: string
+          student_name_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_participants_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_referrer_student_id_fkey"
+            columns: ["referrer_student_id"]
+            isOneToOne: false
+            referencedRelation: "student_class_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_referrer_student_id_fkey"
+            columns: ["referrer_student_id"]
+            isOneToOne: false
+            referencedRelation: "student_name_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_referrer_student_id_fkey"
+            columns: ["referrer_student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_reward_applied_tuition_id_fkey"
+            columns: ["reward_applied_tuition_id"]
+            isOneToOne: false
+            referencedRelation: "tuition_fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_class_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_name_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "campaign_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_enrollments_history: {
         Row: {
           action_date: string
@@ -935,6 +1053,9 @@ export type Database = {
       consultations: {
         Row: {
           ai_analyzed_at: string | null
+          ai_churn_risk:
+            | Database["public"]["Enums"]["consultation_churn_risk"]
+            | null
           ai_decision_maker:
             | Database["public"]["Enums"]["consultation_decision_maker"]
             | null
@@ -969,6 +1090,9 @@ export type Database = {
         }
         Insert: {
           ai_analyzed_at?: string | null
+          ai_churn_risk?:
+            | Database["public"]["Enums"]["consultation_churn_risk"]
+            | null
           ai_decision_maker?:
             | Database["public"]["Enums"]["consultation_decision_maker"]
             | null
@@ -1005,6 +1129,9 @@ export type Database = {
         }
         Update: {
           ai_analyzed_at?: string | null
+          ai_churn_risk?:
+            | Database["public"]["Enums"]["consultation_churn_risk"]
+            | null
           ai_decision_maker?:
             | Database["public"]["Enums"]["consultation_decision_maker"]
             | null
@@ -1324,6 +1451,24 @@ export type Database = {
           },
         ]
       }
+      lead_source_channel_mapping: {
+        Row: {
+          default_channel: Database["public"]["Enums"]["marketing_channel"]
+          description: string | null
+          lead_source: string
+        }
+        Insert: {
+          default_channel: Database["public"]["Enums"]["marketing_channel"]
+          description?: string | null
+          lead_source: string
+        }
+        Update: {
+          default_channel?: Database["public"]["Enums"]["marketing_channel"]
+          description?: string | null
+          lead_source?: string
+        }
+        Relationships: []
+      }
       learning_comments: {
         Row: {
           content: string
@@ -1507,6 +1652,194 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_attributions: {
+        Row: {
+          activity_id: string | null
+          attribution_type: Database["public"]["Enums"]["attribution_type"]
+          confidence_score: number | null
+          conversion_type: string | null
+          converted_at: string | null
+          created_at: string | null
+          id: string
+          source: string
+          student_id: string
+          touched_at: string | null
+        }
+        Insert: {
+          activity_id?: string | null
+          attribution_type?: Database["public"]["Enums"]["attribution_type"]
+          confidence_score?: number | null
+          conversion_type?: string | null
+          converted_at?: string | null
+          created_at?: string | null
+          id?: string
+          source?: string
+          student_id: string
+          touched_at?: string | null
+        }
+        Update: {
+          activity_id?: string | null
+          attribution_type?: Database["public"]["Enums"]["attribution_type"]
+          confidence_score?: number | null
+          conversion_type?: string | null
+          converted_at?: string | null
+          created_at?: string | null
+          id?: string
+          source?: string
+          student_id?: string
+          touched_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_attributions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_class_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "marketing_attributions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_name_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "marketing_attributions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_campaigns: {
+        Row: {
+          campaign_type: string
+          channel: string | null
+          cost_amount: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          policy_target: string | null
+          reach_count: number | null
+          reward_amount: number | null
+          reward_amount_type: string | null
+          reward_description: string | null
+          reward_type: string | null
+          start_date: string
+          status: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          campaign_type: string
+          channel?: string | null
+          cost_amount?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          policy_target?: string | null
+          reach_count?: number | null
+          reward_amount?: number | null
+          reward_amount_type?: string | null
+          reward_description?: string | null
+          reward_type?: string | null
+          start_date: string
+          status?: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          campaign_type?: string
+          channel?: string | null
+          cost_amount?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          policy_target?: string | null
+          reach_count?: number | null
+          reward_amount?: number | null
+          reward_amount_type?: string | null
+          reward_description?: string | null
+          reward_type?: string | null
+          start_date?: string
+          status?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_insights: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          action_deadline: string | null
+          detail: Json | null
+          expires_at: string | null
+          generated_at: string | null
+          id: string
+          insight_type: Database["public"]["Enums"]["insight_type"]
+          priority: Database["public"]["Enums"]["insight_priority"] | null
+          status: string | null
+          suggested_action: string | null
+          summary: string
+          title: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          action_deadline?: string | null
+          detail?: Json | null
+          expires_at?: string | null
+          generated_at?: string | null
+          id?: string
+          insight_type: Database["public"]["Enums"]["insight_type"]
+          priority?: Database["public"]["Enums"]["insight_priority"] | null
+          status?: string | null
+          suggested_action?: string | null
+          summary: string
+          title: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          action_deadline?: string | null
+          detail?: Json | null
+          expires_at?: string | null
+          generated_at?: string | null
+          id?: string
+          insight_type?: Database["public"]["Enums"]["insight_type"]
+          priority?: Database["public"]["Enums"]["insight_priority"] | null
+          status?: string | null
+          suggested_action?: string | null
+          summary?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_insights_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
@@ -1866,6 +2199,7 @@ export type Database = {
           email: string | null
           id: string
           name: string | null
+          phone: string | null
           position: string | null
           role: string | null
           student_id: string | null
@@ -1879,6 +2213,7 @@ export type Database = {
           email?: string | null
           id: string
           name?: string | null
+          phone?: string | null
           position?: string | null
           role?: string | null
           student_id?: string | null
@@ -1892,6 +2227,7 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          phone?: string | null
           position?: string | null
           role?: string | null
           student_id?: string | null
@@ -2195,6 +2531,45 @@ export type Database = {
           },
         ]
       }
+      seasonal_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          month: number
+          target_grades: string[] | null
+          target_school_types: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          month: number
+          target_grades?: string[] | null
+          target_school_types?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          month?: number
+          target_grades?: string[] | null
+          target_school_types?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       student_risk_scores: {
         Row: {
           achievement_score: number | null
@@ -2278,7 +2653,6 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by_type: string | null
-          days_in_funnel: number | null
           department: string | null
           end_date: string | null
           first_contact_date: string | null
@@ -2305,7 +2679,6 @@ export type Database = {
         Insert: {
           created_at?: string | null
           created_by_type?: string | null
-          days_in_funnel?: number | null
           department?: string | null
           end_date?: string | null
           first_contact_date?: string | null
@@ -2332,7 +2705,6 @@ export type Database = {
         Update: {
           created_at?: string | null
           created_by_type?: string | null
-          days_in_funnel?: number | null
           department?: string | null
           end_date?: string | null
           first_contact_date?: string | null
@@ -2637,10 +3009,13 @@ export type Database = {
       tuition_fees: {
         Row: {
           amount: number
+          base_amount: number | null
           class_id: string | null
           class_name_snapshot: string | null
           class_type: string
           created_at: string | null
+          discount_details: Json | null
+          final_amount: number | null
           id: string
           is_sibling: boolean | null
           is_split_child: boolean | null
@@ -2663,15 +3038,19 @@ export type Database = {
           period_start_date: string | null
           student_id: string | null
           student_name_snapshot: string | null
+          total_discount: number | null
           updated_at: string | null
           year: number
         }
         Insert: {
           amount: number
+          base_amount?: number | null
           class_id?: string | null
           class_name_snapshot?: string | null
           class_type?: string
           created_at?: string | null
+          discount_details?: Json | null
+          final_amount?: number | null
           id?: string
           is_sibling?: boolean | null
           is_split_child?: boolean | null
@@ -2694,15 +3073,19 @@ export type Database = {
           period_start_date?: string | null
           student_id?: string | null
           student_name_snapshot?: string | null
+          total_discount?: number | null
           updated_at?: string | null
           year: number
         }
         Update: {
           amount?: number
+          base_amount?: number | null
           class_id?: string | null
           class_name_snapshot?: string | null
           class_type?: string
           created_at?: string | null
+          discount_details?: Json | null
+          final_amount?: number | null
           id?: string
           is_sibling?: boolean | null
           is_split_child?: boolean | null
@@ -2725,6 +3108,7 @@ export type Database = {
           period_start_date?: string | null
           student_id?: string | null
           student_name_snapshot?: string | null
+          total_discount?: number | null
           updated_at?: string | null
           year?: number
         }
@@ -3063,6 +3447,50 @@ export type Database = {
           student_count: number
         }[]
       }
+      get_cohort_enrolled_details: {
+        Args: { p_cohort_month: string; p_lead_source?: string }
+        Returns: {
+          delayed_count: number
+          grade: number
+          grade_label: string
+          same_month_count: number
+          school_type: string
+          total_count: number
+        }[]
+      }
+      get_cohort_funnel_analysis: {
+        Args: { p_lead_source?: string; p_start_date?: string }
+        Returns: {
+          avg_days_to_enroll: number
+          cohort_date: string
+          cohort_month: string
+          enroll_month_0: number
+          enroll_month_1: number
+          enroll_month_2: number
+          enroll_month_3: number
+          enroll_total: number
+          final_conversion_rate: number
+          is_ongoing: boolean
+          lead_source: string
+          test_month_0: number
+          test_month_1: number
+          test_month_2: number
+          test_month_3: number
+          test_total: number
+          total_students: number
+        }[]
+      }
+      get_cohort_non_enrolled_details: {
+        Args: { p_cohort_month: string; p_lead_source?: string }
+        Returns: {
+          grade: number
+          grade_label: string
+          school_type: string
+          total_count: number
+          with_test_count: number
+          without_test_count: number
+        }[]
+      }
       get_followup_needed_students: {
         Args: { p_stage?: string }
         Returns: {
@@ -3076,13 +3504,17 @@ export type Database = {
           grade: number
           id: string
           last_consultation_date: string
+          lead_source: string
           name: string
           parent_phone: string
+          phone_count: number
           school: string
           school_type: string
           status: string
           student_phone: string
+          text_count: number
           total_consultations: number
+          visit_count: number
         }[]
       }
       get_global_messages_with_names: {
@@ -3189,6 +3621,7 @@ export type Database = {
         Args: { input_text: string }
         Returns: string
       }
+      parse_discount_from_note: { Args: { note_text: string }; Returns: Json }
       save_at_risk_snapshot: { Args: never; Returns: undefined }
       save_monthly_academy_stats: { Args: never; Returns: undefined }
       save_monthly_snapshot: { Args: never; Returns: undefined }
@@ -3202,8 +3635,14 @@ export type Database = {
         | "event"
         | "unauthorized"
         | "other"
+      attribution_type:
+        | "first_touch"
+        | "last_touch"
+        | "ai_inferred"
+        | "multi_touch"
       claude_analysis_type: "trend" | "financial" | "marketing" | "student_mgmt"
       claude_report_type: "monthly" | "quarterly" | "yearly" | "custom"
+      consultation_churn_risk: "critical" | "high" | "medium" | "low" | "none"
       consultation_decision_maker: "parent" | "student" | "both"
       consultation_hurdle:
         | "schedule_conflict"
@@ -3213,6 +3652,11 @@ export type Database = {
         | "timing_defer"
         | "price"
         | "none"
+        | "emotional_distress"
+        | "peer_relationship"
+        | "curriculum_dissatisfaction"
+        | "lack_of_attention"
+        | "academic_stagnation"
       consultation_method_enum: "대면" | "전화" | "문자"
       consultation_outcome_type:
         | "enrolled"
@@ -3220,7 +3664,6 @@ export type Database = {
         | "deferred"
         | "rejected"
         | "lost"
-        | "ongoing"
       consultation_readiness: "high" | "medium" | "low"
       consultation_sentiment:
         | "very_positive"
@@ -3260,8 +3703,34 @@ export type Database = {
         | "after_test_consultation"
         | "enrollment_guidance"
         | "withdrawal_consultation"
+      insight_priority: "critical" | "high" | "medium" | "low"
+      insight_type:
+        | "channel_performance"
+        | "seasonal_reminder"
+        | "content_recommendation"
+        | "timing_optimization"
+        | "budget_allocation"
       makeup_status_enum: "scheduled" | "completed" | "cancelled"
       makeup_type_enum: "absence" | "additional"
+      marketing_channel:
+        | "blog_naver"
+        | "blog_other"
+        | "instagram"
+        | "youtube"
+        | "cafe_naver"
+        | "cafe_other"
+        | "kakao_channel"
+        | "paid_ads"
+        | "seminar"
+        | "student_event"
+        | "parent_event"
+        | "referral"
+        | "flyer"
+        | "seasonal_campaign"
+        | "partnership"
+        | "other"
+        | "cafe_mom"
+      marketing_status: "planned" | "in_progress" | "completed" | "cancelled"
       test_level_enum:
         | "초3-1"
         | "초3-2"
@@ -3423,8 +3892,15 @@ export const Constants = {
   public: {
     Enums: {
       absence_reason_enum: ["sick", "travel", "event", "unauthorized", "other"],
+      attribution_type: [
+        "first_touch",
+        "last_touch",
+        "ai_inferred",
+        "multi_touch",
+      ],
       claude_analysis_type: ["trend", "financial", "marketing", "student_mgmt"],
       claude_report_type: ["monthly", "quarterly", "yearly", "custom"],
+      consultation_churn_risk: ["critical", "high", "medium", "low", "none"],
       consultation_decision_maker: ["parent", "student", "both"],
       consultation_hurdle: [
         "schedule_conflict",
@@ -3434,6 +3910,11 @@ export const Constants = {
         "timing_defer",
         "price",
         "none",
+        "emotional_distress",
+        "peer_relationship",
+        "curriculum_dissatisfaction",
+        "lack_of_attention",
+        "academic_stagnation",
       ],
       consultation_method_enum: ["대면", "전화", "문자"],
       consultation_outcome_type: [
@@ -3442,7 +3923,6 @@ export const Constants = {
         "deferred",
         "rejected",
         "lost",
-        "ongoing",
       ],
       consultation_readiness: ["high", "medium", "low"],
       consultation_sentiment: [
@@ -3487,8 +3967,36 @@ export const Constants = {
         "enrollment_guidance",
         "withdrawal_consultation",
       ],
+      insight_priority: ["critical", "high", "medium", "low"],
+      insight_type: [
+        "channel_performance",
+        "seasonal_reminder",
+        "content_recommendation",
+        "timing_optimization",
+        "budget_allocation",
+      ],
       makeup_status_enum: ["scheduled", "completed", "cancelled"],
       makeup_type_enum: ["absence", "additional"],
+      marketing_channel: [
+        "blog_naver",
+        "blog_other",
+        "instagram",
+        "youtube",
+        "cafe_naver",
+        "cafe_other",
+        "kakao_channel",
+        "paid_ads",
+        "seminar",
+        "student_event",
+        "parent_event",
+        "referral",
+        "flyer",
+        "seasonal_campaign",
+        "partnership",
+        "other",
+        "cafe_mom",
+      ],
+      marketing_status: ["planned", "in_progress", "completed", "cancelled"],
       test_level_enum: [
         "초3-1",
         "초3-2",

@@ -496,37 +496,3 @@ export async function getFunnelByLeadSource(
   }
 }
 
-// ============================================
-// 퍼널 체류일수 업데이트 (배치용)
-// ============================================
-
-export async function updateFunnelDaysInFunnel(
-  supabase: SupabaseClient
-): Promise<{ updated: number }> {
-  // funnel_stage가 있고 funnel_stage_updated_at이 있는 학생들의 days_in_funnel 업데이트
-  const { data: students } = await supabase
-    .from('students')
-    .select('id, funnel_stage_updated_at')
-    .eq('is_active', true)
-    .not('funnel_stage', 'is', null)
-    .not('funnel_stage_updated_at', 'is', null)
-
-  if (!students?.length) return { updated: 0 }
-
-  let updated = 0
-  const now = new Date()
-
-  for (const student of students) {
-    const stageDate = new Date(student.funnel_stage_updated_at)
-    const daysInFunnel = Math.floor((now.getTime() - stageDate.getTime()) / (1000 * 60 * 60 * 24))
-
-    const { error } = await supabase
-      .from('students')
-      .update({ days_in_funnel: daysInFunnel })
-      .eq('id', student.id)
-
-    if (!error) updated++
-  }
-
-  return { updated }
-}
