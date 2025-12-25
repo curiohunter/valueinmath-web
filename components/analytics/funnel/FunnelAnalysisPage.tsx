@@ -40,10 +40,11 @@ export function FunnelAnalysisPage() {
         <>
           {/* 병목 구간 분석 */}
           <BottleneckTab
-            bottlenecks={bottleneckHook.bottlenecks}
             bottleneckDetails={bottleneckHook.bottleneckDetails}
             successPattern={bottleneckHook.successPattern}
             stageDurations={bottleneckHook.stageDurations}
+            byLeadSource={bottleneckHook.byLeadSource}
+            consultationEffects={bottleneckHook.consultationEffects}
           />
 
           {/* 리드소스 분석 탭 카드 */}

@@ -2,13 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
-import type { Bottleneck, BottleneckDetail, StageDuration } from "../types"
+import type { Bottleneck, BottleneckDetail, StageDuration, LeadSourceBottleneck, ConsultationEffect, AIHurdlePattern } from "../types"
 
 export function useBottleneckData() {
   const [bottlenecks, setBottlenecks] = useState<Bottleneck[]>([])
   const [bottleneckDetails, setBottleneckDetails] = useState<BottleneckDetail[]>([])
   const [successPattern, setSuccessPattern] = useState<BottleneckDetail | null>(null)
   const [stageDurations, setStageDurations] = useState<StageDuration[]>([])
+  // 심층 분석 데이터
+  const [byLeadSource, setByLeadSource] = useState<LeadSourceBottleneck[]>([])
+  const [consultationEffects, setConsultationEffects] = useState<ConsultationEffect[]>([])
+  const [aiHurdlePatterns, setAiHurdlePatterns] = useState<AIHurdlePattern[]>([])
   const [loading, setLoading] = useState(true)
 
   const loadData = async () => {
@@ -21,6 +25,10 @@ export function useBottleneckData() {
         setBottleneckDetails(data.details || [])
         setSuccessPattern(data.successPattern || null)
         setStageDurations(data.stageDurations || [])
+        // 심층 분석 데이터
+        setByLeadSource(data.byLeadSource || [])
+        setConsultationEffects(data.consultationEffects || [])
+        setAiHurdlePatterns(data.aiHurdlePatterns || [])
       }
     } catch (error) {
       console.error("Failed to load bottleneck data:", error)
@@ -78,6 +86,10 @@ export function useBottleneckData() {
     bottleneckDetails,
     successPattern,
     stageDurations,
+    // 심층 분석 데이터
+    byLeadSource,
+    consultationEffects,
+    aiHurdlePatterns,
     loading,
     loadData,
     getBottleneckDetail,

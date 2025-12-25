@@ -82,6 +82,37 @@ export type PeriodFilter = "6months" | "1year" | "all"
 export type SortField = "source" | "firstContacts" | "tests" | "enrollments" | "conversionRate" | "testRate" | "testToEnrollRate" | "avgDaysToEnroll" | "avgConsultations" | "totalCost"
 export type SortDirection = "asc" | "desc"
 
+// 심층 분석 타입
+export interface LeadSourceBottleneck {
+  leadSource: string
+  stage: string
+  totalCount: number
+  testCount: number
+  enrollCount: number
+  enrollAfterTestCount: number
+  directEnrollCount: number
+  dropOffRate: number
+  avgConsultations: number
+  avgDaysStuck: number
+}
+
+export interface ConsultationEffect {
+  consultationType: string
+  method: string
+  count: number
+  toTestRate: number
+  toEnrollRate: number
+}
+
+export interface AIHurdlePattern {
+  hurdle: string
+  label: string
+  count: number
+  dropOffRate: number
+  avgDaysStuck: number
+  suggestedAction: string
+}
+
 // 코호트 요약 통계
 export interface CohortSummary {
   recentAvgRate: number

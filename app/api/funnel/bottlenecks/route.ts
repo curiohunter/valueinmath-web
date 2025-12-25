@@ -98,12 +98,80 @@ export async function GET() {
       }
     }).sort((a, b) => b.count - a.count)
 
+    // 심층 분석 데이터 조회
+    const [byLeadSourceRes, consultationEffectsRes, aiHurdlePatternsRes] = await Promise.all([
+      supabase.rpc('get_bottleneck_by_lead_source'),
+      supabase.rpc('get_consultation_effect_analysis'),
+      supabase.rpc('get_ai_hurdle_patterns'),
+    ])
+
+    // 리드소스별 병목 데이터 변환
+    const byLeadSource = (byLeadSourceRes.data || []).map((d: {
+      lead_source: string
+      stage: string
+      total_count: number
+      test_count: number
+      enroll_count: number
+      enroll_after_test_count: number
+      direct_enroll_count: number
+      drop_off_rate: string
+      avg_consultations: string
+      avg_days_stuck: string
+    }) => ({
+      leadSource: d.lead_source,
+      stage: d.stage,
+      totalCount: d.total_count,
+      testCount: d.test_count,
+      enrollCount: d.enroll_count,
+      enrollAfterTestCount: d.enroll_after_test_count,
+      directEnrollCount: d.direct_enroll_count,
+      dropOffRate: parseFloat(d.drop_off_rate || '0'),
+      avgConsultations: parseFloat(d.avg_consultations || '0'),
+      avgDaysStuck: parseFloat(d.avg_days_stuck || '0'),
+    }))
+
+    // 상담 효과 데이터 변환
+    const consultationEffects = (consultationEffectsRes.data || []).map((d: {
+      consultation_type: string
+      method: string
+      consultation_count: number
+      to_test_rate: string
+      to_enroll_rate: string
+    }) => ({
+      consultationType: d.consultation_type,
+      method: d.method,
+      count: d.consultation_count,
+      toTestRate: parseFloat(d.to_test_rate || '0'),
+      toEnrollRate: parseFloat(d.to_enroll_rate || '0'),
+    }))
+
+    // AI 장애요인 패턴 데이터 변환
+    const aiHurdlePatterns = (aiHurdlePatternsRes.data || []).map((d: {
+      hurdle: string
+      label: string
+      hurdle_count: number
+      drop_off_rate: string
+      avg_days_stuck: string
+      suggested_action: string
+    }) => ({
+      hurdle: d.hurdle,
+      label: d.label,
+      count: d.hurdle_count,
+      dropOffRate: parseFloat(d.drop_off_rate || '0'),
+      avgDaysStuck: parseFloat(d.avg_days_stuck || '0'),
+      suggestedAction: d.suggested_action,
+    }))
+
     return NextResponse.json({
       success: true,
       data: bottlenecks,
       details: stageDetails,
       successPattern,
       stageDurations: stageDurationData,
+      // 심층 분석 데이터
+      byLeadSource,
+      consultationEffects,
+      aiHurdlePatterns,
     })
 
   } catch (error) {
