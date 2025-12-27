@@ -25,6 +25,7 @@ import {
   Copy,
   History,
   Scissors,
+  Trash2,
 } from "lucide-react"
 import {
   removeDiscountFromTuition,
