@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
-import { CalendarIcon, ChevronRight, Info, MessageSquare } from "lucide-react"
+import { CalendarIcon, ChevronRight, Info, MessageSquare, X } from "lucide-react"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import { cn } from "@/lib/utils"
@@ -351,7 +351,7 @@ export function StudentFormModal({
 
       // 중복 에러 처리
       if (rawMessage.includes("students_name_parent_phone_unique") ||
-          rawMessage.includes("duplicate key")) {
+        rawMessage.includes("duplicate key")) {
         toast.error("이미 동일한 이름과 학부모 연락처로 등록된 학생이 있습니다.")
       } else {
         const errorMessage = rawMessage || "알 수 없는 오류가 발생했습니다"
@@ -399,32 +399,45 @@ export function StudentFormModal({
             <FormLabel>
               {label} {isRequired && "*"}
             </FormLabel>
-            <Popover>
-              <PopoverTrigger asChild>
-                <FormControl>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full pl-3 text-left font-normal",
-                      !field.value && "text-muted-foreground"
-                    )}
-                    disabled={disabled}
-                  >
-                    {field.value ? format(field.value, "PPP", { locale: ko }) : <span>날짜 선택</span>}
-                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                  </Button>
-                </FormControl>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={field.value || undefined}
-                  onSelect={field.onChange}
-                  disabled={(date) => date < new Date("1900-01-01")}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="relative">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full pl-3 text-left font-normal pr-10",
+                        !field.value && "text-muted-foreground"
+                      )}
+                      disabled={disabled}
+                    >
+                      {field.value ? format(field.value, "PPP", { locale: ko }) : <span>날짜 선택</span>}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value || undefined}
+                    onSelect={field.onChange}
+                    disabled={(date) => date < new Date("1900-01-01")}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {field.value && !disabled && (
+                <div
+                  className="absolute right-8 top-1/2 -translate-y-1/2 cursor-pointer p-1 hover:bg-slate-100 rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    field.onChange(null)
+                  }}
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
+            </div>
             {name === "end_date" && endDateError && (
               <p className="text-sm font-medium text-destructive">{endDateError}</p>
             )}
