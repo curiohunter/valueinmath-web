@@ -38,9 +38,13 @@ export function ClassesFilters({ teachers, onOpen, onPrint, teacherFilter, setTe
           <SelectValue placeholder="과목 전체" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">과목 전체</SelectItem>
+          <SelectItem value="all">전체</SelectItem>
+          <SelectItem value="regular">정규전체</SelectItem>
+          <SelectItem value="special">특강전체</SelectItem>
           <SelectItem value="수학">수학</SelectItem>
           <SelectItem value="과학">과학</SelectItem>
+          <SelectItem value="수학특강">수학특강</SelectItem>
+          <SelectItem value="과학특강">과학특강</SelectItem>
         </SelectContent>
       </Select>
       <Button onClick={onOpen}>+ 반 만들기</Button>

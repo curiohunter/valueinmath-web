@@ -72,15 +72,16 @@ export function TestModal({
         const { data, error } = await supabase
           .from('classes')
           .select('id, name')
+          .eq('is_active', true)
           .order('name')
-        
+
         if (error) throw error
         setClasses(data || [])
       } catch (error) {
         console.error('클래스 목록 로딩 오류:', error)
       }
     }
-    
+
     if (open) {
       loadClasses()
     }

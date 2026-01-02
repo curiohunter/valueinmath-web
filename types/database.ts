@@ -3660,6 +3660,7 @@ export type Database = {
       consultation_method_enum: "대면" | "전화" | "문자"
       consultation_outcome_type:
         | "enrolled"
+        | "enrollment_scheduled"
         | "test_scheduled"
         | "deferred"
         | "rejected"
@@ -3919,6 +3920,7 @@ export const Constants = {
       consultation_method_enum: ["대면", "전화", "문자"],
       consultation_outcome_type: [
         "enrolled",
+        "enrollment_scheduled",
         "test_scheduled",
         "deferred",
         "rejected",
