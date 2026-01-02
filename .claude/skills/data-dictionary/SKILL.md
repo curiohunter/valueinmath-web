@@ -162,7 +162,7 @@ const name = row.student_name_snapshot
 
 ```bash
 # 정확한 필드명 확인
-Grep "테이블명: {" -A 40 types/supabase.ts
+Grep "테이블명: {" -A 40 types/database.ts
 
 # 또는 상세 문서 참조
 Read docs/dbdocs/tables/{카테고리}/{테이블명}.md

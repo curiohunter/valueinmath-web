@@ -99,7 +99,16 @@ export default function ClassesPage() {
     filteredClasses = filteredClasses.filter((c: any) => c.teacher_id === teacherFilter)
   }
   if (subjectFilter !== "all") {
-    filteredClasses = filteredClasses.filter((c: any) => c.subject === subjectFilter)
+    if (subjectFilter === "regular") {
+      // 정규전체: 수학, 과학
+      filteredClasses = filteredClasses.filter((c: any) => c.subject === "수학" || c.subject === "과학")
+    } else if (subjectFilter === "special") {
+      // 특강전체: 수학특강, 과학특강
+      filteredClasses = filteredClasses.filter((c: any) => c.subject === "수학특강" || c.subject === "과학특강")
+    } else {
+      // 개별 과목 필터
+      filteredClasses = filteredClasses.filter((c: any) => c.subject === subjectFilter)
+    }
   }
   
   // 선생님별로 그룹화하여 정렬

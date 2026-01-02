@@ -43,10 +43,11 @@ import type {
 } from "@/types/consultation";
 
 // 상담 결과 타입 및 라벨
-type ConsultationOutcome = "enrolled" | "test_scheduled" | "deferred" | "rejected" | "lost";
+type ConsultationOutcome = "enrolled" | "enrollment_scheduled" | "test_scheduled" | "deferred" | "rejected" | "lost";
 
 const OUTCOME_LABELS: Record<ConsultationOutcome, string> = {
   enrolled: "등록완료",
+  enrollment_scheduled: "등록예정",
   test_scheduled: "테스트 예약",
   deferred: "추가 상담 필요",
   rejected: "등록 거절",

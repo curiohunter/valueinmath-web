@@ -11,6 +11,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface Schedule {
   day_of_week: string
@@ -184,9 +190,31 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600" style={{ maxWidth: '200px' }}>
-                        {studentPreview}
-                      </div>
+                      {studentNames.length > 2 ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-sm text-gray-600 cursor-help" style={{ maxWidth: '200px' }}>
+                                {studentPreview}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-sm">
+                              <div className="space-y-1">
+                                <div className="font-semibold text-xs text-gray-500 mb-2">전체 학생 목록 ({studentNames.length}명)</div>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                  {[...studentNames].sort((a, b) => a.localeCompare(b, 'ko')).map((name, i) => (
+                                    <div key={i} className="text-sm">{name}</div>
+                                  ))}
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <div className="text-sm text-gray-600" style={{ maxWidth: '200px' }}>
+                          {studentPreview}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-xs text-gray-600">

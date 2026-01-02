@@ -25,7 +25,7 @@ grep -roh 'from("테이블명")' --include="*.ts" --include="*.tsx" | wc -l
 Grep "필드명" --include="*.ts" --include="*.tsx"
 
 # 타입 정의에서 확인
-Grep "필드명" types/supabase.ts
+Grep "필드명" types/database.ts
 ```
 
 ## 3. 변경 전 체크리스트
@@ -34,7 +34,7 @@ Grep "필드명" types/supabase.ts
 - [ ] `from("테이블명")` 사용처 모두 확인
 - [ ] RLS 정책 삭제 필요
 - [ ] FK로 연결된 다른 테이블 확인
-- [ ] types/supabase.ts 재생성 필요
+- [ ] types/database.ts 재생성 필요
 
 ### 필드 삭제/이름 변경 시
 - [ ] 해당 필드 사용하는 코드 모두 수정
@@ -64,8 +64,8 @@ Grep "필드명" types/supabase.ts
 ## 5. FK 관계 확인
 
 ```bash
-# types/supabase.ts에서 Relationships 확인
-Grep "Relationships:" -A 20 types/supabase.ts | grep "테이블명"
+# types/database.ts에서 Relationships 확인
+Grep "Relationships:" -A 20 types/database.ts | grep "테이블명"
 ```
 
 ## 6. RLS 정책 영향
@@ -77,6 +77,6 @@ mcp__supabase__execute_sql("SELECT * FROM pg_policies WHERE tablename = '테이�
 
 ## 7. 변경 후 필수 작업
 
-1. `npx supabase gen types typescript --project-id PROJECT_ID > types/supabase.ts`
+1. `npx supabase gen types typescript --project-id zeolpqtmlqzskvmhbyct > types/database.ts`
 2. TypeScript 빌드 확인: `npm run build`
 3. 영향받는 페이지 수동 테스트
