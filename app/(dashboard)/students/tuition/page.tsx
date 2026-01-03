@@ -286,6 +286,9 @@ export default function TuitionPage() {
         const amount = targetClass.monthly_fee || 50000 // 기본값 설정
         // 형제 할인 자동 적용 제거 - 할인정책 탭에서 수동 적용
 
+        // 반의 subject에 따라 classType 자동 설정
+        const classType = (targetClass as any).subject?.includes('특강') ? '특강' : '정규'
+
         newRows.push({
           id: `temp-${Date.now()}-${student.id}`, // 임시 ID
           classId,
@@ -295,7 +298,7 @@ export default function TuitionPage() {
           year,
           month,
           isSibling: false, // 더 이상 자동 설정 안함
-          classType: '정규',
+          classType,
           amount, // 할인 없이 원래 금액
           note: '',
           paymentStatus: '미납',
@@ -483,6 +486,9 @@ export default function TuitionPage() {
             const amount = classData.monthly_fee
             // 형제 할인 자동 적용 제거 - 할인정책 탭에서 수동 적용
 
+            // 반의 subject에 따라 classType 자동 설정
+            const classType = (classData as any).subject?.includes('특강') ? '특강' : '정규'
+
             newRows.push({
               id: `temp-${Date.now()}-${student.id}`, // 임시 ID
               classId: classData.id,
@@ -492,7 +498,7 @@ export default function TuitionPage() {
               year,
               month,
               isSibling: false, // 더 이상 자동 설정 안함
-              classType: '정규',
+              classType,
               amount, // 할인 없이 원래 금액
               note: '',
               paymentStatus: '미납',
