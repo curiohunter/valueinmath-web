@@ -22,7 +22,7 @@ interface Student {
 }
 
 interface Schedule {
-  day_of_week: '월' | '화' | '수' | '목' | '금' | '토'
+  day_of_week: '월' | '화' | '수' | '목' | '금' | '토' | '일'
   start_time: string
   end_time: string
 }
@@ -194,7 +194,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
   const handleRemoveTeacher = () => setSelectedTeacher(null)
 
   // 시간표 관리
-  const days: Array<'월' | '화' | '수' | '목' | '금' | '토'> = ['월', '화', '수', '목', '금', '토']
+  const days: Array<'월' | '화' | '수' | '목' | '금' | '토' | '일'> = ['월', '화', '수', '목', '금', '토', '일']
   const toggleDay = (day: typeof days[number]) => {
     const exists = schedules.find(s => s.day_of_week === day)
     if (exists) {
@@ -403,7 +403,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
               </CollapsibleTrigger>
 
               <CollapsibleContent className="mt-2 rounded-lg border border-gray-200 px-4 py-4 bg-white">
-                <div className="grid grid-cols-6 gap-3">
+                <div className="grid grid-cols-7 gap-3">
                   {days.map(day => {
                     const schedule = schedules.find(s => s.day_of_week === day)
                     const isSelected = !!schedule
