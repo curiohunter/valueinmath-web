@@ -152,7 +152,6 @@ export interface StudentInfo {
   name: string
   grade: number | null
   school: string | null
-  has_sibling: boolean | null
   status: string
 }
 

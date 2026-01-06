@@ -2659,7 +2659,6 @@ export type Database = {
           funnel_stage: string | null
           funnel_stage_updated_at: string | null
           grade: number | null
-          has_sibling: boolean | null
           id: string
           is_active: boolean
           lead_source: string | null
@@ -2668,6 +2667,7 @@ export type Database = {
           name: string
           notes: string | null
           parent_phone: string | null
+          parent_phone2: string | null
           payment_phone: string | null
           school: string | null
           school_type: string | null
@@ -2685,7 +2685,6 @@ export type Database = {
           funnel_stage?: string | null
           funnel_stage_updated_at?: string | null
           grade?: number | null
-          has_sibling?: boolean | null
           id?: string
           is_active?: boolean
           lead_source?: string | null
@@ -2694,6 +2693,7 @@ export type Database = {
           name: string
           notes?: string | null
           parent_phone?: string | null
+          parent_phone2?: string | null
           payment_phone?: string | null
           school?: string | null
           school_type?: string | null
@@ -2711,7 +2711,6 @@ export type Database = {
           funnel_stage?: string | null
           funnel_stage_updated_at?: string | null
           grade?: number | null
-          has_sibling?: boolean | null
           id?: string
           is_active?: boolean
           lead_source?: string | null
@@ -2720,6 +2719,7 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_phone?: string | null
+          parent_phone2?: string | null
           payment_phone?: string | null
           school?: string | null
           school_type?: string | null

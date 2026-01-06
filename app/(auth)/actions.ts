@@ -20,8 +20,8 @@ export async function checkPhoneAndRole(phone: string, role: "parent" | "student
     // Search students table using Admin Client to bypass RLS
     const { data: matches, error } = await adminClient
         .from("students")
-        .select("student_phone, parent_phone")
-        .or(`student_phone.eq.${cleanPhone},parent_phone.eq.${cleanPhone}`)
+        .select("student_phone, parent_phone, parent_phone2")
+        .or(`student_phone.eq.${cleanPhone},parent_phone.eq.${cleanPhone},parent_phone2.eq.${cleanPhone}`)
 
     if (error) {
         console.error("Phone check error:", error)
@@ -33,7 +33,7 @@ export async function checkPhoneAndRole(phone: string, role: "parent" | "student
     }
 
     // Intelligent Role Suggestion Logic
-    const hasParentMatch = matches.some((m: any) => m.parent_phone === cleanPhone)
+    const hasParentMatch = matches.some((m: any) => m.parent_phone === cleanPhone || m.parent_phone2 === cleanPhone)
     const hasStudentMatch = matches.some((m: any) => m.student_phone === cleanPhone)
 
     if (role === "student" && hasParentMatch && !hasStudentMatch) {
@@ -137,15 +137,15 @@ async function matchStudentToUser(userId: string, phone: string, role: string) {
     // Lookup students (Admin)
     const { data: students } = await adminClient
         .from("students")
-        .select("id, student_phone, parent_phone")
-        .or(`student_phone.eq.${phone},parent_phone.eq.${phone}`)
+        .select("id, student_phone, parent_phone, parent_phone2")
+        .or(`student_phone.eq.${phone},parent_phone.eq.${phone},parent_phone2.eq.${phone}`)
 
     if (students && students.length > 0) {
         let studentsToLink: string[] = []
 
         if (role === "parent") {
             studentsToLink = students
-                .filter((s: any) => s.parent_phone === phone)
+                .filter((s: any) => s.parent_phone === phone || s.parent_phone2 === phone)
                 .map((s: any) => s.id)
         } else {
             const selfMatch = students.find((s: any) => s.student_phone === phone)
@@ -153,7 +153,7 @@ async function matchStudentToUser(userId: string, phone: string, role: string) {
                 studentsToLink = [selfMatch.id]
             } else {
                 studentsToLink = students
-                    .filter((s: any) => s.parent_phone === phone)
+                    .filter((s: any) => s.parent_phone === phone || s.parent_phone2 === phone)
                     .map((s: any) => s.id)
             }
         }

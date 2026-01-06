@@ -44,16 +44,8 @@ function mapStudentRowToInfo(row: StudentRow): StudentInfo {
     name: row.name,
     grade: row.grade,
     school: row.school,
-    has_sibling: row.has_sibling,
     status: row.status,
   }
-}
-
-// 형제 할인 계산 함수
-function calculateSiblingDiscount(baseAmount: number, hasSibling: boolean): number {
-  if (!hasSibling) return baseAmount
-  // 형제 할인 5% 적용
-  return Math.floor(baseAmount * 0.95)
 }
 
 // 월별 학원비 통계 계산
@@ -96,7 +88,7 @@ export async function getTuitionFees(
       .select(`
         *,
         class:classes(id, name, subject),
-        student:students(id, name, grade, school, has_sibling)
+        student:students(id, name, grade, school)
       `)
       .eq("year", year)
       .eq("month", month)
@@ -162,7 +154,7 @@ export async function getTuitionFeesByRange(
       .select(`
         *,
         class:classes(id, name, subject),
-        student:students(id, name, grade, school, has_sibling)
+        student:students(id, name, grade, school)
       `)
       .order("year", { ascending: true })
       .order("month", { ascending: true })
@@ -387,7 +379,7 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
       .from("class_students")
       .select(`
         class_id,
-        student:students(id, name, grade, school, has_sibling, status)
+        student:students(id, name, grade, school, status)
       `)
     
     if (classStudentsError) {
@@ -464,19 +456,14 @@ export async function generateMonthlyTuition(
         totalCount++
         
         try {
-          let amount = classData.monthly_fee
-          
-          // 형제 할인 적용
-          if (applyDiscount && student.has_sibling) {
-            amount = calculateSiblingDiscount(amount, true)
-          }
-          
+          const amount = classData.monthly_fee
+
           tuitionFeesToCreate.push({
             class_id: classData.id,
             student_id: student.id,
             year,
             month,
-            is_sibling: student.has_sibling || false,
+            is_sibling: false,
             class_type: '정규',
             amount,
             note: undefined,
