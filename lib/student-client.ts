@@ -20,7 +20,6 @@ function mapStudentRowToStudent(row: StudentRow): Student {
     school: row.school,
     school_type: row.school_type as Student["school_type"],
     grade: row.grade,
-    has_sibling: row.has_sibling || false,
     lead_source: row.lead_source as Student["lead_source"],
     start_date: row.start_date,
     end_date: row.end_date,

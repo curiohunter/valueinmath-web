@@ -51,13 +51,13 @@ interface FormValues {
   name: string
   student_phone: string | null
   parent_phone: string | null
+  parent_phone2: string | null
   payment_phone: string | null
   status: string
   department: string | null
   school: string | null
   school_type: string | null
   grade: number | null
-  has_sibling: boolean
   lead_source: string | null
   start_date: Date | null
   end_date: Date | null
@@ -105,13 +105,13 @@ export function StudentFormModal({
       name: "",
       student_phone: "",
       parent_phone: "",
+      parent_phone2: "",
       payment_phone: "",
       status: isConsultationMode ? "신규상담" : "미등록",
       department: null,
       school: "",
       school_type: null,
       grade: null,
-      has_sibling: false,
       lead_source: null,
       start_date: null,
       end_date: null,
@@ -144,13 +144,13 @@ export function StudentFormModal({
           name: student.name,
           student_phone: student.student_phone,
           parent_phone: student.parent_phone,
+          parent_phone2: student.parent_phone2,
           payment_phone: student.payment_phone,
           status: student.status,
           department: student.department,
           school: student.school,
           school_type: student.school_type,
           grade: student.grade,
-          has_sibling: student.has_sibling,
           lead_source: student.lead_source,
           start_date: startDate,
           end_date: endDate,
@@ -172,13 +172,13 @@ export function StudentFormModal({
         name: "",
         student_phone: "",
         parent_phone: "",
+        parent_phone2: "",
         payment_phone: "",
         status: isConsultationMode ? "신규상담" : "미등록",
         department: null,
         school: "",
         school_type: null,
         grade: null,
-        has_sibling: false,
         lead_source: null,
         start_date: null,
         end_date: null,
@@ -289,13 +289,13 @@ export function StudentFormModal({
         name: values.name,
         student_phone: values.student_phone || null,
         parent_phone: values.parent_phone || null,
+        parent_phone2: values.parent_phone2 || null,
         payment_phone: values.payment_phone || null,
         status: values.status as StudentStatus,
         department: values.department || null,
         school: values.school || null,
         school_type: values.school_type || null,  // 빈 문자열을 null로 변환
         grade: values.grade || null,
-        has_sibling: values.has_sibling || false,
         lead_source: values.lead_source || null,
         start_date: values.start_date ? getKoreanDateString(values.start_date) : null,
         end_date: values.end_date ? getKoreanDateString(values.end_date) : null,
@@ -465,9 +465,9 @@ export function StudentFormModal({
               // Step 1: 학생 정보
               <form onSubmit={(e) => { e.preventDefault(); handleStep1Submit(); }} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* 기본 정보 */}
+                  {/* 왼쪽 컬럼: 기본 정보 + 연락처 */}
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium">기본 정보</h3>
+                    <h3 className="text-lg font-medium border-b pb-2">기본 정보</h3>
 
                     <FormField
                       control={form.control}
@@ -483,6 +483,58 @@ export function StudentFormModal({
                       )}
                     />
 
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="status"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>상태 *</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="상태 선택" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="재원">재원</SelectItem>
+                                <SelectItem value="퇴원">퇴원</SelectItem>
+                                <SelectItem value="휴원">휴원</SelectItem>
+                                <SelectItem value="미등록">미등록</SelectItem>
+                                <SelectItem value="신규상담">신규상담</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="department"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>담당관 *</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || undefined}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="담당관 선택" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="고등관">고등관</SelectItem>
+                                <SelectItem value="중등관">중등관</SelectItem>
+                                <SelectItem value="영재관">영재관</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <h3 className="text-lg font-medium border-b pb-2 pt-2">연락처</h3>
+
                     <FormField
                       control={form.control}
                       name="student_phone"
@@ -497,19 +549,35 @@ export function StudentFormModal({
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="parent_phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>학부모 연락처</FormLabel>
-                          <FormControl>
-                            <Input placeholder="01012345678" {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="parent_phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>학부모1 (어머니)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="01012345678" {...field} value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="parent_phone2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>학부모2 (아버지)</FormLabel>
+                            <FormControl>
+                              <Input placeholder="01012345678" {...field} value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     <FormField
                       control={form.control}
@@ -521,81 +589,17 @@ export function StudentFormModal({
                             <Input placeholder="01012345678" {...field} value={field.value || ""} />
                           </FormControl>
                           <FormDescription className="text-xs">
-                            결제선생 청구용 번호 (없으면 학부모 연락처 사용)
+                            결제선생 청구용 (미입력 시 학부모1 사용)
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>상태 *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="상태 선택" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="재원">재원</SelectItem>
-                              <SelectItem value="퇴원">퇴원</SelectItem>
-                              <SelectItem value="휴원">휴원</SelectItem>
-                              <SelectItem value="미등록">미등록</SelectItem>
-                              <SelectItem value="신규상담">신규상담</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="department"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>담당관 *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || undefined}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="담당관 선택" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="고등관">고등관</SelectItem>
-                              <SelectItem value="중등관">중등관</SelectItem>
-                              <SelectItem value="영재관">영재관</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="has_sibling"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                          <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>형제 할인 대상</FormLabel>
-                            <FormDescription>형제가 함께 수강중인 경우 체크해주세요.</FormDescription>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
                   </div>
 
-                  {/* 학교 및 추가 정보 */}
+                  {/* 오른쪽 컬럼: 학교 정보 + 등록 정보 */}
                   <div className="space-y-4">
-                    <h3 className="text-lg font-medium">학교 정보</h3>
+                    <h3 className="text-lg font-medium border-b pb-2">학교 정보</h3>
 
                     <FormField
                       control={form.control}
@@ -611,94 +615,107 @@ export function StudentFormModal({
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="school_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>학교 구분</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || undefined}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="학교 구분 선택" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="초등학교">초등학교</SelectItem>
-                              <SelectItem value="중학교">중학교</SelectItem>
-                              <SelectItem value="고등학교">고등학교</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="school_type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>학교 구분</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || undefined}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="선택" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="초등학교">초등학교</SelectItem>
+                                <SelectItem value="중학교">중학교</SelectItem>
+                                <SelectItem value="고등학교">고등학교</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="grade"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>학년</FormLabel>
-                          <Select
-                            onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                            value={field.value?.toString() || undefined}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="학년 선택" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="1">1학년</SelectItem>
-                              <SelectItem value="2">2학년</SelectItem>
-                              <SelectItem value="3">3학년</SelectItem>
-                              <SelectItem value="4">4학년</SelectItem>
-                              <SelectItem value="5">5학년</SelectItem>
-                              <SelectItem value="6">6학년</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      <FormField
+                        control={form.control}
+                        name="grade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>학년</FormLabel>
+                            <Select
+                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || undefined}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="선택" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="1">1학년</SelectItem>
+                                <SelectItem value="2">2학년</SelectItem>
+                                <SelectItem value="3">3학년</SelectItem>
+                                <SelectItem value="4">4학년</SelectItem>
+                                <SelectItem value="5">5학년</SelectItem>
+                                <SelectItem value="6">6학년</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
-                    <FormField
-                      control={form.control}
-                      name="lead_source"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>유입 경로</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || undefined}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="유입 경로 선택" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="블로그">블로그</SelectItem>
-                              <SelectItem value="입소문">입소문</SelectItem>
-                              <SelectItem value="전화상담">전화상담</SelectItem>
-                              <SelectItem value="원외학부모추천">원외학부모추천</SelectItem>
-                              <SelectItem value="원내학부모추천">원내학부모추천</SelectItem>
-                              <SelectItem value="원내친구추천">원내친구추천</SelectItem>
-                              <SelectItem value="원외친구추천">원외친구추천</SelectItem>
-                              <SelectItem value="오프라인">오프라인</SelectItem>
-                              <SelectItem value="형제">형제</SelectItem>
-                              <SelectItem value="문자메세지">문자메세지</SelectItem>
-                              <SelectItem value="부원장">부원장</SelectItem>
-                              <SelectItem value="맘까페">맘까페</SelectItem>
-                              <SelectItem value="홈페이지">홈페이지</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <h3 className="text-lg font-medium border-b pb-2 pt-2">등록 정보</h3>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {renderDatePicker("최초 상담일", "first_contact_date", true)}
+
+                      <FormField
+                        control={form.control}
+                        name="lead_source"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>유입 경로</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || undefined}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="선택" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="블로그">블로그</SelectItem>
+                                <SelectItem value="입소문">입소문</SelectItem>
+                                <SelectItem value="전화상담">전화상담</SelectItem>
+                                <SelectItem value="원외학부모추천">원외학부모추천</SelectItem>
+                                <SelectItem value="원내학부모추천">원내학부모추천</SelectItem>
+                                <SelectItem value="원내친구추천">원내친구추천</SelectItem>
+                                <SelectItem value="원외친구추천">원외친구추천</SelectItem>
+                                <SelectItem value="오프라인">오프라인</SelectItem>
+                                <SelectItem value="형제">형제</SelectItem>
+                                <SelectItem value="문자메세지">문자메세지</SelectItem>
+                                <SelectItem value="부원장">부원장</SelectItem>
+                                <SelectItem value="맘까페">맘까페</SelectItem>
+                                <SelectItem value="홈페이지">홈페이지</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {renderDatePicker("시작일", "start_date", status === "재원")}
+                      {renderDatePicker("종료일", "end_date", status === "퇴원")}
+                    </div>
 
                     {/* 퇴원 사유 (상태가 퇴원일 때만 표시) */}
                     {status === "퇴원" && (
-                      <div className="space-y-3 p-4 rounded-lg border border-red-200 bg-red-50">
+                      <div className="space-y-3 p-3 rounded-lg border border-red-200 bg-red-50">
                         <h4 className="text-sm font-medium text-red-800">퇴원 사유</h4>
                         <FormField
                           control={form.control}
@@ -746,38 +763,28 @@ export function StudentFormModal({
                       </div>
                     )}
                   </div>
+                </div>
 
-                  {/* 날짜 정보 */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">날짜 정보</h3>
-                    {renderDatePicker("시작일", "start_date", status === "재원")}
-                    {renderDatePicker("종료일", "end_date", status === "퇴원")}
-                    {renderDatePicker("최초 상담일", "first_contact_date", true)}
-                  </div>
-
-                  {/* 메모 */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">추가 정보</h3>
-
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>메모</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="학생에 대한 추가 정보를 입력하세요."
-                              className="min-h-[120px]"
-                              {...field}
-                              value={field.value || ""}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                {/* 메모 - 전체 너비 */}
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium border-b pb-2">메모</h3>
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Textarea
+                            placeholder="학생에 대한 추가 정보를 입력하세요."
+                            className="min-h-[80px]"
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
                 <DialogFooter>

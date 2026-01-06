@@ -23,13 +23,13 @@ export interface Student {
   name: string
   student_phone: string | null
   parent_phone: string | null
+  parent_phone2: string | null
   payment_phone: string | null
   status: StudentStatus
   department: Department | null
   school: string | null
   school_type: SchoolType | null
   grade: number | null
-  has_sibling: boolean
   lead_source: LeadSource | null
   created_by_type: CreatedByType
   start_date: string | null

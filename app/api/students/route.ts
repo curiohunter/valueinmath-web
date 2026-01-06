@@ -12,20 +12,24 @@ function mapStudentRowToStudent(row: Database["public"]["Tables"]["students"]["R
     name: row.name,
     student_phone: row.student_phone,
     parent_phone: row.parent_phone,
+    parent_phone2: row.parent_phone2,
     payment_phone: row.payment_phone,
     status: row.status as Student["status"],
     department: row.department as Student["department"],
     school: row.school,
     school_type: row.school_type as Student["school_type"],
     grade: row.grade,
-    has_sibling: row.has_sibling || false, // null을 false로 변환
     lead_source: row.lead_source as Student["lead_source"],
+    created_by_type: (row.created_by_type as Student["created_by_type"]) || 'employee',
     start_date: row.start_date,
     end_date: row.end_date,
     first_contact_date: row.first_contact_date,
     notes: row.notes,
     created_at: row.created_at || '', // null을 빈 문자열로 변환
     updated_at: row.updated_at || '', // null을 빈 문자열로 변환
+    is_active: row.is_active,
+    left_at: row.left_at,
+    left_reason: row.left_reason,
   }
 }
 
