@@ -118,13 +118,15 @@ export function PrintClassesTable({
     return acc
   }, {})
 
-  // 관별 통계
+  // 관별 통계 (중복 학생 제거)
   const getDepartmentStats = (deptClasses: Class[]) => {
-    let totalStudents = 0
+    const uniqueStudentIds = new Set<string>()
     deptClasses.forEach(cls => {
-      totalStudents += getClassStudents(cls.id).length
+      getClassStudents(cls.id).forEach(student => {
+        uniqueStudentIds.add(student.id)
+      })
     })
-    return { classCount: deptClasses.length, studentCount: totalStudents }
+    return { classCount: deptClasses.length, studentCount: uniqueStudentIds.size }
   }
 
   const formatDate = (date: Date) => {
@@ -327,6 +329,47 @@ export function PrintClassesTable({
         )
       })}
 
+      {/* 반 미등록 재원생 섹션 */}
+      {(() => {
+        // 반에 등록된 재원생 ID 목록
+        const enrolledStudentIds = new Set(
+          classStudents.map(cs => cs.student_id)
+        )
+        // 재원 상태이지만 반에 등록되지 않은 학생
+        const unenrolledStudents = students
+          .filter(s => s.status === '재원' && !enrolledStudentIds.has(s.id))
+          .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+
+        if (unenrolledStudents.length === 0) return null
+
+        return (
+          <div className="department-section">
+            <div className="department-header" style={{ backgroundColor: '#6b7280' }}>
+              <span>미등록</span>
+              <span className="department-stats">
+                {unenrolledStudents.length}명
+              </span>
+            </div>
+            <table className="class-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '100%' }}>반에 등록되지 않은 재원생</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="col-students">
+                    <span className="student-list">
+                      {unenrolledStudents.map(s => formatStudentName(s)).join(', ')}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
+
       <div className="summary-row">
         <div className="summary-item">
           <div className="summary-label">총 반 수</div>
@@ -336,6 +379,24 @@ export function PrintClassesTable({
           <div className="summary-label">총 학생 수 (재원)</div>
           <div className="summary-value">
             {students.filter(s => s.status === '재원').length}명
+          </div>
+        </div>
+        <div className="summary-item">
+          <div className="summary-label">반 등록</div>
+          <div className="summary-value">
+            {(() => {
+              const enrolledIds = new Set(classStudents.map(cs => cs.student_id))
+              return students.filter(s => s.status === '재원' && enrolledIds.has(s.id)).length
+            })()}명
+          </div>
+        </div>
+        <div className="summary-item">
+          <div className="summary-label">미등록</div>
+          <div className="summary-value">
+            {(() => {
+              const enrolledIds = new Set(classStudents.map(cs => cs.student_id))
+              return students.filter(s => s.status === '재원' && !enrolledIds.has(s.id)).length
+            })()}명
           </div>
         </div>
       </div>
