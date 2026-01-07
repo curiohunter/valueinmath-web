@@ -61,14 +61,8 @@ interface DashboardStats {
   cohortData: CohortMonthData[] // 최근 3개월 코호트 데이터 (각 월별 YoY 포함)
 }
 
-interface TeacherGroup {
-  teacherName: string
-  students: any[]
-}
-
 interface StatsCardsProps {
   stats: DashboardStats
-  atRiskStudents: TeacherGroup[]
 }
 
 // 학교타입+학년 포맷팅 함수: "홍길동(고2)"
@@ -113,7 +107,7 @@ const formatDeptStudents = (dept: string, students: StudentInfo[]): string => {
   return `${dept}: ${students.length}명 - ${names}${extra}`
 }
 
-export function StatsCards({ stats, atRiskStudents }: StatsCardsProps) {
+export function StatsCards({ stats }: StatsCardsProps) {
   const [enrollmentModalOpen, setEnrollmentModalOpen] = useState(false)
   const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false)
 

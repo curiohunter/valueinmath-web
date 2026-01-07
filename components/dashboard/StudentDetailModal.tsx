@@ -39,7 +39,7 @@ import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { AtRiskStudent } from "./AtRiskStudentsCard";
+import type { ChurnRiskStudent } from "./ChurnRiskCard";
 import type { Database } from "@/types/database";
 
 type Student = Database["public"]["Tables"]["students"]["Row"];
@@ -51,7 +51,7 @@ type Class = Database["public"]["Tables"]["classes"]["Row"];
 interface StudentDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  student: AtRiskStudent | null;
+  student: ChurnRiskStudent | null;
 }
 
 interface StudentDetail extends Student {
@@ -90,12 +90,12 @@ export default function StudentDetailModal({
       const { data: studentData, error: studentError } = await supabase
         .from("students")
         .select("*")
-        .eq("id", student.studentId)
+        .eq("id", student.id)
         .single();
 
       if (studentError) throw studentError;
 
-      // 2. 수강 반 정보 로드
+      // 2. 수강 반 정보 로드 (현재 활성화된 반만)
       const { data: classData, error: classError } = await supabase
         .from("class_students")
         .select(`
@@ -103,11 +103,13 @@ export default function StudentDetailModal({
           classes!inner(
             id,
             name,
+            is_active,
             teacher_id,
             employees!inner(name)
           )
         `)
-        .eq("student_id", student.studentId);
+        .eq("student_id", student.id)
+        .eq("classes.is_active", true);
 
       if (classError) throw classError;
 
@@ -118,7 +120,7 @@ export default function StudentDetailModal({
       const { data: studyLogs, error: studyError } = await supabase
         .from("study_logs")
         .select("*")
-        .eq("student_id", student.studentId)
+        .eq("student_id", student.id)
         .gte("date", oneMonthAgo.toISOString().split("T")[0])
         .order("date", { ascending: false });
 
@@ -128,7 +130,7 @@ export default function StudentDetailModal({
       const { data: testLogs, error: testError } = await supabase
         .from("test_logs")
         .select("*")
-        .eq("student_id", student.studentId)
+        .eq("student_id", student.id)
         .order("date", { ascending: false })
         .limit(20);
 
@@ -138,7 +140,7 @@ export default function StudentDetailModal({
       const { data: makeupClasses, error: makeupError } = await supabase
         .from("makeup_classes")
         .select("*")
-        .eq("student_id", student.studentId)
+        .eq("student_id", student.id)
         .order("created_at", { ascending: false });
 
       if (makeupError) throw makeupError;
@@ -167,10 +169,12 @@ export default function StudentDetailModal({
 
   const getRiskBadgeVariant = (level: string) => {
     switch (level) {
-      case "high":
+      case "critical":
         return "destructive";
-      case "medium":
+      case "high":
         return "secondary";
+      case "medium":
+        return "outline";
       case "low":
         return "outline";
       default:
@@ -180,14 +184,16 @@ export default function StudentDetailModal({
 
   const getRiskLabel = (level: string) => {
     switch (level) {
+      case "critical":
+        return "매우 위험";
       case "high":
-        return "고위험";
+        return "위험";
       case "medium":
-        return "중위험";
+        return "주의";
       case "low":
-        return "주의";
+        return "양호";
       default:
-        return "주의";
+        return "양호";
     }
   };
 
@@ -222,13 +228,13 @@ export default function StudentDetailModal({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <span>{student.studentName} 학생 상세 정보</span>
-            <Badge variant={getRiskBadgeVariant(student.riskLevel)}>
-              {getRiskLabel(student.riskLevel)}
+            <span>{student.name} 학생 상세 정보</span>
+            <Badge variant={getRiskBadgeVariant(student.risk_level)}>
+              {getRiskLabel(student.risk_level)}
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            종합 위험도 점수: {student.totalScore.toFixed(1)}점
+            이탈 위험도: {student.risk_score}점 | 재원 {student.tenure_months}개월
           </DialogDescription>
         </DialogHeader>
 
@@ -242,42 +248,99 @@ export default function StudentDetailModal({
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4">
-              {/* 위험 지표 카드 */}
+              {/* 위험 요인 카드 */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">위험 지표 분석</CardTitle>
+                  <CardTitle className="text-base">이탈 위험 요인</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
-                      <BookOpen className="h-5 w-5 text-gray-600 mb-1" />
-                      <span className="text-xs text-gray-600">출석</span>
-                      <span className={cn("text-lg font-bold", getScoreColor(student.factors.attendanceAvg))}>
-                        {student.factors.attendanceAvg.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
-                      <ClipboardX className="h-5 w-5 text-gray-600 mb-1" />
-                      <span className="text-xs text-gray-600">숙제</span>
-                      <span className={cn("text-lg font-bold", getScoreColor(student.factors.homeworkAvg))}>
-                        {student.factors.homeworkAvg.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
-                      <Clock className="h-5 w-5 text-gray-600 mb-1" />
-                      <span className="text-xs text-gray-600">집중도</span>
-                      <span className={cn("text-lg font-bold", getScoreColor(student.factors.focusAvg))}>
-                        {student.factors.focusAvg.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
-                      <School className="h-5 w-5 text-gray-600 mb-1" />
-                      <span className="text-xs text-gray-600">시험</span>
-                      <span className={cn("text-lg font-bold", getScoreColor(student.factors.testScore || 0, "test"))}>
-                        {student.factors.testScore ? Math.round(student.factors.testScore) : "없음"}
-                      </span>
-                    </div>
+                <CardContent className="space-y-4">
+                  {/* 위험 요인 목록 */}
+                  <div className="flex flex-wrap gap-2">
+                    {student.risk_factors.map((factor, idx) => (
+                      <Badge
+                        key={idx}
+                        variant={factor.startsWith("📈") ? "outline" : "secondary"}
+                        className={cn(
+                          "text-xs",
+                          factor.startsWith("📈") && "bg-green-50 text-green-700 border-green-200"
+                        )}
+                      >
+                        {factor}
+                      </Badge>
+                    ))}
                   </div>
+
+                  {/* AI 상담 분석 */}
+                  {student.ai_churn_risk && (
+                    <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <span className="text-sm font-medium text-amber-800">AI 상담 분석</span>
+                      </div>
+                      <p className="text-sm text-amber-700">{student.ai_churn_risk}</p>
+                    </div>
+                  )}
+
+                  {/* 추세 정보 */}
+                  {student.trends && (
+                    <div className="grid grid-cols-3 gap-3 mt-4">
+                      {student.trends.attendance && (
+                        <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
+                          <BookOpen className="h-5 w-5 text-gray-600 mb-1" />
+                          <span className="text-xs text-gray-600">출석률</span>
+                          <div className="flex items-center gap-1">
+                            {student.trends.attendance.trend === 'improving' ? (
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                            ) : student.trends.attendance.trend === 'declining' ? (
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Minus className="h-4 w-4 text-gray-400" />
+                            )}
+                            <span className="text-sm font-medium">
+                              {student.trends.attendance.recent}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {student.trends.mathflat && (
+                        <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
+                          <School className="h-5 w-5 text-gray-600 mb-1" />
+                          <span className="text-xs text-gray-600">매쓰플랫</span>
+                          <div className="flex items-center gap-1">
+                            {student.trends.mathflat.trend === 'improving' ? (
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                            ) : student.trends.mathflat.trend === 'declining' ? (
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Minus className="h-4 w-4 text-gray-400" />
+                            )}
+                            <span className="text-sm font-medium">
+                              {student.trends.mathflat.recent}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {student.trends.consultation && (
+                        <div className="flex flex-col items-center p-3 bg-gray-50 rounded-lg">
+                          <Clock className="h-5 w-5 text-gray-600 mb-1" />
+                          <span className="text-xs text-gray-600">상담 추세</span>
+                          <div className="flex items-center gap-1">
+                            {student.trends.consultation.trend === 'improving' ? (
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                            ) : student.trends.consultation.trend === 'declining' ? (
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                            ) : (
+                              <Minus className="h-4 w-4 text-gray-400" />
+                            )}
+                            <span className="text-sm font-medium">
+                              {student.trends.consultation.trend === 'improving' ? '개선' :
+                               student.trends.consultation.trend === 'declining' ? '악화' : '유지'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -559,7 +622,7 @@ export default function StudentDetailModal({
           </Button>
           <Button
             onClick={() => {
-              window.location.href = `/learning?student=${student.studentId}`;
+              window.location.href = `/learning?student=${student.id}`;
             }}
           >
             학습 관리 페이지로 이동

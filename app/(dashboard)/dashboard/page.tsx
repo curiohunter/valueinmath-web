@@ -14,7 +14,7 @@ import { Plus, Calendar, Phone, GraduationCap, TrendingUp, Users, Edit, Trash2, 
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
 import { EntranceTestTable, type EntranceTestData as EntranceTestTableData } from "@/components/dashboard/EntranceTestTable"
-import AtRiskStudentsCard, { type AtRiskStudent, type TeacherGroup } from "@/components/dashboard/AtRiskStudentsCard"
+import ChurnRiskCard, { type ChurnRiskStudent } from "@/components/dashboard/ChurnRiskCard"
 import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
 import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
 import { StudentManagementTab } from "@/components/dashboard/student-management-tab"
@@ -32,7 +32,6 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/providers/auth-provider"
 import { calendarService } from "@/services/calendar"
-import { atRiskSnapshotService } from "@/services/at-risk-snapshot-service"
 import { getKoreanMonthRange, getKoreanDateString, getKoreanDateTimeString, parseKoreanDateTime } from "@/lib/utils"
 import type { Database } from "@/types/database"
 import { toast } from "sonner"
@@ -87,7 +86,7 @@ export default function DashboardPage() {
   const supabase = createClient()
   const [consultations, setConsultations] = useState<ConsultationData[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
-  const [atRiskStudents, setAtRiskStudents] = useState<TeacherGroup[]>([])
+  const [churnRiskStudents, setChurnRiskStudents] = useState<ChurnRiskStudent[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [stats, setStats] = useState<DashboardStats>({
@@ -129,7 +128,7 @@ export default function DashboardPage() {
   // 테이블로 변경되어 더 이상 필요하지 않음
   // const [expandedConsultations, setExpandedConsultations] = useState<Set<string>>(new Set())
   // const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set())
-  const [selectedStudent, setSelectedStudent] = useState<AtRiskStudent | null>(null)
+  const [selectedStudent, setSelectedStudent] = useState<ChurnRiskStudent | null>(null)
   const [isStudentDetailModalOpen, setIsStudentDetailModalOpen] = useState(false)
   
   // 학생 정보 모달 관련 상태
@@ -1208,14 +1207,15 @@ export default function DashboardPage() {
     loadEmployeeId()
   }, [user])
 
-  // 위험 학생 데이터 로딩 - 상담 페이지와 동일한 서비스 사용
-  const loadAtRiskStudents = async () => {
+  // 이탈 위험 학생 데이터 로딩 - churn-risk API 사용
+  const loadChurnRiskStudents = async () => {
     try {
-      // atRiskSnapshotService를 사용하여 동일한 기준 적용
-      const groups = await atRiskSnapshotService.calculateAtRiskStudents();
-      setAtRiskStudents(groups);
+      const response = await fetch('/api/churn-risk');
+      if (!response.ok) throw new Error('Failed to fetch churn risk data');
+      const data = await response.json();
+      setChurnRiskStudents(data.students || []);
     } catch (error) {
-      console.error('위험 학생 데이터 로딩 오류:', error);
+      console.error('이탈 위험 학생 데이터 로딩 오류:', error);
     }
   };
 
@@ -1225,7 +1225,7 @@ export default function DashboardPage() {
       loadStats(),
       loadConsultations(),
       loadEntranceTests(),
-      loadAtRiskStudents()
+      loadChurnRiskStudents()
     ])
   }
 
@@ -1284,7 +1284,7 @@ export default function DashboardPage() {
 
         <TabsContent value="overview" className="space-y-6 mt-6">
           {/* 통계 카드 */}
-          <StatsCards stats={stats} atRiskStudents={atRiskStudents} />
+          <StatsCards stats={stats} />
 
           {/* 바로가기 섹션 */}
           <QuickAccessSection />
@@ -1350,14 +1350,14 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 하단: 학원 일정 캘린더 및 위험 학생 관리 */}
+      {/* 하단: 학원 일정 캘린더 및 이탈 위험 학생 */}
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
         {/* 왼쪽: 캘린더 */}
         <DashboardCalendar />
-        
-        {/* 오른쪽: 위험 학생 관리 */}
-        <AtRiskStudentsCard 
-          teacherGroups={atRiskStudents}
+
+        {/* 오른쪽: 이탈 위험 학생 */}
+        <ChurnRiskCard
+          students={churnRiskStudents}
           loading={loading}
           onStudentClick={(student) => {
             setSelectedStudent(student);
