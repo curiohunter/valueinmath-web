@@ -163,7 +163,7 @@ export default function LearningPage() {
     try {
       const { data: classData } = await supabase.from("classes").select("id, name, teacher_id").eq("is_active", true);
       const { data: classStudentData } = await supabase.from("class_students").select("class_id, student_id");
-      const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type");
+      const { data: studentData } = await supabase.from("students").select("id, name, status, grade, school_type").eq("is_active", true);
       const { data: teacherData } = await supabase.from("employees").select("id, name");
 
       // 선생님별로 정렬 (선생님 이름 → 반 이름)

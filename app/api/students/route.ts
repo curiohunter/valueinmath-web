@@ -64,6 +64,9 @@ export async function GET(request: NextRequest) {
 
     let query = adminClient.from("students").select("*", { count: "exact" })
 
+    // 기본적으로 활성 학생만 조회 (is_active = true)
+    query = query.eq("is_active", true)
+
     // 검색어 필터 적용
     if (filters.search) {
       query = query.or(

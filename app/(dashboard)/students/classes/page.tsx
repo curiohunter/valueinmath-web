@@ -33,7 +33,7 @@ export default function ClassesPage() {
         .select("id, name, position")
         .in("position", ["원장", "강사"])
         .order("name", { ascending: true }),
-      supabase.from("students").select("id, name, status, school_type, grade").order("name", { ascending: true }),
+      supabase.from("students").select("id, name, status, school_type, grade").eq("is_active", true).order("name", { ascending: true }),
       supabase.from("class_students").select("class_id, student_id"),
       supabase.from("class_schedules").select("*")
     ])

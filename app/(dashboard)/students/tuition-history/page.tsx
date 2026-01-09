@@ -106,7 +106,7 @@ export default function TuitionHistoryPage() {
   useEffect(() => {
     async function fetchClassesAndTeachers() {
       // 반 정보 가져오기 (teacher_id 포함)
-      const { data: classes } = await supabase.from("classes").select("id,name,teacher_id");
+      const { data: classes } = await supabase.from("classes").select("id,name,teacher_id").eq("is_active", true);
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
       setClassOptions(classes || []);
       
