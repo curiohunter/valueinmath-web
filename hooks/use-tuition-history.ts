@@ -54,8 +54,8 @@ export function useTuitionHistoryMeta() {
     
     try {
       const [classesResult, studentsResult] = await Promise.all([
-        supabaseClient.from("classes").select("id,name"),
-        supabaseClient.from("students").select("id,name")
+        supabaseClient.from("classes").select("id,name").eq("is_active", true),
+        supabaseClient.from("students").select("id,name").eq("is_active", true)
       ])
 
       if (classesResult.error) throw classesResult.error

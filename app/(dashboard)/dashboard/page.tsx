@@ -173,76 +173,82 @@ export default function DashboardPage() {
       const lastYearMonthEnd = new Date(lastYearYear, lastYearMonth + 1, 0, 23, 59, 59).toISOString()
 
 
-      // 재원생 수
-      const { data: activeStudents, error: activeError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('status', '재원')
-      
-      if (activeError) {
-        console.error('재원생 조회 오류:', activeError)
-        toast.error(`데이터 로딩 실패: ${activeError.message}`)
+      // 보강/학원비 통계용 날짜 계산
+      const today = getKoreanDateString()
+      const weekFromNow = new Date(today)
+      weekFromNow.setDate(weekFromNow.getDate() + 7)
+      const weekFromNowStr = weekFromNow.toISOString().split('T')[0]
+      const currentDate = new Date()
+      const currentYear = currentDate.getFullYear()
+      const currentMonth = currentDate.getMonth() + 1
+
+      // 코호트 분석용 날짜
+      const twentyFourMonthsAgo = new Date()
+      twentyFourMonthsAgo.setMonth(twentyFourMonthsAgo.getMonth() - 24)
+      const cohortStartDate = `${twentyFourMonthsAgo.getFullYear()}-${String(twentyFourMonthsAgo.getMonth() + 1).padStart(2, '0')}-01`
+
+      // 모든 쿼리를 병렬로 실행 (성능 최적화)
+      const [
+        activeStudentsRes,
+        consultationsRes,
+        lastYearConsultationsRes,
+        testsRes,
+        newEnrollmentsRes,
+        withdrawalsRes,
+        lastYearWithdrawalsRes,
+        makeupRes,
+        tuitionRes,
+        todosRes,
+        consultationRequestsRes,
+        cohortRes
+      ] = await Promise.all([
+        // 재원생 수 (is_active = true인 학생만)
+        supabase.from('students').select('*').eq('status', '재원').eq('is_active', true),
+        // 이번달 신규상담
+        supabase.from('students').select('*').eq('is_active', true).gte('first_contact_date', monthStart).lt('first_contact_date', monthEnd),
+        // 작년 동월 신규상담
+        supabase.from('students').select('*').eq('is_active', true).gte('first_contact_date', lastYearMonthStart).lt('first_contact_date', lastYearMonthEnd),
+        // 이번달 입학테스트
+        supabase.from('entrance_tests').select(`*, students!student_id (department)`).gte('test_date', monthStart).lt('test_date', monthEnd),
+        // 이번달 신규등원
+        supabase.from('students').select('*').eq('is_active', true).gte('start_date', monthStart).lt('start_date', monthEnd).eq('status', '재원'),
+        // 이번달 퇴원
+        supabase.from('students').select('*').eq('is_active', true).gte('end_date', monthStart).lt('end_date', monthEnd).eq('status', '퇴원'),
+        // 작년 동월 퇴원
+        supabase.from('students').select('*').eq('is_active', true).gte('end_date', lastYearMonthStart).lt('end_date', lastYearMonthEnd).eq('status', '퇴원'),
+        // 보강 데이터
+        supabase.from('makeup_classes').select(`*, classes!inner (id, name, teacher_id, employees!teacher_id (id, name))`).eq('status', 'scheduled'),
+        // 학원비 납부 통계
+        supabase.from('tuition_fees').select('*').eq('year', currentYear).eq('month', currentMonth),
+        // 투두 통계
+        supabase.from('todos').select('*').neq('status', 'completed').not('assigned_to', 'is', null),
+        // 상담요청 통계
+        supabase.from('consultation_requests').select('status, counselor_id'),
+        // 코호트 분석
+        supabase.rpc("get_cohort_funnel_analysis", { p_lead_source: undefined, p_start_date: cohortStartDate })
+      ])
+
+      // 결과 추출
+      const activeStudents = activeStudentsRes.data
+      const consultationsData = consultationsRes.data
+      const lastYearConsultationsData = lastYearConsultationsRes.data
+      const testsData = testsRes.data
+      const newEnrollments = newEnrollmentsRes.data
+      const withdrawals = withdrawalsRes.data
+      const lastYearWithdrawalsData = lastYearWithdrawalsRes.data
+      const makeupData = makeupRes.data
+      const tuitionData = tuitionRes.data
+      const todosData = todosRes.data
+      const consultationRequestsData = consultationRequestsRes.data
+      const cohortRawData = cohortRes.data
+
+      // 에러 처리
+      if (activeStudentsRes.error) {
+        console.error('재원생 조회 오류:', activeStudentsRes.error)
+        toast.error(`데이터 로딩 실패: ${activeStudentsRes.error.message}`)
       }
-
-      // 이번달 신규상담 (first_contact_date 기준) - 상태 무관하게 수정
-      const { data: consultationsData } = await supabase
-        .from('students')
-        .select('*')
-        .gte('first_contact_date', monthStart)
-        .lt('first_contact_date', monthEnd)
-      
-      // 작년 동월 신규상담 (YoY 계산용)
-      const { data: lastYearConsultationsData } = await supabase
-        .from('students')
-        .select('*')
-        .gte('first_contact_date', lastYearMonthStart)
-        .lt('first_contact_date', lastYearMonthEnd)
-
-
-      // 이번달 입학테스트 (test_date 기준) - 학생 정보와 함께 조회
-      const { data: testsData } = await supabase
-        .from('entrance_tests')
-        .select(`
-          *,
-          students!student_id (
-            department
-          )
-        `)
-        .gte('test_date', monthStart)
-        .lt('test_date', monthEnd)
-
-
-      // 이번달 신규등원 (start_date 기준)
-      const { data: newEnrollments } = await supabase
-        .from('students')
-        .select('*')
-        .gte('start_date', monthStart)
-        .lt('start_date', monthEnd)
-        .eq('status', '재원')
-
-      // 이번달 퇴원 (end_date 기준) - 한국시간 범위 적용
-      const { data: withdrawals, error: withdrawalError } = await supabase
-        .from('students')
-        .select('*')
-        .gte('end_date', monthStart)
-        .lt('end_date', monthEnd)
-        .eq('status', '퇴원')
-      
-      // 작년 동월 퇴원 (YoY 계산용)
-      const { data: lastYearWithdrawalsData } = await supabase
-        .from('students')
-        .select('*')
-        .gte('end_date', lastYearMonthStart)
-        .lt('end_date', lastYearMonthEnd)
-        .eq('status', '퇴원')
-
-      if (withdrawalError) {
-        console.error('퇴원 쿼리 에러:', withdrawalError)
-      }
-
-      // 퇴원 학생들의 상세 정보 로그
-      if (withdrawals && withdrawals.length > 0) {
-        // 퇴원 학생 데이터 처리 (로그 제거됨)
+      if (withdrawalsRes.error) {
+        console.error('퇴원 쿼리 에러:', withdrawalsRes.error)
       }
 
       // 부서 정렬 함수
@@ -328,29 +334,7 @@ export default function DashboardPage() {
         withdrawalsYoY = "+100%" // 작년에 데이터가 없고 올해는 있는 경우
       }
 
-      // 보강 관련 통계 - 한국시간 기준
-      const today = getKoreanDateString()
-      const weekFromNow = new Date(today)
-      weekFromNow.setDate(weekFromNow.getDate() + 7)
-      const weekFromNowStr = weekFromNow.toISOString().split('T')[0]
-      
-      // 보강 데이터와 관련 정보 조회
-      const { data: makeupData } = await supabase
-        .from('makeup_classes')
-        .select(`
-          *,
-          classes!inner (
-            id,
-            name,
-            teacher_id,
-            employees!teacher_id (
-              id,
-              name
-            )
-          )
-        `)
-        .eq('status', 'scheduled')
-      
+      // 보강 관련 통계 처리
       let pendingMakeups = 0
       let weeklyScheduledMakeups = 0
       let overdueScheduledMakeups = 0
@@ -378,27 +362,10 @@ export default function DashboardPage() {
       })
       
       const overdueTeachers = Array.from(overdueTeacherSet)
-      
-      // 학원비 납부 통계 - 이번달
-      const currentDate = new Date()
-      const currentYear = currentDate.getFullYear()
-      const currentMonth = currentDate.getMonth() + 1
-      
-      const { data: tuitionData } = await supabase
-        .from('tuition_fees')
-        .select('*')
-        .eq('year', currentYear)
-        .eq('month', currentMonth)
-      
+
+      // 학원비 납부 통계 처리
       const currentMonthPaidCount = tuitionData?.filter(t => t.payment_status === '완납').length || 0
       const currentMonthUnpaidCount = tuitionData?.filter(t => t.payment_status !== '완납').length || 0
-
-      // 투두 통계 로드
-      const { data: todosData } = await supabase
-        .from('todos')
-        .select('*')
-        .neq('status', 'completed')
-        .not('assigned_to', 'is', null)
 
       // 담당자별 미완료 건수 계산
       const todosByAssignee: Record<string, number> = {}
@@ -417,7 +384,9 @@ export default function DashboardPage() {
 
         const employeeMap: Record<string, string> = {}
         employeesData?.forEach(emp => {
-          employeeMap[emp.auth_id] = emp.name
+          if (emp.auth_id) {
+            employeeMap[emp.auth_id] = emp.name
+          }
         })
 
         // 담당자별 카운트
@@ -430,11 +399,7 @@ export default function DashboardPage() {
         })
       }
 
-      // 상담요청 통계
-      const { data: consultationRequestsData } = await supabase
-        .from('consultation_requests')
-        .select('status, counselor_id')
-
+      // 상담요청 통계 처리
       const consultationRequestsUnassigned = consultationRequestsData?.filter(
         r => r.status === '대기중' && r.counselor_id === null
       ).length || 0
@@ -447,22 +412,10 @@ export default function DashboardPage() {
         r => r.status === '완료'
       ).length || 0
 
-      // 코호트 기반 전환율 데이터 로드 (RPC 함수 사용)
+      // 코호트 기반 전환율 데이터 처리
       let cohortData: CohortMonthData[] = []
 
-      try {
-        // 24개월 데이터 조회 (모든 월의 YoY 비교를 위해)
-        const twentyFourMonthsAgo = new Date()
-        twentyFourMonthsAgo.setMonth(twentyFourMonthsAgo.getMonth() - 24)
-        const startDate = `${twentyFourMonthsAgo.getFullYear()}-${String(twentyFourMonthsAgo.getMonth() + 1).padStart(2, '0')}-01`
-
-        const { data: cohortRawData, error: cohortError } = await supabase
-          .rpc("get_cohort_funnel_analysis", {
-            p_lead_source: null,
-            p_start_date: startDate,
-          })
-
-        if (!cohortError && cohortRawData) {
+      if (!cohortRes.error && cohortRawData) {
           // 월별로 합산 (lead_source별로 나뉘어 있을 수 있으므로)
           const monthMap = new Map<string, { consultations: number; enrollments: number; conversionRate: number }>()
 
@@ -509,9 +462,6 @@ export default function DashboardPage() {
               yoyChange
             }
           })
-        }
-      } catch (cohortErr) {
-        console.error('코호트 데이터 로드 오류:', cohortErr)
       }
 
       setStats({
@@ -567,6 +517,7 @@ export default function DashboardPage() {
       const { data, error } = await supabase
         .from('students')
         .select('*')
+        .eq('is_active', true)
         .eq('status', '신규상담')
         .order('first_contact_date', { ascending: false })
         .limit(20)  // 더 많이 가져오기
@@ -585,6 +536,7 @@ export default function DashboardPage() {
       const { data: consultationStudents } = await supabase
         .from('students')
         .select('id')
+        .eq('is_active', true)
         .eq('status', '신규상담')
       
       const studentIds = consultationStudents?.map(s => s.id) || []
@@ -1157,6 +1109,7 @@ export default function DashboardPage() {
         const { data: studentsData } = await supabase
           .from('students')
           .select('*')
+          .eq('is_active', true)
           .eq('status', '재원')
           .order('name')
         

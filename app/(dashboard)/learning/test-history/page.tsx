@@ -98,7 +98,7 @@ export default function TestHistoryPage() {
   useEffect(() => {
     async function fetchMeta() {
       const { data: classes } = await supabase.from("classes").select("id,name").eq("is_active", true);
-      const { data: students } = await supabase.from("students").select("id,name,school,grade,status");
+      const { data: students } = await supabase.from("students").select("id,name,school,grade,status").eq("is_active", true);
       setClassMap(Object.fromEntries((classes || []).map((c: any) => [c.id, c.name])));
       setStudentMap(Object.fromEntries((students || []).map((s: any) => [s.id, s.name])));
       setClassOptions(classes || []);
