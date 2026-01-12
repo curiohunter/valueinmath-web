@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { User } from "@supabase/supabase-js"
 import { useToast } from "@/components/ui/use-toast"
-import { checkPhoneAndRole, completeRegistration } from "../actions"
+import { checkPhoneAndRole, checkEmployeePhone, completeRegistration } from "../actions"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,8 +64,17 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
     setIsSubmitting(true)
 
     try {
-      // 1. Check Phone/Role logic (only for student/parent)
-      if (role !== "teacher") {
+      // 직원인 경우 employees 테이블 확인
+      if (role === "teacher") {
+        const checkResult = await checkEmployeePhone(phone)
+
+        if (!checkResult.success) {
+          toast({ title: "등록 제한", description: checkResult.message, variant: "destructive" })
+          setIsSubmitting(false)
+          return
+        }
+      } else {
+        // 학생/학부모인 경우 students 테이블 확인
         const checkResult = await checkPhoneAndRole(phone, role)
 
         if (!checkResult.success) {
