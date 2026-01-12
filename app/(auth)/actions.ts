@@ -139,7 +139,7 @@ export async function completeRegistration(userId: string, formData: any) {
     const cleanPhone = phone.replace(/-/g, "")
 
     // 직원인 경우
-    if (role === "teacher") {
+    if (role === "employee") {
         // 1. Validate Employee Phone
         const checkResult = await checkEmployeePhone(cleanPhone)
         if (!checkResult.success) {

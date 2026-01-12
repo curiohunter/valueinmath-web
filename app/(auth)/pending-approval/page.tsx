@@ -72,7 +72,7 @@ export default async function PendingApprovalPage() {
     switch (role) {
       case "student": return "학생"
       case "parent": return "학부모"
-      case "teacher": return "직원"
+      case "employee": return "직원"
       default: return ""
     }
   }
