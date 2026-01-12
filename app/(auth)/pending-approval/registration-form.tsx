@@ -26,7 +26,7 @@ interface RegistrationFormProps {
 }
 
 export function RegistrationForm({ user }: RegistrationFormProps) {
-  const [role, setRole] = useState<"student" | "parent" | "teacher" | "">("")
+  const [role, setRole] = useState<"student" | "parent" | "employee" | "">("")
   const [name, setName] = useState(user.user_metadata?.name || "")
   const [phone, setPhone] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -65,7 +65,7 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
 
     try {
       // 직원인 경우 employees 테이블 확인
-      if (role === "teacher") {
+      if (role === "employee") {
         const checkResult = await checkEmployeePhone(phone)
 
         if (!checkResult.success) {
@@ -186,8 +186,8 @@ export function RegistrationForm({ user }: RegistrationFormProps) {
                   <Label htmlFor="parent">학부모</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="teacher" id="teacher" />
-                  <Label htmlFor="teacher">직원</Label>
+                  <RadioGroupItem value="employee" id="employee" />
+                  <Label htmlFor="employee">직원</Label>
                 </div>
               </RadioGroup>
             </div>
