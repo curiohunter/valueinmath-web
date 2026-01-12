@@ -6,11 +6,43 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin"
 interface RegistrationResult {
     success: boolean
     message?: string
+    employeeId?: string
     warning?: {
         type: "role_mismatch"
         suggestedRole: "parent" | "student"
         message: string
     }
+}
+
+// 직원 연락처 확인
+export async function checkEmployeePhone(phone: string): Promise<RegistrationResult> {
+    const adminClient = getSupabaseAdmin()
+    const cleanPhone = phone.replace(/-/g, "")
+
+    // employees 테이블에서 연락처 확인 (재직 중인 직원만)
+    const { data: employee, error } = await adminClient
+        .from("employees")
+        .select("id, name, phone, auth_id, status")
+        .eq("phone", cleanPhone)
+        .eq("status", "재직")
+        .single()
+
+    if (error || !employee) {
+        return {
+            success: false,
+            message: "등록된 직원 정보가 없습니다.\n원장님께 직원 등록을 요청해주세요."
+        }
+    }
+
+    // 이미 다른 계정과 연결된 경우
+    if (employee.auth_id) {
+        return {
+            success: false,
+            message: "이미 가입된 연락처입니다.\n기존 계정으로 로그인해주세요."
+        }
+    }
+
+    return { success: true, employeeId: employee.id }
 }
 
 export async function checkPhoneAndRole(phone: string, role: "parent" | "student"): Promise<RegistrationResult> {
@@ -102,9 +134,46 @@ export async function registerUser(formData: any) {
 
 export async function completeRegistration(userId: string, formData: any) {
     const supabase = await createClient()
+    const adminClient = getSupabaseAdmin()
     const { name, phone, role } = formData
     const cleanPhone = phone.replace(/-/g, "")
 
+    // 직원인 경우
+    if (role === "teacher") {
+        // 1. Validate Employee Phone
+        const checkResult = await checkEmployeePhone(cleanPhone)
+        if (!checkResult.success) {
+            return { error: checkResult.message }
+        }
+
+        // 2. Update Profile
+        const { error: profileError } = await supabase
+            .from("profiles")
+            .update({
+                name,
+                phone: cleanPhone,
+                role,
+                approval_status: 'approved'
+            })
+            .eq("id", userId)
+
+        if (profileError) return { error: profileError.message }
+
+        // 3. Link Employee to User (auth_id 연결)
+        const { error: employeeError } = await adminClient
+            .from("employees")
+            .update({ auth_id: userId })
+            .eq("id", checkResult.employeeId!)
+
+        if (employeeError) {
+            console.error("Employee link error:", employeeError)
+            return { error: "직원 정보 연결에 실패했습니다." }
+        }
+
+        return { success: true }
+    }
+
+    // 학생/학부모인 경우
     // 1. Validate Phone
     const { success } = await checkPhoneAndRole(cleanPhone, role)
     if (!success) {

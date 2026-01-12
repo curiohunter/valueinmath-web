@@ -47,20 +47,22 @@ export default function MakeupClassesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 학생 데이터
+      // 학생 데이터 (활성 학생만)
       const { data: studentData, error: studentError } = await supabase
         .from("students")
         .select("*")
+        .eq("is_active", true)
         .eq("status", "재원")
         .order("name");
       
       if (studentError) throw studentError;
       setStudents(studentData || []);
 
-      // 반 데이터
+      // 반 데이터 (활성 반만)
       const { data: classData, error: classError } = await supabase
         .from("classes")
         .select("*")
+        .eq("is_active", true)
         .order("name");
       
       if (classError) throw classError;
