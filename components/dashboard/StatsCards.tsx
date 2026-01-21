@@ -12,54 +12,7 @@ import {
   Users, Phone, GraduationCap, TrendingUp, MessageSquare, Clock,
   CreditCard, CheckSquare
 } from "lucide-react"
-
-interface StudentInfo {
-  name: string
-  school_type: string | null
-  grade: number | null
-  department: string | null
-}
-
-interface CohortMonthData {
-  month: string
-  consultations: number
-  enrollments: number
-  conversionRate: number
-  yoyChange: string // YoY 변화 (예: "+5.2%", "-3.1%", "")
-}
-
-interface DashboardStats {
-  activeStudents: number
-  activeStudentsByDept: { [key: string]: number }
-  activeStudentsChange: string
-  consultationsThisMonth: number
-  consultationsByDept: { [key: string]: number }
-  consultationsYoY: string
-  testsThisMonth: number
-  testsByDept: { [key: string]: number }
-  testConversionRate: string
-  newEnrollmentsThisMonth: number
-  newEnrollmentsByDept: { [key: string]: number }
-  newEnrollmentStudents: StudentInfo[]
-  enrollmentConversionRate: string
-  withdrawalsThisMonth: number
-  withdrawalsByDept: { [key: string]: number }
-  withdrawalStudents: StudentInfo[]
-  withdrawalsYoY: string
-  // 새로운 통계 추가
-  pendingMakeups: number // 보강 미정
-  weeklyScheduledMakeups: number // 7일내 예정
-  overdueScheduledMakeups: number // 기한 지난 미완료
-  overdueTeachers: string[] // 기한 초과 담당 선생님들
-  currentMonthPaidCount: number // 이번달 완납
-  currentMonthUnpaidCount: number // 이번달 미납
-  todosByAssignee: { [key: string]: number } // 담당자별 미완료 투두
-  totalIncompleteTodos: number // 전체 미완료 투두 수
-  consultationRequestsUnassigned: number // 미배정 상담요청
-  consultationRequestsPending: number // 대기중 상담요청
-  consultationRequestsCompleted: number // 완료 상담요청
-  cohortData: CohortMonthData[] // 최근 3개월 코호트 데이터 (각 월별 YoY 포함)
-}
+import type { DashboardStats, StudentInfo } from "@/types/dashboard"
 
 interface StatsCardsProps {
   stats: DashboardStats
