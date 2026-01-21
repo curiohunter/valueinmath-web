@@ -74,6 +74,30 @@ export function getKoreanDateTimeString(date?: Date): string {
 export function parseKoreanDateTime(dateTimeString: string): Date {
   // 입력값을 한국시간으로 해석하여 UTC Date로 변환
   const koreanDate = new Date(dateTimeString + ':00+09:00') // 한국시간 타임존 명시
-  
+
   return koreanDate
+}
+
+/**
+ * UTC로 저장된 datetime을 한국시간으로 변환하여 표시용 문자열로 반환합니다.
+ *
+ * @param utcDateString UTC 형식의 날짜 문자열
+ * @returns 한국 로케일 형식의 날짜/시간 문자열 (예: "2024. 1. 15. 오후 3:30:00")
+ */
+export function formatKoreanDateTime(utcDateString: string): string {
+  const utcDate = new Date(utcDateString)
+  return utcDate.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+}
+
+/**
+ * UTC로 저장된 datetime을 datetime-local input 형식(YYYY-MM-DDTHH:mm)으로 변환합니다.
+ *
+ * @param utcDateString UTC 형식의 날짜 문자열 또는 null
+ * @returns YYYY-MM-DDTHH:mm 형식의 문자열 (input datetime-local 호환)
+ */
+export function formatKoreanDateTimeForInput(utcDateString: string | null): string {
+  if (!utcDateString) return ''
+  const utcDate = new Date(utcDateString)
+  const koreanTime = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000))
+  return koreanTime.toISOString().slice(0, 16)
 }
