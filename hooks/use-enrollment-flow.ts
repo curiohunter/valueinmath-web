@@ -93,6 +93,7 @@ export function useEnrollmentFlow(): UseEnrollmentFlowReturn {
 
     if (updatedStudent?.status === '재원') {
       // 재원으로 변경된 경우 반 등록 여부 확인
+      // TODO: confirm() 대신 AlertDialog로 변경 필요 (훅 인터페이스 리팩토링 필요)
       const confirmClassRegistration = confirm('학생이 재원으로 등록되었습니다.\n이어서 반 등록도 진행하시겠습니까?')
 
       if (confirmClassRegistration) {

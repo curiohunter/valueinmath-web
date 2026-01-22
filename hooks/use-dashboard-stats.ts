@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getKoreanMonthRange, getKoreanDateString } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { DashboardStats, CohortMonthData, INITIAL_DASHBOARD_STATS } from '@/types/dashboard'
+import type { DashboardStats, CohortMonthData } from '@/types/dashboard'
 
 interface UseDashboardStatsReturn {
   stats: DashboardStats
@@ -33,6 +33,19 @@ const sortDepartments = (deptData: { [key: string]: number }) => {
   })
 
   return sorted
+}
+
+// 부서별로 항목을 그룹핑하고 정렬된 카운트를 반환하는 헬퍼 함수
+function groupByDepartment<T extends { department?: string | null }>(
+  items: T[] | null,
+  defaultDept = '미분류'
+): { [key: string]: number } {
+  const deptRaw: { [key: string]: number } = {}
+  items?.forEach(item => {
+    const dept = item.department || defaultDept
+    deptRaw[dept] = (deptRaw[dept] || 0) + 1
+  })
+  return sortDepartments(deptRaw)
 }
 
 /**
@@ -160,55 +173,46 @@ export function useDashboardStats(): UseDashboardStatsReturn {
       const consultationRequestsData = consultationRequestsRes.data
       const cohortRawData = cohortRes.data
 
-      // 에러 처리
+      // 에러 처리 (일관된 패턴: console.error + toast.error)
+      const errors: string[] = []
       if (activeStudentsRes.error) {
         console.error('재원생 조회 오류:', activeStudentsRes.error)
-        toast.error(`데이터 로딩 실패: ${activeStudentsRes.error.message}`)
+        errors.push('재원생')
+      }
+      if (consultationsRes.error) {
+        console.error('신규상담 조회 오류:', consultationsRes.error)
+        errors.push('신규상담')
+      }
+      if (testsRes.error) {
+        console.error('입학테스트 조회 오류:', testsRes.error)
+        errors.push('입학테스트')
+      }
+      if (newEnrollmentsRes.error) {
+        console.error('신규등원 조회 오류:', newEnrollmentsRes.error)
+        errors.push('신규등원')
       }
       if (withdrawalsRes.error) {
-        console.error('퇴원 쿼리 에러:', withdrawalsRes.error)
+        console.error('퇴원 조회 오류:', withdrawalsRes.error)
+        errors.push('퇴원')
+      }
+      if (errors.length > 0) {
+        toast.error(`데이터 로딩 실패: ${errors.join(', ')}`)
       }
 
-      // 부서별 재원생 분류
-      const activeStudentsByDeptRaw: { [key: string]: number } = {}
-      activeStudents?.forEach(student => {
-        const dept = student.department || '미분류'
-        activeStudentsByDeptRaw[dept] = (activeStudentsByDeptRaw[dept] || 0) + 1
-      })
-      const activeStudentsByDept = sortDepartments(activeStudentsByDeptRaw)
+      // 부서별 분류 (헬퍼 함수 사용)
+      const activeStudentsByDept = groupByDepartment(activeStudents)
+      const consultationsByDept = groupByDepartment(consultationsData)
+      const newEnrollmentsByDept = groupByDepartment(newEnrollments)
+      const withdrawalsByDept = groupByDepartment(withdrawals)
 
-      // 부서별 상담 분류
-      const consultationsByDeptRaw: { [key: string]: number } = {}
-      consultationsData?.forEach(consultation => {
-        const dept = consultation.department || '미분류'
-        consultationsByDeptRaw[dept] = (consultationsByDeptRaw[dept] || 0) + 1
-      })
-      const consultationsByDept = sortDepartments(consultationsByDeptRaw)
-
-      // 부서별 입학테스트 분류
+      // 입학테스트는 조인된 students에서 department를 가져옴
       const testsByDeptRaw: { [key: string]: number } = {}
       testsData?.forEach(test => {
-        const student = test.students as any
+        const student = test.students as { department?: string | null } | null
         const dept = student?.department || '미분류'
         testsByDeptRaw[dept] = (testsByDeptRaw[dept] || 0) + 1
       })
       const testsByDept = sortDepartments(testsByDeptRaw)
-
-      // 부서별 신규등원 분류
-      const newEnrollmentsByDeptRaw: { [key: string]: number } = {}
-      newEnrollments?.forEach(enrollment => {
-        const dept = enrollment.department || '미분류'
-        newEnrollmentsByDeptRaw[dept] = (newEnrollmentsByDeptRaw[dept] || 0) + 1
-      })
-      const newEnrollmentsByDept = sortDepartments(newEnrollmentsByDeptRaw)
-
-      // 부서별 퇴원 분류
-      const withdrawalsByDeptRaw: { [key: string]: number } = {}
-      withdrawals?.forEach(withdrawal => {
-        const dept = withdrawal.department || '미분류'
-        withdrawalsByDeptRaw[dept] = (withdrawalsByDeptRaw[dept] || 0) + 1
-      })
-      const withdrawalsByDept = sortDepartments(withdrawalsByDeptRaw)
 
       // YoY 계산 (신규상담)
       let consultationsYoY = "0%"
@@ -349,7 +353,7 @@ export function useDashboardStats(): UseDashboardStatsReturn {
       setStats({
         activeStudents: activeStudents?.length || 0,
         activeStudentsByDept,
-        activeStudentsChange: "+2%",
+        activeStudentsChange: "", // TODO: 재원생 변화율 계산 구현 필요
         consultationsThisMonth: consultationsData?.length || 0,
         consultationsByDept,
         consultationsYoY,

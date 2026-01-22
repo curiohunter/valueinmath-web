@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calendarService } from '@/services/calendar'
+import { cleanObj } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { EntranceTestData } from '@/components/dashboard/TestModal'
 import type { ConsultationData } from '@/types/dashboard'
@@ -15,15 +16,6 @@ interface UseEntranceTestsReturn {
   saveTest: (testData: Partial<EntranceTestData>, editingTest: EntranceTestData | null) => Promise<boolean>
   deleteTest: (id: number) => Promise<boolean>
   refresh: () => Promise<void>
-}
-
-// undefined 속성 제거 및 빈 문자열을 null로 변환
-function cleanObj<T extends object>(obj: T): T {
-  return Object.fromEntries(
-    Object.entries(obj)
-      .filter(([_, v]) => v !== undefined)
-      .map(([k, v]) => [k, v === '' ? null : v])
-  ) as T
 }
 
 /**
@@ -228,10 +220,8 @@ export function useEntranceTests(): UseEntranceTestsReturn {
     }
   }, [supabase])
 
-  // 입학테스트 삭제
+  // 입학테스트 삭제 (확인은 호출하는 컴포넌트에서 처리)
   const deleteTest = useCallback(async (id: number): Promise<boolean> => {
-    if (!confirm('정말 삭제하시겠습니까?')) return false
-
     try {
       // 먼저 입학테스트 정보를 가져와서 calendar_event_id 확인
       const { data: testData, error: fetchError } = await supabase

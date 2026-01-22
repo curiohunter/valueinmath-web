@@ -9,6 +9,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { MoreHorizontal, Edit, Trash2, Plus, Phone, Eye } from "lucide-react"
 import { MemoDetailModal } from "./MemoDetailModal"
 import type { Database } from "@/types/database"
@@ -51,14 +61,29 @@ export function ConsultationTable({
   onCreateTest
 }: ConsultationTableProps) {
   const [memoModalOpen, setMemoModalOpen] = useState(false)
-  const [selectedMemo, setSelectedMemo] = useState<{ title: string; content: string | null }>({ 
-    title: '', 
-    content: null 
+  const [selectedMemo, setSelectedMemo] = useState<{ title: string; content: string | null }>({
+    title: '',
+    content: null
   })
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
 
   const handleMemoClick = (name: string, memo: string | null) => {
     setSelectedMemo({ title: `${name} - 메모`, content: memo })
     setMemoModalOpen(true)
+  }
+
+  const handleDeleteClick = (id: string) => {
+    setDeleteTargetId(id)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = () => {
+    if (deleteTargetId && onDelete) {
+      onDelete(deleteTargetId)
+    }
+    setDeleteDialogOpen(false)
+    setDeleteTargetId(null)
   }
 
   if (consultations.length === 0) {
@@ -143,8 +168,8 @@ export function ConsultationTable({
                       </DropdownMenuItem>
                     )}
                     {onDelete && (
-                      <DropdownMenuItem 
-                        onClick={() => onDelete(consultation.id)} 
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteClick(consultation.id)}
                         className="text-red-600"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -165,6 +190,23 @@ export function ConsultationTable({
         title={selectedMemo.title}
         content={selectedMemo.content}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>상담 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

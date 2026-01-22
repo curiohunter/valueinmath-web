@@ -101,3 +101,18 @@ export function formatKoreanDateTimeForInput(utcDateString: string | null): stri
   const koreanTime = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000))
   return koreanTime.toISOString().slice(0, 16)
 }
+
+/**
+ * 객체에서 undefined 속성을 제거하고 빈 문자열을 null로 변환합니다.
+ * API 호출 전 데이터 정리에 사용됩니다.
+ *
+ * @param obj 정리할 객체
+ * @returns undefined가 제거되고 빈 문자열이 null로 변환된 객체
+ */
+export function cleanObj<T extends object>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, v === '' ? null : v])
+  ) as T
+}

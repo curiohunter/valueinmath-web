@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { cleanObj } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { ConsultationData } from '@/types/dashboard'
 
@@ -12,15 +13,6 @@ interface UseConsultationsReturn {
   saveConsultation: (data: Partial<ConsultationData>, editingConsultation: ConsultationData | null) => Promise<{ success: boolean; statusChanged: boolean }>
   deleteConsultation: (id: string) => Promise<boolean>
   refresh: () => Promise<void>
-}
-
-// undefined 속성 제거 및 빈 문자열을 null로 변환
-function cleanObj<T extends object>(obj: T): T {
-  return Object.fromEntries(
-    Object.entries(obj)
-      .filter(([_, v]) => v !== undefined)
-      .map(([k, v]) => [k, v === '' ? null : v])
-  ) as T
 }
 
 /**
@@ -124,10 +116,8 @@ export function useConsultations(): UseConsultationsReturn {
     }
   }, [supabase])
 
-  // 상담 삭제
+  // 상담 삭제 (확인은 호출하는 컴포넌트에서 처리)
   const deleteConsultation = useCallback(async (id: string): Promise<boolean> => {
-    if (!confirm('정말 삭제하시겠습니까?')) return false
-
     try {
       const { error: deleteError } = await supabase
         .from('students')
