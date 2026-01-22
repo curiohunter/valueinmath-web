@@ -9,6 +9,28 @@ interface UseDashboardCalendarReturn {
   handleCreateCalendarEvent: (test: EntranceTestData) => Promise<boolean>
 }
 
+// 입학테스트 데이터로부터 캘린더 이벤트 데이터를 생성하는 헬퍼 함수
+function buildCalendarEventData(test: EntranceTestData) {
+  const studentName = test.student_name || '학생'
+  const subjects = [test.test1_level, test.test2_level].filter(Boolean)
+  const title = `${studentName} ${subjects.join(', ')}`
+
+  let startTime = test.test_date
+  if (!startTime.includes('+')) {
+    startTime = test.test_date.slice(0, 19)
+  }
+
+  const startDate = new Date(startTime)
+  const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
+
+  return {
+    title,
+    start_time: startTime,
+    end_time: endDate.toISOString().slice(0, 19),
+    description: `입학테스트 - ${studentName}`
+  }
+}
+
 /**
  * 대시보드 캘린더 이벤트를 관리하는 커스텀 훅
  * 입학테스트 일정의 캘린더 등록/수정을 처리합니다.
@@ -25,32 +47,11 @@ export function useDashboardCalendar(): UseDashboardCalendarReturn {
     try {
       // 1. calendar_event_id가 있는지 먼저 확인 (양방향 동기화)
       if (test.calendar_event_id) {
+        // TODO: confirm() 대신 AlertDialog로 변경 필요 (훅 인터페이스 리팩토링 필요)
         const updateConfirm = confirm('이미 등록된 일정이 있습니다. 기존 일정을 업데이트하시겠습니까?')
         if (!updateConfirm) return false
 
-        const studentName = test.student_name || '학생'
-        const subjects = []
-        if (test.test1_level) subjects.push(test.test1_level)
-        if (test.test2_level) subjects.push(test.test2_level)
-
-        const title = `${studentName} ${subjects.join(', ')}`
-
-        let startTime = test.test_date
-        if (!startTime.includes('+')) {
-          startTime = test.test_date.slice(0, 19)
-        }
-
-        const startDate = new Date(startTime)
-        const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
-        const endTime = endDate.toISOString().slice(0, 19)
-
-        const updateData = {
-          title,
-          start_time: startTime,
-          end_time: endTime,
-          description: `입학테스트 - ${studentName}`
-        }
-
+        const updateData = buildCalendarEventData(test)
         await calendarService.updateEvent(test.calendar_event_id, updateData)
 
         alert('캘린더 일정이 업데이트되었습니다.')
@@ -73,29 +74,7 @@ export function useDashboardCalendar(): UseDashboardCalendarReturn {
             .update({ calendar_event_id: existingCalendarEvent.id })
             .eq('id', test.id)
 
-          const studentName = test.student_name || '학생'
-          const subjects = []
-          if (test.test1_level) subjects.push(test.test1_level)
-          if (test.test2_level) subjects.push(test.test2_level)
-
-          const title = `${studentName} ${subjects.join(', ')}`
-
-          let startTime = test.test_date
-          if (!startTime.includes('+')) {
-            startTime = test.test_date.slice(0, 19)
-          }
-
-          const startDate = new Date(startTime)
-          const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
-          const endTime = endDate.toISOString().slice(0, 19)
-
-          const updateData = {
-            title,
-            start_time: startTime,
-            end_time: endTime,
-            description: `입학테스트 - ${studentName}`
-          }
-
+          const updateData = buildCalendarEventData(test)
           await calendarService.updateEvent(existingCalendarEvent.id, updateData)
 
           alert('캘린더 일정이 업데이트되었습니다.')
@@ -106,28 +85,9 @@ export function useDashboardCalendar(): UseDashboardCalendarReturn {
       }
 
       // 3. 새로운 일정 생성
-      const studentName = test.student_name || '학생'
-      const subjects = []
-      if (test.test1_level) subjects.push(test.test1_level)
-      if (test.test2_level) subjects.push(test.test2_level)
-
-      const title = `${studentName} ${subjects.join(', ')}`
-
-      let startTime = test.test_date
-      if (!startTime.includes('+')) {
-        startTime = test.test_date.slice(0, 19)
-      }
-
-      const startDate = new Date(startTime)
-      const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000))
-      const endTime = endDate.toISOString().slice(0, 19)
-
       const eventData = {
-        title,
-        start_time: startTime,
-        end_time: endTime,
-        event_type: 'entrance_test' as const,
-        description: `입학테스트 - ${studentName}`
+        ...buildCalendarEventData(test),
+        event_type: 'entrance_test' as const
       }
 
       const response = await calendarService.createEvent(eventData)

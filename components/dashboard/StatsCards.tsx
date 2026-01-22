@@ -18,16 +18,21 @@ interface StatsCardsProps {
   stats: DashboardStats
 }
 
+// 학교타입 → 축약 접두사 매핑
+const SCHOOL_PREFIX_MAP: Record<string, string> = {
+  '고등학교': '고',
+  '중학교': '중',
+  '초등학교': '초'
+}
+
 // 학교타입+학년 포맷팅 함수: "홍길동(고2)"
 const formatStudentWithGrade = (student: StudentInfo): string => {
-  const schoolPrefix = student.school_type === '고등학교' ? '고'
-    : student.school_type === '중학교' ? '중'
-    : student.school_type === '초등학교' ? '초'
-    : ''
+  const schoolPrefix = SCHOOL_PREFIX_MAP[student.school_type || ''] || ''
 
   if (schoolPrefix && student.grade) {
     return `${student.name}(${schoolPrefix}${student.grade})`
-  } else if (student.grade) {
+  }
+  if (student.grade) {
     return `${student.name}(${student.grade}학년)`
   }
   return student.name
