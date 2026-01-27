@@ -10,7 +10,8 @@ import { useAuth } from "@/providers/auth-provider";
 import type { Database } from "@/types/database";
 import { Input } from "@/components/ui/input";
 import { TuitionTable } from "@/components/tuition/tuition-table";
-import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw, CreditCard } from "lucide-react";
+import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw, CreditCard, Receipt, CheckCircle2, AlertCircle, Clock, UserX, ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput, AppliedDiscount } from "@/types/tuition";
 import {
@@ -101,6 +102,17 @@ export default function TuitionHistoryPage() {
   // 할인 정책 관련 상태
   const [policiesByStudent, setPoliciesByStudent] = useState<Record<string, Campaign[]>>({});
   const [pendingRewardsByStudent, setPendingRewardsByStudent] = useState<Record<string, CampaignParticipant[]>>({});
+
+  // 학원비 미생성 학생 관련 상태
+  const [missingTuitionStudents, setMissingTuitionStudents] = useState<{
+    studentId: string;
+    studentName: string;
+    className: string;
+    classId: string;
+    monthlyFee: number;
+  }[]>([]);
+  const [isMissingExpanded, setIsMissingExpanded] = useState(false);
+  const [isMissingLoading, setIsMissingLoading] = useState(false);
 
   // 반 이름 매핑 및 선생님 정보 fetch (초기 로드)
   useEffect(() => {
@@ -194,6 +206,102 @@ export default function TuitionHistoryPage() {
     const lastDayStr = `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
     setDateRange({ from: firstDay, to: lastDayStr });
   }, []);
+
+  // 학원비 미생성 학생 조회 (날짜 범위 변경 시)
+  useEffect(() => {
+    async function fetchMissingTuitionStudents() {
+      if (!dateRange.from) return;
+
+      const [year, month] = dateRange.from.split('-').map(Number);
+      if (!year || !month) return;
+
+      setIsMissingLoading(true);
+      try {
+        // 1. 활성 반 정보 가져오기 (monthly_fee > 0인 반만)
+        const { data: classes, error: classError } = await supabase
+          .from("classes")
+          .select("id, name, monthly_fee")
+          .eq("is_active", true)
+          .gt("monthly_fee", 0);
+
+        if (classError || !classes) {
+          console.error("반 조회 오류:", classError);
+          return;
+        }
+
+        // 2. 반에 등록된 재원 학생 가져오기
+        const { data: classStudents, error: csError } = await supabase
+          .from("class_students")
+          .select(`
+            class_id,
+            student_id,
+            students!inner(id, name, status)
+          `)
+          .in("class_id", classes.map(c => c.id));
+
+        if (csError || !classStudents) {
+          console.error("반-학생 조회 오류:", csError);
+          return;
+        }
+
+        // 재원 학생만 필터링
+        const activeClassStudents = classStudents.filter((cs: any) =>
+          cs.students?.status === '재원'
+        );
+
+        // 3. 해당 연월의 학원비 조회
+        const { data: tuitionFees, error: tfError } = await supabase
+          .from("tuition_fees")
+          .select("student_id, class_id")
+          .eq("year", year)
+          .eq("month", month);
+
+        if (tfError) {
+          console.error("학원비 조회 오류:", tfError);
+          return;
+        }
+
+        // 4. 이미 생성된 학원비의 (student_id, class_id) 조합을 Set으로 만들기
+        const existingTuitionSet = new Set(
+          (tuitionFees || []).map(tf => `${tf.student_id}-${tf.class_id}`)
+        );
+
+        // 5. 미생성 학생 찾기
+        const missing: typeof missingTuitionStudents = [];
+
+        for (const cs of activeClassStudents) {
+          const classInfo = classes.find(c => c.id === cs.class_id);
+          if (!classInfo) continue;
+
+          const key = `${cs.student_id}-${cs.class_id}`;
+          if (!existingTuitionSet.has(key)) {
+            missing.push({
+              studentId: cs.student_id,
+              studentName: (cs.students as any)?.name || '알 수 없음',
+              className: classInfo.name,
+              classId: cs.class_id,
+              monthlyFee: classInfo.monthly_fee || 0
+            });
+          }
+        }
+
+        // 반 이름 → 학생 이름 순으로 정렬
+        missing.sort((a, b) => {
+          const classCompare = a.className.localeCompare(b.className, 'ko');
+          if (classCompare !== 0) return classCompare;
+          return a.studentName.localeCompare(b.studentName, 'ko');
+        });
+
+        setMissingTuitionStudents(missing);
+      } catch (error) {
+        console.error("미생성 학생 조회 오류:", error);
+      } finally {
+        setIsMissingLoading(false);
+      }
+    }
+
+    fetchMissingTuitionStudents();
+  }, [dateRange.from]);
 
   // 할인 정책 및 대기 중인 이벤트 보상 fetch
   async function fetchDiscountData(studentIds: string[]) {
@@ -524,13 +632,24 @@ export default function TuitionHistoryPage() {
   // 개별 행 삭제 핸들러
   const handleRowDelete = async (index: number) => {
     if (index >= paginatedData.length) return;
-    
+
     const row = paginatedData[index];
     const confirmDelete = window.confirm(`정말로 ${row.studentName}의 ${row.year}년 ${row.month}월 학원비를 삭제하시겠습니까?`);
-    
+
     if (!confirmDelete) return;
-    
+
     try {
+      // 1. 캠페인 참여자의 연결 해제 및 상태를 '대기'로 변경
+      await supabase
+        .from("campaign_participants")
+        .update({
+          reward_applied_tuition_id: null,
+          reward_status: 'pending',
+          reward_applied_at: null
+        })
+        .eq("reward_applied_tuition_id", row.id);
+
+      // 2. 학원비 삭제
       const { error } = await supabase
         .from("tuition_fees")
         .delete()
@@ -670,9 +789,9 @@ export default function TuitionHistoryPage() {
     }
 
     const confirmDelete = window.confirm(`선택한 ${selectedRows.length}개의 학원비를 삭제하시겠습니까?`);
-    
+
     if (!confirmDelete) return;
-    
+
     setIsSaving(true);
     try {
       // 선택된 행들의 ID 수집
@@ -686,7 +805,17 @@ export default function TuitionHistoryPage() {
         return;
       }
 
-      // 일괄 삭제
+      // 1. 캠페인 참여자의 연결 해제 및 상태를 '대기'로 변경
+      await supabase
+        .from("campaign_participants")
+        .update({
+          reward_applied_tuition_id: null,
+          reward_status: 'pending',
+          reward_applied_at: null
+        })
+        .in("reward_applied_tuition_id", idsToDelete);
+
+      // 2. 일괄 삭제
       const { error } = await supabase
         .from("tuition_fees")
         .delete()
@@ -695,10 +824,10 @@ export default function TuitionHistoryPage() {
       if (error) throw error;
 
       toast.success(`${idsToDelete.length}개의 학원비가 삭제되었습니다.`);
-      
+
       // 선택 초기화
       setSelectedRows([]);
-      
+
       // 데이터 새로고침 (페이지 유지)
       fetchTuitionHistoryWithFilters(false);
     } catch (error) {
@@ -1036,37 +1165,181 @@ export default function TuitionHistoryPage() {
         </div>
       </div>
 
-      {/* 통계 카드 */}
+      {/* 학원비 미생성 학생 카드 */}
+      {dateRange.from && (
+        <Card className={cn(
+          "border transition-all duration-200",
+          missingTuitionStudents.length > 0
+            ? "bg-gradient-to-br from-violet-50 to-purple-50 border-violet-300 cursor-pointer hover:shadow-md"
+            : "bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200"
+        )}
+          onClick={() => missingTuitionStudents.length > 0 && setIsMissingExpanded(!isMissingExpanded)}
+        >
+          <div className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-2.5 rounded-lg text-white",
+                  missingTuitionStudents.length > 0 ? "bg-violet-500" : "bg-gray-400"
+                )}>
+                  <UserX className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className={cn(
+                    "text-xs font-medium",
+                    missingTuitionStudents.length > 0 ? "text-violet-600" : "text-gray-500"
+                  )}>
+                    {dateRange.from.split('-')[1]}월 학원비 미생성
+                  </p>
+                  {isMissingLoading ? (
+                    <p className="text-lg font-bold text-gray-400">조회중...</p>
+                  ) : (
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      missingTuitionStudents.length > 0 ? "text-violet-700" : "text-gray-500"
+                    )}>
+                      {missingTuitionStudents.length}
+                      <span className={cn(
+                        "text-sm font-normal ml-0.5",
+                        missingTuitionStudents.length > 0 ? "text-violet-500" : "text-gray-400"
+                      )}>명</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              {missingTuitionStudents.length > 0 && (
+                <div className="text-violet-500">
+                  {isMissingExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* 미생성 학생 목록 (펼침) */}
+      {isMissingExpanded && missingTuitionStudents.length > 0 && (
+        <Card className="border-violet-200 bg-violet-50/50 overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserX className="h-4 w-4 text-violet-600" />
+              <h3 className="text-sm font-semibold text-violet-800">
+                {dateRange.from.split('-')[1]}월 학원비 미생성 학생
+              </h3>
+              <Badge variant="outline" className="bg-violet-100 text-violet-700 border-violet-300 text-xs">
+                {missingTuitionStudents.length}명
+              </Badge>
+            </div>
+            {/* 반별로 그룹핑하여 표시 */}
+            <div className="space-y-3">
+              {Object.entries(
+                missingTuitionStudents.reduce((acc, item) => {
+                  if (!acc[item.className]) {
+                    acc[item.className] = [];
+                  }
+                  acc[item.className].push(item);
+                  return acc;
+                }, {} as Record<string, typeof missingTuitionStudents>)
+              ).map(([className, students]) => (
+                <div key={className} className="space-y-1">
+                  <div className="text-xs font-medium text-violet-700 flex items-center gap-2">
+                    <span>{className}</span>
+                    <span className="text-violet-500">({students.length}명)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {students.map(student => (
+                      <Badge
+                        key={`${student.studentId}-${student.classId}`}
+                        variant="secondary"
+                        className="bg-white border border-violet-200 text-violet-800 hover:bg-violet-100 transition-colors px-3 py-1.5 text-sm font-medium"
+                      >
+                        {student.studentName}
+                        <span className="ml-1 text-violet-500 font-normal">
+                          ({formatAmount(student.monthlyFee)})
+                        </span>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* 통계 카드 - 반관리 페이지와 일관된 디자인 */}
       {filteredData.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-          <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <div className="text-sm text-purple-700 font-medium">총 건수</div>
-            <div className="text-2xl font-bold text-purple-800">{stats.totalCount}건</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 전체 청구 */}
+          <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-slate-600 text-white">
+                  <Receipt className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-slate-500 font-medium">전체 청구</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-slate-800">{stats.totalCount}<span className="text-sm font-normal text-slate-500 ml-0.5">건</span></p>
+                    <p className="text-sm font-semibold text-slate-600">{formatAmount(stats.totalAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </Card>
-          
-          <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <div className="text-sm text-purple-700 font-medium">총 금액</div>
-            <div className="text-2xl font-bold text-purple-800">{formatAmount(stats.totalAmount)}</div>
+
+          {/* 완납 */}
+          <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-500 text-white">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-emerald-600 font-medium">완납</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-emerald-700">{stats.paidCount}<span className="text-sm font-normal text-emerald-500 ml-0.5">건</span></p>
+                    <p className="text-sm font-semibold text-emerald-600">{formatAmount(stats.paidAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </Card>
-          
-          <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-            <div className="text-sm text-emerald-700 font-medium">완납 건수</div>
-            <div className="text-2xl font-bold text-emerald-800">{stats.paidCount}건</div>
+
+          {/* 미납 */}
+          <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-red-500 text-white">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-red-600 font-medium">미납</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-red-700">{stats.unpaidCount}<span className="text-sm font-normal text-red-500 ml-0.5">건</span></p>
+                    <p className="text-sm font-semibold text-red-600">{formatAmount(stats.unpaidAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </Card>
-          
-          <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-            <div className="text-sm text-emerald-700 font-medium">완납 금액</div>
-            <div className="text-2xl font-bold text-emerald-800">{formatAmount(stats.paidAmount)}</div>
-          </Card>
-          
-          <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-            <div className="text-sm text-red-700 font-medium">미납 건수</div>
-            <div className="text-2xl font-bold text-red-800">{stats.unpaidCount}건</div>
-          </Card>
-          
-          <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-            <div className="text-sm text-red-700 font-medium">미납 금액</div>
-            <div className="text-2xl font-bold text-red-800">{formatAmount(stats.unpaidAmount)}</div>
+
+          {/* 분할청구 */}
+          <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-amber-500 text-white">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-amber-600 font-medium">분할청구</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-amber-700">{stats.partialCount}<span className="text-sm font-normal text-amber-500 ml-0.5">건</span></p>
+                    <p className="text-sm font-semibold text-amber-600">{formatAmount(stats.partialAmount)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </Card>
         </div>
       )}

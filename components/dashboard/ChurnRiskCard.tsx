@@ -121,7 +121,7 @@ export default function ChurnRiskCard({
           퇴원 위험도 40점 이상 (AI 상담분석 + 전환기 + 추세 기반)
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
+      <CardContent className="space-y-2">
         {highRiskStudents.map((student) => (
           <div
             key={student.id}

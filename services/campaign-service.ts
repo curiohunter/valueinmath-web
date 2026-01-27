@@ -783,6 +783,8 @@ export async function removeDiscountFromTuition(
   }
 
   // 5. DB 업데이트
+  // 모든 할인이 제거되면 base_amount도 리셋하여 다음 할인 적용 시 현재 금액 기준으로 계산
+  const shouldResetBaseAmount = updatedDetails.length === 0
   const { error: updateError } = await supabase
     .from("tuition_fees")
     .update({
@@ -791,6 +793,7 @@ export async function removeDiscountFromTuition(
       total_discount: newTotalDiscount,
       final_amount: newAmount,
       note: newNote || null,
+      ...(shouldResetBaseAmount && { base_amount: null }),
     })
     .eq("id", tuitionFeeId)
 

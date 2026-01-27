@@ -1,5 +1,5 @@
 "use client"
-import { Suspense, useState, useRef } from "react"
+import { Suspense, useState, useMemo } from "react"
 import { ClassesHeader } from "@/components/students/classes/classes-header"
 import { ClassesFilters } from "@/components/students/classes/classes-filters"
 import { ClassesTable } from "@/components/students/classes/classes-table"
@@ -10,6 +10,9 @@ import { useEffect, useState as useClientState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import ReactDOM from "react-dom/client"
 import type { Database } from "@/types/database"
+import { Users, UserCheck, UserX, ChevronDown, ChevronUp } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 export default function ClassesPage() {
   const [modalOpen, setModalOpen] = useState(false)
@@ -92,6 +95,35 @@ export default function ClassesPage() {
     }
     return acc
   }, {})
+
+  // 미배정 학생 펼침 상태
+  const [isUnassignedExpanded, setIsUnassignedExpanded] = useState(false)
+
+  // 재원생 현황 계산
+  const enrollmentStats = useMemo(() => {
+    // 재원생만 필터링
+    const activeStudents = students.filter(s => s.status === '재원')
+
+    // 반에 등록된 학생 ID 집합
+    const enrolledStudentIds = new Set(
+      classStudents
+        .filter(cs => {
+          const student = students.find(s => s.id === cs.student_id)
+          return student && student.status === '재원'
+        })
+        .map(cs => cs.student_id)
+    )
+
+    // 미등록 학생 (재원생이지만 반에 등록되지 않은 학생)
+    const unassignedStudents = activeStudents.filter(s => !enrolledStudentIds.has(s.id))
+
+    return {
+      totalActive: activeStudents.length,
+      enrolled: enrolledStudentIds.size,
+      unassigned: unassignedStudents.length,
+      unassignedList: unassignedStudents
+    }
+  }, [students, classStudents])
 
   // 담당 선생님/과목 필터 적용 및 정렬
   let filteredClasses = classes;
@@ -346,6 +378,124 @@ export default function ClassesPage() {
   return (
     <div className="space-y-6">
       <ClassesHeader />
+
+      {/* 재원생 현황 요약 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 전체 재원생 */}
+        <Card className="bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-slate-600 text-white">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">전체 재원생</p>
+                <p className="text-2xl font-bold text-slate-800">{enrollmentStats.totalActive}<span className="text-sm font-normal text-slate-500 ml-1">명</span></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 반 배정 완료 */}
+        <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-emerald-500 text-white">
+                <UserCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-emerald-600 font-medium">반 배정 완료</p>
+                <p className="text-2xl font-bold text-emerald-700">{enrollmentStats.enrolled}<span className="text-sm font-normal text-emerald-500 ml-1">명</span></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 반 미배정 */}
+        <Card className={cn(
+          "border transition-all duration-200",
+          enrollmentStats.unassigned > 0
+            ? "bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300 cursor-pointer hover:shadow-md"
+            : "bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200"
+        )}
+          onClick={() => enrollmentStats.unassigned > 0 && setIsUnassignedExpanded(!isUnassignedExpanded)}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-2.5 rounded-lg text-white",
+                  enrollmentStats.unassigned > 0 ? "bg-amber-500" : "bg-gray-400"
+                )}>
+                  <UserX className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className={cn(
+                    "text-xs font-medium",
+                    enrollmentStats.unassigned > 0 ? "text-amber-600" : "text-gray-500"
+                  )}>반 미배정</p>
+                  <p className={cn(
+                    "text-2xl font-bold",
+                    enrollmentStats.unassigned > 0 ? "text-amber-700" : "text-gray-500"
+                  )}>
+                    {enrollmentStats.unassigned}
+                    <span className={cn(
+                      "text-sm font-normal ml-1",
+                      enrollmentStats.unassigned > 0 ? "text-amber-500" : "text-gray-400"
+                    )}>명</span>
+                  </p>
+                </div>
+              </div>
+              {enrollmentStats.unassigned > 0 && (
+                <div className="text-amber-500">
+                  {isUnassignedExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 미배정 학생 목록 (펼침) */}
+      {isUnassignedExpanded && enrollmentStats.unassigned > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50 overflow-hidden">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <UserX className="h-4 w-4 text-amber-600" />
+              <h3 className="text-sm font-semibold text-amber-800">반 미배정 학생 목록</h3>
+              <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-xs">
+                {enrollmentStats.unassigned}명
+              </Badge>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {enrollmentStats.unassignedList.map(student => {
+                const schoolTypeMap: Record<string, string> = {
+                  '초등학교': '초',
+                  '중학교': '중',
+                  '고등학교': '고'
+                }
+                const schoolAbbr = schoolTypeMap[student.school_type] || ''
+                const gradeStr = student.grade ? `${student.grade}` : ''
+                const displayInfo = schoolAbbr && gradeStr ? `${schoolAbbr}${gradeStr}` : null
+
+                return (
+                  <Badge
+                    key={student.id}
+                    variant="secondary"
+                    className="bg-white border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors px-3 py-1.5 text-sm font-medium"
+                  >
+                    {student.name}
+                    {displayInfo && (
+                      <span className="ml-1 text-amber-500 font-normal">({displayInfo})</span>
+                    )}
+                  </Badge>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="overflow-hidden">
         <ClassesFilters
           teachers={teachers}
