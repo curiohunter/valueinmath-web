@@ -31,10 +31,10 @@ interface StudentsTabProps {
 export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("신규상담");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [schoolTypeFilter, setSchoolTypeFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
-  const [sortBy, setSortBy] = useState<'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date' | 'status'>('status');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
   // Filter students when search or filters change
@@ -71,8 +71,33 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
     
     // Apply sorting
     filtered.sort((a, b) => {
+      // 기본 정렬: 상태 우선순위 (신규상담 > 재원 > 기타)
+      if (sortBy === 'status') {
+        const statusPriority: Record<string, number> = {
+          '신규상담': 0,
+          '재원': 1,
+          '미등록': 2,
+          '퇴원': 3,
+        };
+        const aPriority = statusPriority[a.status] ?? 99;
+        const bPriority = statusPriority[b.status] ?? 99;
+
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+
+        // 같은 상태 내에서: 신규상담은 first_contact_date 내림차순, 나머지는 이름순
+        if (a.status === '신규상담') {
+          // 최신 first_contact_date가 위로 (내림차순)
+          return (b.first_contact_date || '').localeCompare(a.first_contact_date || '');
+        }
+
+        // 재원생 및 기타는 이름순
+        return a.name.localeCompare(b.name, 'ko');
+      }
+
       let compareValue = 0;
-      
+
       switch (sortBy) {
         case 'name':
           compareValue = a.name.localeCompare(b.name, 'ko');
@@ -99,14 +124,14 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
           compareValue = (a.end_date || '').localeCompare(b.end_date || '');
           break;
       }
-      
+
       return sortOrder === 'asc' ? compareValue : -compareValue;
     });
     
     setFilteredStudents(filtered);
   }, [students, searchTerm, statusFilter, schoolTypeFilter, gradeFilter, sortBy, sortOrder]);
   
-  const handleSort = (column: 'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date') => {
+  const handleSort = (column: 'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date' | 'status') => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {

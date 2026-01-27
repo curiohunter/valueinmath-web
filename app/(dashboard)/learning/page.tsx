@@ -29,6 +29,8 @@ export default function LearningPage() {
   const {
     date,
     setDate,
+    selectedTeacherIds,
+    setSelectedTeacherIds,
     selectedClassIds,
     setSelectedClassIds,
     isSidebarOpen,
@@ -108,10 +110,38 @@ export default function LearningPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }, [classStudents, students]);
 
+  // 반을 담당하는 선생님 목록 (가나다순)
+  const teachersWithClasses = useMemo(() => {
+    const teacherIdsWithClasses = new Set(classes.map(c => c.teacher_id).filter(Boolean));
+    return teachers
+      .filter(t => teacherIdsWithClasses.has(t.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  }, [classes, teachers]);
+
+  // 선택된 선생님에 따라 필터링된 반 목록
+  const filteredClasses = useMemo(() => {
+    if (selectedTeacherIds.length === 0) {
+      return classes;
+    }
+    return classes.filter(c => c.teacher_id && selectedTeacherIds.includes(c.teacher_id));
+  }, [classes, selectedTeacherIds]);
+
   // 필터링 및 정렬된 데이터
   const filteredAndSortedRows = useMemo(() => {
     return rows
-      .filter(row => selectedClassIds.length === 0 || selectedClassIds.includes(row.classId))
+      .filter(row => {
+        // 반 필터가 있으면 반 필터 적용
+        if (selectedClassIds.length > 0) {
+          return selectedClassIds.includes(row.classId);
+        }
+        // 선생님 필터만 있으면 해당 선생님의 반만 표시
+        if (selectedTeacherIds.length > 0) {
+          const rowClass = classes.find(c => c.id === row.classId);
+          return rowClass?.teacher_id && selectedTeacherIds.includes(rowClass.teacher_id);
+        }
+        // 둘 다 없으면 전체 표시
+        return true;
+      })
       .sort((a, b) => {
         const classA = classes.find(c => c.id === a.classId);
         const classB = classes.find(c => c.id === b.classId);
@@ -131,12 +161,21 @@ export default function LearningPage() {
 
         return a.name.localeCompare(b.name, "ko");
       });
-  }, [rows, selectedClassIds, classes, teachers]);
+  }, [rows, selectedClassIds, selectedTeacherIds, classes, teachers]);
 
   // 교재/진도 일괄 적용 함수
   const handleBulkApply = useCallback((key: "book1" | "book1log" | "book2" | "book2log") => {
     const currentFilteredRows = rows
-      .filter(row => selectedClassIds.length === 0 || selectedClassIds.includes(row.classId))
+      .filter(row => {
+        if (selectedClassIds.length > 0) {
+          return selectedClassIds.includes(row.classId);
+        }
+        if (selectedTeacherIds.length > 0) {
+          const rowClass = classes.find(c => c.id === row.classId);
+          return rowClass?.teacher_id && selectedTeacherIds.includes(rowClass.teacher_id);
+        }
+        return true;
+      })
       .sort((a, b) => {
         const classA = classes.find(c => c.id === a.classId)?.name || "";
         const classB = classes.find(c => c.id === b.classId)?.name || "";
@@ -157,11 +196,20 @@ export default function LearningPage() {
     }
 
     rows.forEach((r, idx) => {
-      if (selectedClassIds.length === 0 || selectedClassIds.includes(r.classId)) {
+      let shouldApply = false;
+      if (selectedClassIds.length > 0) {
+        shouldApply = selectedClassIds.includes(r.classId);
+      } else if (selectedTeacherIds.length > 0) {
+        const rowClass = classes.find(c => c.id === r.classId);
+        shouldApply = rowClass?.teacher_id ? selectedTeacherIds.includes(rowClass.teacher_id) : false;
+      } else {
+        shouldApply = true;
+      }
+      if (shouldApply) {
         handleChange(idx, key, firstValue);
       }
     });
-  }, [rows, selectedClassIds, classes, handleChange]);
+  }, [rows, selectedClassIds, selectedTeacherIds, classes, handleChange]);
 
   // 모달 저장 핸들러
   const handleModalSave = useCallback(() => {
@@ -420,7 +468,82 @@ export default function LearningPage() {
                       <h2 className="text-lg font-semibold text-gray-800">학습 관리</h2>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-600">반 필터:</span>
+                        {/* 선생님 필터 */}
+                        <span className="text-sm font-medium text-gray-600">선생님:</span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="justify-start h-8 px-3 text-sm font-normal"
+                            >
+                              <Users className="w-4 h-4 mr-2" />
+                              {selectedTeacherIds.length === 0
+                                ? "전체"
+                                : selectedTeacherIds.length + "명 선택"}
+                              <ChevronDown className="w-4 h-4 ml-2" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-0" align="start">
+                            <div className="p-2 border-b">
+                              <h4 className="font-medium text-sm text-gray-700 mb-2">선생님 선택</h4>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedTeacherIds(teachersWithClasses.map(t => t.id))}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  전체 선택
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedTeacherIds([]);
+                                    setSelectedClassIds([]);
+                                  }}
+                                  className="h-7 px-2 text-xs"
+                                >
+                                  전체 해제
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                              {teachersWithClasses.map(teacher => (
+                                <div key={teacher.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50">
+                                  <Checkbox
+                                    id={`teacher-${teacher.id}`}
+                                    checked={selectedTeacherIds.includes(teacher.id)}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedTeacherIds(prev => [...prev, teacher.id]);
+                                      } else {
+                                        setSelectedTeacherIds(prev => prev.filter(id => id !== teacher.id));
+                                        // 해당 선생님의 반 선택도 해제
+                                        const teacherClassIds = classes
+                                          .filter(c => c.teacher_id === teacher.id)
+                                          .map(c => c.id);
+                                        setSelectedClassIds(prev => prev.filter(id => !teacherClassIds.includes(id)));
+                                      }
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`teacher-${teacher.id}`}
+                                    className="text-sm font-medium cursor-pointer flex-1"
+                                  >
+                                    {teacher.name}
+                                  </label>
+                                  <span className="text-xs text-gray-400">
+                                    {classes.filter(c => c.teacher_id === teacher.id).length}반
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* 반 필터 */}
+                        <span className="text-sm font-medium text-gray-600">반:</span>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
@@ -441,7 +564,7 @@ export default function LearningPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => setSelectedClassIds(classes.map(c => c.id))}
+                                  onClick={() => setSelectedClassIds(filteredClasses.map(c => c.id))}
                                   className="h-7 px-2 text-xs"
                                 >
                                   전체 선택
@@ -457,31 +580,37 @@ export default function LearningPage() {
                               </div>
                             </div>
                             <div className="max-h-48 overflow-y-auto">
-                              {classes.map(cls => (
-                                <div key={cls.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50">
-                                  <Checkbox
-                                    id={cls.id}
-                                    checked={selectedClassIds.includes(cls.id)}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
-                                        setSelectedClassIds(prev => [...prev, cls.id]);
-                                      } else {
-                                        setSelectedClassIds(prev => prev.filter(id => id !== cls.id));
-                                      }
-                                    }}
-                                  />
-                                  <label
-                                    htmlFor={cls.id}
-                                    className="text-sm font-medium cursor-pointer flex-1"
-                                  >
-                                    {cls.name}
-                                  </label>
-                                </div>
-                              ))}
+                              {filteredClasses.map(cls => {
+                                const teacher = teachers.find(t => t.id === cls.teacher_id);
+                                return (
+                                  <div key={cls.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50">
+                                    <Checkbox
+                                      id={cls.id}
+                                      checked={selectedClassIds.includes(cls.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setSelectedClassIds(prev => [...prev, cls.id]);
+                                        } else {
+                                          setSelectedClassIds(prev => prev.filter(id => id !== cls.id));
+                                        }
+                                      }}
+                                    />
+                                    <label
+                                      htmlFor={cls.id}
+                                      className="text-sm font-medium cursor-pointer flex-1"
+                                    >
+                                      {cls.name}
+                                    </label>
+                                    {teacher && (
+                                      <span className="text-xs text-gray-400">{teacher.name}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </PopoverContent>
                         </Popover>
-                        {selectedClassIds.length > 0 && (
+                        {(selectedClassIds.length > 0 || selectedTeacherIds.length > 0) && (
                           <Badge variant="secondary">
                             {filteredAndSortedRows.length}명
                           </Badge>
@@ -519,26 +648,58 @@ export default function LearningPage() {
                     </div>
                   </div>
 
-                  {/* 선택된 반들을 태그로 표시 */}
-                  {selectedClassIds.length > 0 && (
+                  {/* 선택된 선생님/반들을 태그로 표시 */}
+                  {(selectedTeacherIds.length > 0 || selectedClassIds.length > 0) && (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm text-gray-500">선택된 반:</span>
-                      {selectedClassIds.map(classId => {
-                        const className = classes.find(c => c.id === classId)?.name || classId;
-                        return (
-                          <Badge key={classId} variant="secondary" className="text-xs">
-                            {className}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto p-0 ml-1 hover:bg-transparent"
-                              onClick={() => setSelectedClassIds(prev => prev.filter(id => id !== classId))}
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </Badge>
-                        );
-                      })}
+                      {selectedTeacherIds.length > 0 && (
+                        <>
+                          <span className="text-sm text-gray-500">선생님:</span>
+                          {selectedTeacherIds.map(teacherId => {
+                            const teacherName = teachers.find(t => t.id === teacherId)?.name || teacherId;
+                            return (
+                              <Badge key={teacherId} variant="outline" className="text-xs bg-blue-50 border-blue-200">
+                                {teacherName}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-auto p-0 ml-1 hover:bg-transparent"
+                                  onClick={() => {
+                                    setSelectedTeacherIds(prev => prev.filter(id => id !== teacherId));
+                                    // 해당 선생님의 반 선택도 해제
+                                    const teacherClassIds = classes
+                                      .filter(c => c.teacher_id === teacherId)
+                                      .map(c => c.id);
+                                    setSelectedClassIds(prev => prev.filter(id => !teacherClassIds.includes(id)));
+                                  }}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </Badge>
+                            );
+                          })}
+                        </>
+                      )}
+                      {selectedClassIds.length > 0 && (
+                        <>
+                          <span className="text-sm text-gray-500 ml-2">반:</span>
+                          {selectedClassIds.map(classId => {
+                            const className = classes.find(c => c.id === classId)?.name || classId;
+                            return (
+                              <Badge key={classId} variant="secondary" className="text-xs">
+                                {className}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-auto p-0 ml-1 hover:bg-transparent"
+                                  onClick={() => setSelectedClassIds(prev => prev.filter(id => id !== classId))}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </Badge>
+                            );
+                          })}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -759,10 +920,10 @@ export default function LearningPage() {
                         <td colSpan={12} className="text-center text-gray-400 py-12">
                           <div className="text-4xl mb-4">📝</div>
                           <div className="text-lg mb-2">
-                            {selectedClassIds.length > 0 ? "선택한 반에 학습 기록이 없습니다" : "학습 기록이 없습니다"}
+                            {(selectedClassIds.length > 0 || selectedTeacherIds.length > 0) ? "선택한 필터에 해당하는 학습 기록이 없습니다" : "학습 기록이 없습니다"}
                           </div>
                           <div className="text-sm">
-                            {selectedClassIds.length > 0 ? "다른 반을 선택하거나 학생을 추가해 주세요" : "왼쪽 사이드바에서 반과 학생을 추가해 주세요"}
+                            {(selectedClassIds.length > 0 || selectedTeacherIds.length > 0) ? "다른 필터를 선택하거나 학생을 추가해 주세요" : "왼쪽 사이드바에서 반과 학생을 추가해 주세요"}
                           </div>
                         </td>
                       </tr>
@@ -777,7 +938,7 @@ export default function LearningPage() {
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-600">
                       총 <span className="font-semibold text-gray-900">{rows.length}</span>개의 학습 기록
-                      {selectedClassIds.length > 0 && (
+                      {(selectedClassIds.length > 0 || selectedTeacherIds.length > 0) && (
                         <span className="ml-2 text-blue-600">
                           (필터됨: <span className="font-semibold">{filteredAndSortedRows.length}</span>개)
                         </span>
