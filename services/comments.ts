@@ -271,7 +271,7 @@ export async function getStudentsWithCommentStatus(
 > {
   const supabase = createClient()
 
-  // 학생 목록 조회
+  // 학생 목록 조회 (활성 학생만)
   let studentsQuery = supabase
     .from("students")
     .select(`
@@ -291,6 +291,7 @@ export async function getStudentsWithCommentStatus(
         )
       )
     `)
+    .eq("is_active", true)
     .eq("status", "재원")
 
   const { data: studentsData, error: studentsError } = await studentsQuery

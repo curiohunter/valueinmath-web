@@ -67,6 +67,7 @@ export default function ConsultationsPage() {
     const { data, error } = await supabase
       .from("students")
       .select("*")
+      .eq("is_active", true)
       .order("name");
 
     if (error) {
@@ -131,6 +132,7 @@ export default function ConsultationsPage() {
       const { data: newStudents } = await supabase
         .from("students")
         .select("*")
+        .eq("is_active", true)
         .gte("start_date", startOfMonth.toISOString().split('T')[0])
         .lte("start_date", endOfMonth.toISOString().split('T')[0])
         .eq("status", "재원");
@@ -146,6 +148,7 @@ export default function ConsultationsPage() {
       const { data: newInquiries } = await supabase
         .from("students")
         .select("*")
+        .eq("is_active", true)
         .gte("first_contact_date", startOfMonth.toISOString().split('T')[0])
         .lte("first_contact_date", endOfMonth.toISOString().split('T')[0]);
 

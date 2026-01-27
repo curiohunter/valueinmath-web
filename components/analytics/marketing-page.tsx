@@ -260,10 +260,11 @@ export default function MarketingPage() {
 
   async function loadSiblingGroups() {
     try {
-      // 재원 학생 중 parent_phone이 있는 학생들 조회
+      // 재원 학생 중 parent_phone이 있는 학생들 조회 (활성 학생만)
       const { data: studentsData, error } = await supabase
         .from("students")
         .select("id, name, parent_phone, grade, school")
+        .eq("is_active", true)
         .eq("status", "재원")
         .not("parent_phone", "is", null)
 
@@ -314,10 +315,11 @@ export default function MarketingPage() {
       if (csError) throw csError
       if (!classStudentsData) return
 
-      // 재원 학생 정보 조회
+      // 재원 학생 정보 조회 (활성 학생만)
       const { data: studentsData, error: sError } = await supabase
         .from("students")
         .select("id, name, grade, school, status")
+        .eq("is_active", true)
         .eq("status", "재원")
 
       if (sError) throw sError
@@ -374,6 +376,7 @@ export default function MarketingPage() {
     const { data } = await supabase
       .from("students")
       .select("id, name")
+      .eq("is_active", true)
       .eq("status", "재원")
       .order("name")
     setStudents(data || [])

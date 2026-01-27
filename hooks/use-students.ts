@@ -15,19 +15,20 @@ export function useStudentsByStatus(status?: string) {
   const fetchStudents = useCallback(async () => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const supabase = createClient()
       let query = supabase
         .from('students')
         .select('*')
+        .eq('is_active', true)
         .order('name', { ascending: true })
-      
+
       // 상태 필터링
       if (status) {
         query = query.eq('status', status)
       }
-      
+
       const { data, error: fetchError } = await query
       
       if (fetchError) {

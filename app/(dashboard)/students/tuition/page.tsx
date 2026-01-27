@@ -123,10 +123,11 @@ export default function TuitionPage() {
     const fetchSiblingCandidates = async () => {
       const supabase = createClient()
       try {
-        // 재원 학생 중 parent_phone이 있는 학생들 조회
+        // 재원 학생 중 parent_phone이 있는 학생들 조회 (활성 학생만)
         const { data: students, error } = await supabase
           .from('students')
           .select('id, name, parent_phone')
+          .eq('is_active', true)
           .eq('status', '재원')
           .not('parent_phone', 'is', null)
 

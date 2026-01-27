@@ -374,22 +374,22 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
       throw classesError
     }
     
-    // 반별 학생 조회
+    // 반별 학생 조회 (is_active 포함)
     const { data: classStudentsData, error: classStudentsError } = await supabase
       .from("class_students")
       .select(`
         class_id,
-        student:students(id, name, grade, school, status)
+        student:students(id, name, grade, school, status, is_active)
       `)
-    
+
     if (classStudentsError) {
       throw classStudentsError
     }
-    
-    // 데이터 조합
+
+    // 데이터 조합 (is_active = true인 재원 학생만)
     const classesWithStudents: ClassWithStudents[] = (classesData || []).map(classRow => {
       const students = (classStudentsData || [])
-        .filter((cs: any) => cs.class_id === classRow.id && cs.student?.status?.includes('재원'))
+        .filter((cs: any) => cs.class_id === classRow.id && cs.student?.is_active === true && cs.student?.status?.includes('재원'))
         .map((cs: any) => mapStudentRowToInfo(cs.student))
         .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
       

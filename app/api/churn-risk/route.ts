@@ -35,7 +35,7 @@ export async function GET() {
     const fourWeeksAgoStr = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const eightWeeksAgoStr = new Date(now.getTime() - 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-    // 재원 학생 + 최근 상담 AI 분석 결과 조회
+    // 재원 학생 + 최근 상담 AI 분석 결과 조회 (활성 학생만)
     const { data: students, error: studentsError } = await supabase
       .from('students')
       .select(`
@@ -46,6 +46,7 @@ export async function GET() {
         status,
         start_date
       `)
+      .eq('is_active', true)
       .eq('status', '재원')
       .order('name')
 
