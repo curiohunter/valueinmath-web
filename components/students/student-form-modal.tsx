@@ -29,6 +29,7 @@ import { toast } from "sonner"
 import { getKoreanDateString } from "@/lib/utils"
 import type { Student, StudentStatus, Department, SchoolType, LeadSource } from "@/types/student"
 import { createClient } from "@/lib/supabase/client"
+import { calendarService } from "@/services/calendar"
 
 // 상담 모달 import - 나중에 실제 파일로 교체
 import { ConsultationModal } from "@/components/consultations/ConsultationModal"
@@ -342,7 +343,32 @@ export function StudentFormModal({
       }
 
       setSavedStudentName(values.name)
-      toast.success("학생 정보가 저장되었습니다.")
+
+      // 재원으로 변경되고 start_date가 있는 경우 캘린더에 신규등록 이벤트 자동 생성
+      // 조건: (1) 상태가 "재원"이고 (2) start_date가 있고 (3) 기존 학생의 상태가 "재원"이 아니었거나 새 학생인 경우
+      const isNewEnrollment = values.status === "재원" &&
+        values.start_date &&
+        (!student || student.status !== "재원")
+
+      if (isNewEnrollment && values.start_date) {
+        try {
+          const startDateStr = getKoreanDateString(values.start_date)
+          await calendarService.createEvent({
+            title: `[신규등록] ${values.name}`,
+            start_time: `${startDateStr}T09:00:00`,
+            end_time: `${startDateStr}T10:00:00`,
+            event_type: "new_enrollment",
+            description: `${values.name} 학생 신규등록\n담당관: ${values.department || '-'}\n학교: ${values.school || '-'} ${values.school_type || ''} ${values.grade ? values.grade + '학년' : ''}`
+          })
+          toast.success("학생 정보가 저장되었습니다. 캘린더에 신규등록 일정이 추가되었습니다.")
+        } catch (calendarError) {
+          console.error("캘린더 이벤트 생성 실패:", calendarError)
+          toast.success("학생 정보가 저장되었습니다.")
+          // 캘린더 실패해도 학생 저장은 성공으로 처리
+        }
+      } else {
+        toast.success("학생 정보가 저장되었습니다.")
+      }
 
       // Step 2로 이동
       setCurrentStep(2)
