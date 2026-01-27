@@ -47,6 +47,8 @@ export default function TestLogsPage() {
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [openClassIds, setOpenClassIds] = useState<string[]>([]);
   const [filterClassId, setFilterClassId] = useState<string>("all");
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [originalRows, setOriginalRows] = useState<typeof rows>([]);
@@ -449,7 +451,16 @@ export default function TestLogsPage() {
 
   const handleBulkApply = (key: "test" | "testType" | "testScore") => {
     const currentFilteredRows = rows
-      .filter(row => filterClassId === "all" || row.classId === filterClassId)
+      .filter(row => {
+        if (selectedClassIds.length > 0) {
+          return selectedClassIds.includes(row.classId);
+        }
+        if (selectedTeacherIds.length > 0) {
+          const rowClass = classes.find(c => c.id === row.classId);
+          return rowClass?.teacher_id && selectedTeacherIds.includes(rowClass.teacher_id);
+        }
+        return true;
+      })
       .sort((a, b) => {
         const classA = classes.find(c => c.id === a.classId)?.name || "";
         const classB = classes.find(c => c.id === b.classId)?.name || "";
@@ -472,7 +483,16 @@ export default function TestLogsPage() {
     // rows 업데이트
     setRows(prev => {
       return prev.map(r => {
-        if (filterClassId === "all" || r.classId === filterClassId) {
+        let shouldApply = false;
+        if (selectedClassIds.length > 0) {
+          shouldApply = selectedClassIds.includes(r.classId);
+        } else if (selectedTeacherIds.length > 0) {
+          const rowClass = classes.find(c => c.id === r.classId);
+          shouldApply = rowClass?.teacher_id ? selectedTeacherIds.includes(rowClass.teacher_id) : false;
+        } else {
+          shouldApply = true;
+        }
+        if (shouldApply) {
           return { ...r, [key]: firstValue };
         }
         return r;
@@ -483,8 +503,17 @@ export default function TestLogsPage() {
     setDirtyFields(prev => {
       const newMap = new Map(prev);
       rows.forEach(row => {
+        let shouldApply = false;
+        if (selectedClassIds.length > 0) {
+          shouldApply = selectedClassIds.includes(row.classId);
+        } else if (selectedTeacherIds.length > 0) {
+          const rowClass = classes.find(c => c.id === row.classId);
+          shouldApply = rowClass?.teacher_id ? selectedTeacherIds.includes(rowClass.teacher_id) : false;
+        } else {
+          shouldApply = true;
+        }
         // 필터 조건에 맞고, 기존 레코드인 경우만 (새로 추가된 행은 제외)
-        if ((filterClassId === "all" || row.classId === filterClassId) && row.id) {
+        if (shouldApply && row.id) {
           const rowKey = String(row.id);
           // 원본과 비교하여 실제로 변경되었는지 확인
           const originalRow = originalRows.find(or => or.id === row.id);
@@ -745,8 +774,30 @@ export default function TestLogsPage() {
     </div>
   );
 
+  // 반을 담당하는 선생님 목록 (가나다순)
+  const teachersWithClasses = teachers
+    .filter(t => classes.some(c => c.teacher_id === t.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+  // 선택된 선생님에 따라 필터링된 반 목록
+  const filteredClasses = selectedTeacherIds.length === 0
+    ? classes
+    : classes.filter(c => c.teacher_id && selectedTeacherIds.includes(c.teacher_id));
+
   const filteredAndSortedRows = rows
-    .filter(row => filterClassId === "all" || row.classId === filterClassId)
+    .filter(row => {
+      // 반 필터가 있으면 반 필터 적용
+      if (selectedClassIds.length > 0) {
+        return selectedClassIds.includes(row.classId);
+      }
+      // 선생님 필터만 있으면 해당 선생님의 반만 표시
+      if (selectedTeacherIds.length > 0) {
+        const rowClass = classes.find(c => c.id === row.classId);
+        return rowClass?.teacher_id && selectedTeacherIds.includes(rowClass.teacher_id);
+      }
+      // 둘 다 없으면 전체 표시
+      return true;
+    })
     .sort((a, b) => {
       const classA = classes.find(c => c.id === a.classId)?.name || "";
       const classB = classes.find(c => c.id === b.classId)?.name || "";
@@ -787,14 +838,19 @@ export default function TestLogsPage() {
             <TestLogsMainTable
               rows={rows}
               classes={classes}
+              filteredClasses={filteredClasses}
               students={students}
+              teachers={teachers}
+              teachersWithClasses={teachersWithClasses}
               date={date}
-              filterClassId={filterClassId}
+              selectedTeacherIds={selectedTeacherIds}
+              selectedClassIds={selectedClassIds}
               isSidebarOpen={isSidebarOpen}
               hasUnsavedChanges={hasUnsavedChanges}
               deletedRowIds={deletedRowIds}
               onSidebarToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-              onFilterChange={setFilterClassId}
+              onTeacherFilterChange={setSelectedTeacherIds}
+              onClassFilterChange={setSelectedClassIds}
               onRowChange={handleChange}
               onBulkApply={handleBulkApply}
               onDeleteRow={handleDeleteRow}

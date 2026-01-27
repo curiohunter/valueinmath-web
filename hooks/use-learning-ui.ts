@@ -17,6 +17,8 @@ interface UseLearningUIReturn {
   setDate: (date: string) => void
 
   // 필터 관련
+  selectedTeacherIds: string[]
+  setSelectedTeacherIds: React.Dispatch<React.SetStateAction<string[]>>
   selectedClassIds: string[]
   setSelectedClassIds: React.Dispatch<React.SetStateAction<string[]>>
 
@@ -48,6 +50,7 @@ export function useLearningUI(): UseLearningUIReturn {
   const [date, setDate] = useState(today)
 
   // 필터 상태
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([])
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([])
 
   // 사이드바 상태
@@ -119,6 +122,8 @@ export function useLearningUI(): UseLearningUIReturn {
   return {
     date,
     setDate,
+    selectedTeacherIds,
+    setSelectedTeacherIds,
     selectedClassIds,
     setSelectedClassIds,
     isSidebarOpen,

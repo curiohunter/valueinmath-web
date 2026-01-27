@@ -4,7 +4,9 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { Trash2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Trash2, ChevronDown, ChevronLeft, ChevronRight, Users, Filter, X } from "lucide-react"
 
 interface TestLogRow {
   id?: string
@@ -26,14 +28,19 @@ interface TestLogRow {
 interface TestLogsMainTableProps {
   rows: TestLogRow[]
   classes: any[]
+  filteredClasses: any[]
   students: any[]
+  teachers: any[]
+  teachersWithClasses: any[]
   date: string
-  filterClassId: string
+  selectedTeacherIds: string[]
+  selectedClassIds: string[]
   isSidebarOpen: boolean
   hasUnsavedChanges: boolean
   deletedRowIds: string[]
   onSidebarToggle: () => void
-  onFilterChange: (classId: string) => void
+  onTeacherFilterChange: React.Dispatch<React.SetStateAction<string[]>>
+  onClassFilterChange: React.Dispatch<React.SetStateAction<string[]>>
   onRowChange: (idx: number, key: keyof TestLogRow, value: any) => void
   onBulkApply: (key: "test" | "testType" | "testScore") => void
   onDeleteRow: (originalIdx: number) => void
@@ -58,14 +65,19 @@ const TEST_TYPE_OPTIONS = [
 export function TestLogsMainTable({
   rows,
   classes,
+  filteredClasses,
   students,
+  teachers,
+  teachersWithClasses,
   date,
-  filterClassId,
+  selectedTeacherIds,
+  selectedClassIds,
   isSidebarOpen,
   hasUnsavedChanges,
   deletedRowIds,
   onSidebarToggle,
-  onFilterChange,
+  onTeacherFilterChange,
+  onClassFilterChange,
   onRowChange,
   onBulkApply,
   onDeleteRow,
@@ -74,7 +86,19 @@ export function TestLogsMainTable({
   onOpenModal
 }: TestLogsMainTableProps) {
   const filteredAndSortedRows = rows
-    .filter(row => filterClassId === "all" || row.classId === filterClassId)
+    .filter(row => {
+      // 반 필터가 있으면 반 필터 적용
+      if (selectedClassIds.length > 0) {
+        return selectedClassIds.includes(row.classId);
+      }
+      // 선생님 필터만 있으면 해당 선생님의 반만 표시
+      if (selectedTeacherIds.length > 0) {
+        const rowClass = classes.find(c => c.id === row.classId);
+        return rowClass?.teacher_id && selectedTeacherIds.includes(rowClass.teacher_id);
+      }
+      // 둘 다 없으면 전체 표시
+      return true;
+    })
     .sort((a, b) => {
       const classA = classes.find(c => c.id === a.classId)?.name || ""
       const classB = classes.find(c => c.id === b.classId)?.name || ""
@@ -99,26 +123,211 @@ export function TestLogsMainTable({
             </Button>
             
             <h2 className="text-lg font-semibold text-gray-800">테스트 관리</h2>
-            
+
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-600">반 필터:</span>
-              <select
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={filterClassId}
-                onChange={(e) => onFilterChange(e.target.value)}
-              >
-                <option value="all">전체</option>
-                {classes.map((cls: any) => (
-                  <option key={cls.id} value={cls.id}>{cls.name}</option>
-                ))}
-              </select>
-              {filterClassId !== "all" && (
+              {/* 선생님 필터 */}
+              <span className="text-sm font-medium text-gray-600">선생님:</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="justify-start h-8 px-3 text-sm font-normal"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    {selectedTeacherIds.length === 0
+                      ? "전체"
+                      : selectedTeacherIds.length + "명 선택"}
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-0" align="start">
+                  <div className="p-2 border-b">
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">선생님 선택</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onTeacherFilterChange(teachersWithClasses.map(t => t.id))}
+                        className="h-7 px-2 text-xs"
+                      >
+                        전체 선택
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onTeacherFilterChange([]);
+                          onClassFilterChange([]);
+                        }}
+                        className="h-7 px-2 text-xs"
+                      >
+                        전체 해제
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {teachersWithClasses.map(teacher => (
+                      <div key={teacher.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50">
+                        <Checkbox
+                          id={`teacher-${teacher.id}`}
+                          checked={selectedTeacherIds.includes(teacher.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              onTeacherFilterChange(prev => [...prev, teacher.id]);
+                            } else {
+                              onTeacherFilterChange(prev => prev.filter(id => id !== teacher.id));
+                              // 해당 선생님의 반 선택도 해제
+                              const teacherClassIds = classes
+                                .filter(c => c.teacher_id === teacher.id)
+                                .map(c => c.id);
+                              onClassFilterChange(prev => prev.filter(id => !teacherClassIds.includes(id)));
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`teacher-${teacher.id}`}
+                          className="text-sm font-medium cursor-pointer flex-1"
+                        >
+                          {teacher.name}
+                        </label>
+                        <span className="text-xs text-gray-400">
+                          {classes.filter(c => c.teacher_id === teacher.id).length}반
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* 반 필터 */}
+              <span className="text-sm font-medium text-gray-600">반:</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="justify-start h-8 px-3 text-sm font-normal"
+                  >
+                    <Filter className="w-4 h-4 mr-2" />
+                    {selectedClassIds.length === 0
+                      ? "전체 반"
+                      : selectedClassIds.length + "개 반 선택"}
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <div className="p-2 border-b">
+                    <h4 className="font-medium text-sm text-gray-700 mb-2">반 선택</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onClassFilterChange(filteredClasses.map(c => c.id))}
+                        className="h-7 px-2 text-xs"
+                      >
+                        전체 선택
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onClassFilterChange([])}
+                        className="h-7 px-2 text-xs"
+                      >
+                        전체 해제
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredClasses.map(cls => {
+                      const teacher = teachers.find(t => t.id === cls.teacher_id);
+                      return (
+                        <div key={cls.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50">
+                          <Checkbox
+                            id={cls.id}
+                            checked={selectedClassIds.includes(cls.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                onClassFilterChange(prev => [...prev, cls.id]);
+                              } else {
+                                onClassFilterChange(prev => prev.filter(id => id !== cls.id));
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={cls.id}
+                            className="text-sm font-medium cursor-pointer flex-1"
+                          >
+                            {cls.name}
+                          </label>
+                          {teacher && (
+                            <span className="text-xs text-gray-400">{teacher.name}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {(selectedClassIds.length > 0 || selectedTeacherIds.length > 0) && (
                 <Badge variant="secondary">
                   {filteredAndSortedRows.length}명
                 </Badge>
               )}
             </div>
           </div>
+
+          {/* 선택된 선생님/반 태그 표시 */}
+          {(selectedTeacherIds.length > 0 || selectedClassIds.length > 0) && (
+            <div className="flex items-center gap-2 flex-wrap mt-3">
+              {selectedTeacherIds.length > 0 && (
+                <>
+                  <span className="text-sm text-gray-500">선생님:</span>
+                  {selectedTeacherIds.map(teacherId => {
+                    const teacherName = teachers.find(t => t.id === teacherId)?.name || teacherId;
+                    return (
+                      <Badge key={teacherId} variant="outline" className="text-xs bg-blue-50 border-blue-200">
+                        {teacherName}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-0 ml-1 hover:bg-transparent"
+                          onClick={() => {
+                            onTeacherFilterChange(prev => prev.filter(id => id !== teacherId));
+                            const teacherClassIds = classes
+                              .filter(c => c.teacher_id === teacherId)
+                              .map(c => c.id);
+                            onClassFilterChange(prev => prev.filter(id => !teacherClassIds.includes(id)));
+                          }}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </Badge>
+                    );
+                  })}
+                </>
+              )}
+              {selectedClassIds.length > 0 && (
+                <>
+                  <span className="text-sm text-gray-500 ml-2">반:</span>
+                  {selectedClassIds.map(classId => {
+                    const className = classes.find(c => c.id === classId)?.name || classId;
+                    return (
+                      <Badge key={classId} variant="secondary" className="text-xs">
+                        {className}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-0 ml-1 hover:bg-transparent"
+                          onClick={() => onClassFilterChange(prev => prev.filter(id => id !== classId))}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </Badge>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-3">
             {hasUnsavedChanges && (
               <span className="text-sm text-orange-600 font-medium animate-pulse">
