@@ -33,7 +33,7 @@ interface TestModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   test: EntranceTestData | null
-  onSave: (data: Partial<EntranceTestData>) => void
+  onSave: (data: Partial<EntranceTestData>) => Promise<boolean> | void
   onStatusChange?: () => void
 }
 
@@ -58,8 +58,9 @@ export function TestModal({
     recommended_class: '',
     notes: ''
   })
-  
+
   const [classes, setClasses] = useState<{id: string, name: string}[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // 시간 옵션 생성
   const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'))
@@ -160,13 +161,14 @@ export function TestModal({
     }
   }, [test, open])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+    setIsSubmitting(true)
+
     // test2_level과 test_result에서 특수 값 처리
     const processedTest2Level = formData.test2_level === 'none' ? null : formData.test2_level
     const processedTestResult = formData.test_result === 'pending' || formData.test_result === '' ? null : formData.test_result
-    
+
     const submitData: any = {
       test_date: formData.test_date ? `${formData.test_date}T${formData.test_hour}:${formData.test_minute}:00` : null,
       test1_level: formData.test1_level || null,
@@ -178,8 +180,9 @@ export function TestModal({
       recommended_class: formData.recommended_class || null,
       notes: formData.notes || null
     }
-    
-    onSave(submitData)
+
+    await onSave(submitData)
+    setIsSubmitting(false)
   }
 
   const testLevels = [
@@ -219,9 +222,9 @@ export function TestModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>입학테스트 {test ? '수정' : '등록'}</DialogTitle>
+          <DialogTitle>입학테스트 {test?.id ? '수정' : '등록'}</DialogTitle>
           <DialogDescription>
-            입학테스트 정보를 {test ? '수정' : '입력'}해주세요.
+            입학테스트 정보를 {test?.id ? '수정' : '입력'}해주세요.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -372,8 +375,8 @@ export function TestModal({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               취소
             </Button>
-            <Button type="submit">
-              {test ? '수정' : '등록'}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? '저장 중...' : (test?.id ? '수정' : '등록')}
             </Button>
           </DialogFooter>
         </form>

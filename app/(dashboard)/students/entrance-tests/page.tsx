@@ -30,10 +30,11 @@ export default function EntranceTestsPage() {
 
       if (testsError) throw testsError;
 
-      // 학생 데이터 로드
+      // 학생 데이터 로드 (활성 학생만)
       const { data: studentsData, error: studentsError } = await supabase
         .from("students")
         .select("*")
+        .eq("is_active", true)
         .order("name");
 
       if (studentsError) throw studentsError;

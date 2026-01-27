@@ -71,6 +71,8 @@ export function StudentManagementList({
       setSelectedCommentIds(new Set())
     } catch (error) {
       console.error("학생 목록 로딩 오류:", error)
+      toast.error("학생 목록을 불러오는데 실패했습니다.")
+      setStudents([])
     } finally {
       setLoading(false)
     }

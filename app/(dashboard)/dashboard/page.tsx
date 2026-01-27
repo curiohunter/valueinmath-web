@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Plus, Users, BarChart3 } from "lucide-react"
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
@@ -18,8 +28,12 @@ import { ClassFormModal } from "@/components/students/classes/class-form-modal"
 import { QuickAccessSection } from "@/components/dashboard/QuickAccessSection"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/providers/auth-provider"
+import { toast } from "sonner"
 import type { ChurnRiskStudent } from "@/components/dashboard/ChurnRiskCard"
 import type { ConsultationData } from "@/types/dashboard"
+
+// 입학테스트비 기본 금액
+const ENTRANCE_TEST_FEE = 10000
 
 // 커스텀 훅 import
 import { useDashboardStats } from "@/hooks/use-dashboard-stats"
@@ -62,6 +76,14 @@ export default function DashboardPage() {
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState<ChurnRiskStudent | null>(null)
   const [isStudentDetailModalOpen, setIsStudentDetailModalOpen] = useState(false)
+
+  // 입학테스트비 확인 다이얼로그 상태
+  const [showTuitionFeeConfirm, setShowTuitionFeeConfirm] = useState(false)
+  const [pendingTuitionFeeData, setPendingTuitionFeeData] = useState<{
+    studentId: string
+    studentName: string
+    testDate: string
+  } | null>(null)
 
   // 모든 데이터 새로고침
   const refreshAllData = useCallback(async () => {
@@ -144,15 +166,79 @@ export default function DashboardPage() {
   }, [deleteConsultation, refreshStats, refreshConsultations])
 
   // 입학테스트 저장 핸들러
-  const handleTestSave = useCallback(async (testData: Partial<EntranceTestData>) => {
+  const handleTestSave = useCallback(async (testData: Partial<EntranceTestData>): Promise<boolean> => {
+    const isNewTest = !editingTest?.id
     const success = await saveTest(testData, editingTest)
+
     if (success) {
-      await refreshStats()
-      await refreshEntranceTests()
+      // 모달 먼저 닫기
       setIsTestModalOpen(false)
       setEditingTest(null)
+
+      // 신규 생성이고 테스트 날짜가 있으면 입학테스트비 확인 다이얼로그 표시
+      if (isNewTest && testData.test_date && editingTest?.student_id) {
+        const testDateStr = typeof testData.test_date === 'string'
+          ? testData.test_date.split('T')[0]
+          : ''
+        setPendingTuitionFeeData({
+          studentId: editingTest.student_id,
+          studentName: editingTest.student_name || '학생',
+          testDate: testDateStr
+        })
+        setShowTuitionFeeConfirm(true)
+      }
+
+      // 데이터 새로고침은 백그라운드에서 처리 (await 제거)
+      refreshStats()
+      refreshEntranceTests()
     }
+    return success
   }, [saveTest, editingTest, refreshStats, refreshEntranceTests])
+
+  // 입학테스트비 등록
+  const handleCreateTuitionFee = useCallback(async () => {
+    if (!pendingTuitionFeeData) return
+
+    const { studentId, studentName, testDate } = pendingTuitionFeeData
+    const date = new Date(testDate)
+    const year = date.getFullYear()
+    const month = date.getMonth() + 1
+
+    try {
+      const { error } = await supabase
+        .from('tuition_fees')
+        .insert({
+          student_id: studentId,
+          class_id: null,
+          year,
+          month,
+          amount: ENTRANCE_TEST_FEE,
+          class_type: '입학테스트비',
+          payment_status: '미납',
+          student_name_snapshot: studentName,
+          class_name_snapshot: null,
+          period_start_date: testDate,
+          period_end_date: testDate,
+          note: null
+        })
+
+      if (error) throw error
+
+      toast.success(`${studentName} 학생의 입학테스트비(${ENTRANCE_TEST_FEE.toLocaleString()}원)가 등록되었습니다.`)
+    } catch (error) {
+      console.error('입학테스트비 등록 오류:', error)
+      toast.error('입학테스트비 등록 중 오류가 발생했습니다.')
+    } finally {
+      setShowTuitionFeeConfirm(false)
+      setPendingTuitionFeeData(null)
+    }
+  }, [pendingTuitionFeeData, supabase])
+
+  // 입학테스트비 건너뛰기
+  const handleSkipTuitionFee = useCallback(() => {
+    setShowTuitionFeeConfirm(false)
+    setPendingTuitionFeeData(null)
+  }, [])
 
   // 입학테스트 삭제 핸들러
   const handleTestDelete = useCallback(async (id: number) => {
@@ -347,6 +433,36 @@ export default function DashboardPage() {
               selectedStudentIds: [newlyEnrolledStudent.id]
             } : undefined}
           />
+
+          {/* 입학테스트비 등록 확인 다이얼로그 */}
+          <AlertDialog open={showTuitionFeeConfirm} onOpenChange={setShowTuitionFeeConfirm}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>입학테스트비 등록</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2">
+                    <p>
+                      <strong>{pendingTuitionFeeData?.studentName}</strong> 학생의 입학테스트비를 등록하시겠습니까?
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      테스트 날짜: {pendingTuitionFeeData?.testDate}
+                    </p>
+                    <p className="font-medium text-foreground">
+                      금액: {ENTRANCE_TEST_FEE.toLocaleString()}원
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={handleSkipTuitionFee}>
+                  건너뛰기
+                </AlertDialogCancel>
+                <AlertDialogAction onClick={handleCreateTuitionFee}>
+                  등록하기
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
 
         <TabsContent value="students" className="mt-6">

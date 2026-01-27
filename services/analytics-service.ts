@@ -454,6 +454,7 @@ export async function getStudentsForAnalytics(): Promise<AnalyticsApiResponse<St
     const { data, error } = await supabase
       .from("students")
       .select("id, name, department, grade, school")
+      .eq("is_active", true)
       .eq("status", "재원")
       .order("name", { ascending: true })
     
@@ -833,7 +834,7 @@ export async function getStudentReportsStatus(
   try {
     const supabase = await createServerClient()
     
-    // 1. 학생 목록 조회 (필터 적용)
+    // 1. 학생 목록 조회 (필터 적용, 활성 학생만)
     let studentsQuery = supabase
       .from("students")
       .select(`
@@ -851,6 +852,7 @@ export async function getStudentReportsStatus(
           )
         )
       `)
+      .eq("is_active", true)
       .eq("status", "재원")
     
     // 필터 적용
@@ -1076,10 +1078,11 @@ export async function getClassAnalytics(
     let studentIds: string[] = []
     
     if (classId === "all") {
-      // 모든 재원 학생 조회
+      // 모든 재원 학생 조회 (활성 학생만)
       const { data: students, error } = await supabase
         .from("students")
         .select("id")
+        .eq("is_active", true)
         .eq("status", "재원")
       
       if (error) throw error
@@ -1149,10 +1152,11 @@ export async function generateAllMonthlyReports(
   try {
     const supabase = await createServerClient()
     
-    // 재원 상태의 모든 학생 조회
+    // 재원 상태의 모든 학생 조회 (활성 학생만)
     const { data: students, error: studentsError } = await supabase
       .from("students")
       .select("id, name")
+      .eq("is_active", true)
       .eq("status", "재원")
     
     if (studentsError) {

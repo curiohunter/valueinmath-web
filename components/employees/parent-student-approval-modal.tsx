@@ -120,6 +120,7 @@ export function ParentStudentApprovalModal({
     const { data, error } = await supabase
       .from("students")
       .select("id, name, grade, school, status, parent_phone")
+      .eq("is_active", true)
       .in("status", ["재원", "퇴원"])
       .order("status", { ascending: true })
       .order("name", { ascending: true })
