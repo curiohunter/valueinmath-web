@@ -508,24 +508,40 @@ export async function generateMonthlyTuition(
 export async function deleteTuitionFee(id: string): Promise<TuitionApiResponse<{ deleted: boolean }>> {
   try {
     const supabase = await createServerClient()
-    
+
+    // 1. 캠페인 보상이 이 학원비에 적용된 경우, 연결 해제 및 상태를 pending으로 변경
+    const { error: campaignError } = await supabase
+      .from("campaign_participants")
+      .update({
+        reward_applied_tuition_id: null,
+        reward_status: "pending",
+        reward_paid_at: null,
+      })
+      .eq("reward_applied_tuition_id", id)
+
+    if (campaignError) {
+      console.error("캠페인 보상 연결 해제 오류:", campaignError)
+      // 캠페인 연결이 없을 수도 있으므로 계속 진행
+    }
+
+    // 2. 학원비 삭제 (payssam_logs는 CASCADE로 자동 삭제됨)
     const { error } = await supabase
       .from("tuition_fees")
       .delete()
       // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
       .eq("id", id)
-    
+
     if (error) {
       throw error
     }
-    
+
     return { success: true, data: { deleted: true } }
-    
+
   } catch (error) {
     console.error("deleteTuitionFee 오류:", error)
-    return { 
-      success: false, 
-      error: "학원비 삭제 중 오류가 발생했습니다." 
+    return {
+      success: false,
+      error: "학원비 삭제 중 오류가 발생했습니다."
     }
   }
 }
