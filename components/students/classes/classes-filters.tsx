@@ -1,7 +1,8 @@
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Printer } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Printer, Search } from "lucide-react"
 
 interface Teacher {
   id: string
@@ -17,9 +18,11 @@ interface ClassesFiltersProps {
   setTeacherFilter: (value: string) => void
   subjectFilter: string
   setSubjectFilter: (value: string) => void
+  studentSearch: string
+  setStudentSearch: (value: string) => void
 }
 
-export function ClassesFilters({ teachers, onOpen, onPrint, teacherFilter, setTeacherFilter, subjectFilter, setSubjectFilter }: ClassesFiltersProps) {
+export function ClassesFilters({ teachers, onOpen, onPrint, teacherFilter, setTeacherFilter, subjectFilter, setSubjectFilter, studentSearch, setStudentSearch }: ClassesFiltersProps) {
   return (
     <div className="flex items-center gap-2 px-6 py-4 border-b bg-background">
       <Select value={teacherFilter} onValueChange={setTeacherFilter}>
@@ -47,6 +50,15 @@ export function ClassesFilters({ teachers, onOpen, onPrint, teacherFilter, setTe
           <SelectItem value="과학특강">과학특강</SelectItem>
         </SelectContent>
       </Select>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="학생 이름 검색"
+          value={studentSearch}
+          onChange={(e) => setStudentSearch(e.target.value)}
+          className="w-40 pl-9"
+        />
+      </div>
       <Button onClick={onOpen}>+ 반 만들기</Button>
       {onPrint && (
         <Button 
