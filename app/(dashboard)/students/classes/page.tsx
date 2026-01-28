@@ -24,6 +24,7 @@ export default function ClassesPage() {
   const [loading, setLoading] = useState(false)
   const [teacherFilter, setTeacherFilter] = useState("all")
   const [subjectFilter, setSubjectFilter] = useState("all")
+  const [studentSearch, setStudentSearch] = useState("")
 
   // 데이터 로드 함수
   const loadData = async () => {
@@ -125,7 +126,27 @@ export default function ClassesPage() {
     }
   }, [students, classStudents])
 
-  // 담당 선생님/과목 필터 적용 및 정렬
+  // 학생 검색어로 해당 학생이 속한 반 ID 집합 생성
+  const classIdsWithSearchedStudent = useMemo(() => {
+    if (!studentSearch.trim()) return null
+
+    const searchTerm = studentSearch.trim().toLowerCase()
+    const matchingStudentIds = students
+      .filter(s => s.name.toLowerCase().includes(searchTerm))
+      .map(s => s.id)
+
+    if (matchingStudentIds.length === 0) return new Set<string>()
+
+    const classIds = new Set<string>()
+    classStudents.forEach(cs => {
+      if (matchingStudentIds.includes(cs.student_id)) {
+        classIds.add(cs.class_id)
+      }
+    })
+    return classIds
+  }, [studentSearch, students, classStudents])
+
+  // 담당 선생님/과목/학생검색 필터 적용 및 정렬
   let filteredClasses = classes;
   if (teacherFilter !== "all") {
     filteredClasses = filteredClasses.filter((c: any) => c.teacher_id === teacherFilter)
@@ -141,6 +162,10 @@ export default function ClassesPage() {
       // 개별 과목 필터
       filteredClasses = filteredClasses.filter((c: any) => c.subject === subjectFilter)
     }
+  }
+  // 학생 검색 필터
+  if (classIdsWithSearchedStudent !== null) {
+    filteredClasses = filteredClasses.filter((c: any) => classIdsWithSearchedStudent.has(c.id))
   }
   
   // 선생님별로 그룹화하여 정렬
@@ -505,6 +530,8 @@ export default function ClassesPage() {
           setTeacherFilter={setTeacherFilter}
           subjectFilter={subjectFilter}
           setSubjectFilter={setSubjectFilter}
+          studentSearch={studentSearch}
+          setStudentSearch={setStudentSearch}
         />
         <CardContent className="p-0">
           <Suspense fallback={<div>로딩 중...</div>}>
