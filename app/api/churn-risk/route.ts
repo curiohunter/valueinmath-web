@@ -35,64 +35,78 @@ export async function GET() {
     const fourWeeksAgoStr = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const eightWeeksAgoStr = new Date(now.getTime() - 56 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-    // 재원 학생 + 최근 상담 AI 분석 결과 조회 (활성 학생만)
-    const { data: students, error: studentsError } = await supabase
-      .from('students')
-      .select(`
-        id,
-        name,
-        grade,
-        school_type,
-        status,
-        start_date
-      `)
-      .eq('is_active', true)
-      .eq('status', '재원')
-      .order('name')
+    // 4개 쿼리를 병렬로 실행 (성능 최적화)
+    const [
+      studentsResult,
+      consultationsResult,
+      studyLogsResult,
+      mathflatResult
+    ] = await Promise.all([
+      // 재원 학생 조회
+      supabase
+        .from('students')
+        .select(`
+          id,
+          name,
+          grade,
+          school_type,
+          status,
+          start_date
+        `)
+        .eq('is_active', true)
+        .eq('status', '재원')
+        .order('name'),
+
+      // 각 학생의 최근 AI 분석 상담 조회 (최근 2개씩)
+      supabase
+        .from('consultations')
+        .select(`
+          student_id,
+          type,
+          ai_churn_risk,
+          ai_hurdle,
+          ai_sentiment,
+          ai_analyzed_at,
+          date,
+          content
+        `)
+        .in('type', ['정기상담', '입학후상담', '퇴원상담'])
+        .not('ai_analyzed_at', 'is', null)
+        .order('ai_analyzed_at', { ascending: false }),
+
+      // 출석 데이터 조회 (최근 8주)
+      supabase
+        .from('study_logs')
+        .select('student_id, date, attendance_status')
+        .gte('date', eightWeeksAgoStr)
+        .not('attendance_status', 'is', null),
+
+      // 매쓰플랫 데이터 조회 (최근 8주)
+      supabase
+        .from('mathflat_records')
+        .select('student_id, event_date, correct_rate')
+        .gte('event_date', eightWeeksAgoStr)
+        .not('correct_rate', 'is', null)
+    ])
+
+    // 결과 추출 및 에러 처리
+    const { data: students, error: studentsError } = studentsResult
+    const { data: consultations, error: consultError } = consultationsResult
+    const { data: studyLogs, error: studyLogsError } = studyLogsResult
+    const { data: mathflatRecords, error: mathflatError } = mathflatResult
 
     if (studentsError) {
       console.error('Failed to fetch students:', studentsError)
       return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 })
     }
 
-    // 각 학생의 최근 AI 분석 상담 조회 (최근 2개씩)
-    const { data: consultations, error: consultError } = await supabase
-      .from('consultations')
-      .select(`
-        student_id,
-        type,
-        ai_churn_risk,
-        ai_hurdle,
-        ai_sentiment,
-        ai_analyzed_at,
-        date,
-        content
-      `)
-      .in('type', ['정기상담', '입학후상담', '퇴원상담'])
-      .not('ai_analyzed_at', 'is', null)
-      .order('ai_analyzed_at', { ascending: false })
-
     if (consultError) {
       console.error('Failed to fetch consultations:', consultError)
     }
 
-    // 출석 데이터 조회 (최근 8주)
-    const { data: studyLogs, error: studyLogsError } = await supabase
-      .from('study_logs')
-      .select('student_id, date, attendance_status')
-      .gte('date', eightWeeksAgoStr)
-      .not('attendance_status', 'is', null)
-
     if (studyLogsError) {
       console.error('Failed to fetch study logs:', studyLogsError)
     }
-
-    // 매쓰플랫 데이터 조회 (최근 8주)
-    const { data: mathflatRecords, error: mathflatError } = await supabase
-      .from('mathflat_records')
-      .select('student_id, event_date, correct_rate')
-      .gte('event_date', eightWeeksAgoStr)
-      .not('correct_rate', 'is', null)
 
     if (mathflatError) {
       console.error('Failed to fetch mathflat records:', mathflatError)

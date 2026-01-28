@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { getKoreanMonthRange, getKoreanDateString } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -48,51 +48,44 @@ function groupByDepartment<T extends { department?: string | null }>(
   return sortDepartments(deptRaw)
 }
 
-/**
- * 대시보드 통계 데이터를 로드하는 커스텀 훅
- * 12개의 병렬 쿼리를 실행하여 통계를 수집합니다.
- */
-export function useDashboardStats(): UseDashboardStatsReturn {
+// 초기 상태
+const initialStats: DashboardStats = {
+  activeStudents: 0,
+  activeStudentsByDept: {},
+  activeStudentsChange: "+0%",
+  consultationsThisMonth: 0,
+  consultationsByDept: {},
+  consultationsYoY: "+0%",
+  testsThisMonth: 0,
+  testsByDept: {},
+  testConversionRate: "0%",
+  newEnrollmentsThisMonth: 0,
+  newEnrollmentsByDept: {},
+  newEnrollmentStudents: [],
+  enrollmentConversionRate: "0%",
+  withdrawalsThisMonth: 0,
+  withdrawalsByDept: {},
+  withdrawalStudents: [],
+  withdrawalsYoY: "+0%",
+  pendingMakeups: 0,
+  weeklyScheduledMakeups: 0,
+  overdueScheduledMakeups: 0,
+  overdueTeachers: [],
+  currentMonthPaidCount: 0,
+  currentMonthUnpaidCount: 0,
+  todosByAssignee: {},
+  totalIncompleteTodos: 0,
+  consultationRequestsUnassigned: 0,
+  consultationRequestsPending: 0,
+  consultationRequestsCompleted: 0,
+  cohortData: []
+}
+
+// SWR fetcher 함수
+async function fetchDashboardStats(): Promise<DashboardStats> {
   const supabase = createClient()
-  const [stats, setStats] = useState<DashboardStats>({
-    activeStudents: 0,
-    activeStudentsByDept: {},
-    activeStudentsChange: "+0%",
-    consultationsThisMonth: 0,
-    consultationsByDept: {},
-    consultationsYoY: "+0%",
-    testsThisMonth: 0,
-    testsByDept: {},
-    testConversionRate: "0%",
-    newEnrollmentsThisMonth: 0,
-    newEnrollmentsByDept: {},
-    newEnrollmentStudents: [],
-    enrollmentConversionRate: "0%",
-    withdrawalsThisMonth: 0,
-    withdrawalsByDept: {},
-    withdrawalStudents: [],
-    withdrawalsYoY: "+0%",
-    pendingMakeups: 0,
-    weeklyScheduledMakeups: 0,
-    overdueScheduledMakeups: 0,
-    overdueTeachers: [],
-    currentMonthPaidCount: 0,
-    currentMonthUnpaidCount: 0,
-    todosByAssignee: {},
-    totalIncompleteTodos: 0,
-    consultationRequestsUnassigned: 0,
-    consultationRequestsPending: 0,
-    consultationRequestsCompleted: 0,
-    cohortData: []
-  })
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
 
-  const loadStats = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
+  try {
       // 한국시간 기준 월간 범위 계산
       const { start: monthStart, end: monthEnd } = getKoreanMonthRange()
 
@@ -350,7 +343,7 @@ export function useDashboardStats(): UseDashboardStatsReturn {
         })
       }
 
-      setStats({
+      return {
         activeStudents: activeStudents?.length || 0,
         activeStudentsByDept,
         activeStudentsChange: "", // TODO: 재원생 변화율 계산 구현 필요
@@ -390,20 +383,35 @@ export function useDashboardStats(): UseDashboardStatsReturn {
         consultationRequestsPending,
         consultationRequestsCompleted,
         cohortData
-      })
+      }
 
     } catch (err) {
       console.error('통계 데이터 로딩 오류:', err)
-      setError(err instanceof Error ? err : new Error('Unknown error'))
-    } finally {
-      setIsLoading(false)
+      toast.error('통계 데이터 로딩 중 오류가 발생했습니다.')
+      throw err
     }
-  }, [supabase])
+}
+
+/**
+ * 대시보드 통계 데이터를 로드하는 커스텀 훅
+ * SWR을 사용하여 캐싱 및 중복 요청 방지
+ */
+export function useDashboardStats(): UseDashboardStatsReturn {
+  const { data, error, isLoading, mutate } = useSWR<DashboardStats>(
+    'dashboard-stats',
+    fetchDashboardStats,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000, // 1분간 중복 요청 방지
+      errorRetryCount: 2
+    }
+  )
 
   return {
-    stats,
+    stats: data || initialStats,
     isLoading,
-    error,
-    refresh: loadStats
+    error: error || null,
+    refresh: async () => { await mutate() }
   }
 }

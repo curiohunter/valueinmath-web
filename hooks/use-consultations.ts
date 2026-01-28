@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
+import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { cleanObj } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -15,39 +16,37 @@ interface UseConsultationsReturn {
   refresh: () => Promise<void>
 }
 
+// SWR fetcher
+async function fetchConsultations(): Promise<ConsultationData[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .eq('is_active', true)
+    .eq('status', '신규상담')
+    .order('first_contact_date', { ascending: false })
+    .limit(20)
+
+  if (error) throw error
+  return data || []
+}
+
 /**
  * 신규상담 데이터를 관리하는 커스텀 훅
- * 상담 데이터의 CRUD 작업을 처리합니다.
+ * SWR을 사용하여 캐싱 및 중복 요청 방지
  */
 export function useConsultations(): UseConsultationsReturn {
   const supabase = createClient()
-  const [consultations, setConsultations] = useState<ConsultationData[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  // 신규상담 데이터 로딩
-  const loadConsultations = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const { data, error: queryError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('is_active', true)
-        .eq('status', '신규상담')
-        .order('first_contact_date', { ascending: false })
-        .limit(20)
-
-      if (queryError) throw queryError
-      setConsultations(data || [])
-    } catch (err) {
-      console.error('신규상담 데이터 로딩 오류:', err)
-      setError(err instanceof Error ? err : new Error('Unknown error'))
-    } finally {
-      setIsLoading(false)
+  const { data, error, isLoading, mutate } = useSWR<ConsultationData[]>(
+    'consultations',
+    fetchConsultations,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 30000, // 30초간 중복 요청 방지
+      errorRetryCount: 2
     }
-  }, [supabase])
+  )
 
   // 상담 저장 (생성/수정)
   const saveConsultation = useCallback(async (
@@ -133,11 +132,11 @@ export function useConsultations(): UseConsultationsReturn {
   }, [supabase])
 
   return {
-    consultations,
+    consultations: data || [],
     isLoading,
-    error,
+    error: error || null,
     saveConsultation,
     deleteConsultation,
-    refresh: loadConsultations
+    refresh: async () => { await mutate() }
   }
 }

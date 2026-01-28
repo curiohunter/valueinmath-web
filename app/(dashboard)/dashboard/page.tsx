@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from "react"
+import dynamic from "next/dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -19,18 +20,36 @@ import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
 import { EntranceTestTable } from "@/components/dashboard/EntranceTestTable"
 import ChurnRiskCard from "@/components/dashboard/ChurnRiskCard"
-import StudentDetailModal from "@/components/dashboard/StudentDetailModal"
-import { TestModal, type EntranceTestData } from "@/components/dashboard/TestModal"
-import { StudentManagementTab } from "@/components/dashboard/student-management-tab"
 import { StatsCards } from "@/components/dashboard/StatsCards"
-import { StudentFormModal } from "@/components/students/student-form-modal"
-import { ClassFormModal } from "@/components/students/classes/class-form-modal"
 import { QuickAccessSection } from "@/components/dashboard/QuickAccessSection"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/providers/auth-provider"
 import { toast } from "sonner"
 import type { ChurnRiskStudent } from "@/components/dashboard/ChurnRiskCard"
 import type { ConsultationData } from "@/types/dashboard"
+import type { EntranceTestData } from "@/components/dashboard/TestModal"
+
+// 모달 컴포넌트 지연 로딩 (bundle-dynamic-imports)
+const StudentDetailModal = dynamic(
+  () => import("@/components/dashboard/StudentDetailModal"),
+  { ssr: false }
+)
+const TestModal = dynamic(
+  () => import("@/components/dashboard/TestModal").then(m => ({ default: m.TestModal })),
+  { ssr: false }
+)
+const StudentFormModal = dynamic(
+  () => import("@/components/students/student-form-modal").then(m => ({ default: m.StudentFormModal })),
+  { ssr: false }
+)
+const ClassFormModal = dynamic(
+  () => import("@/components/students/classes/class-form-modal").then(m => ({ default: m.ClassFormModal })),
+  { ssr: false }
+)
+const StudentManagementTab = dynamic(
+  () => import("@/components/dashboard/student-management-tab").then(m => ({ default: m.StudentManagementTab })),
+  { ssr: false }
+)
 
 // 입학테스트비 기본 금액
 const ENTRANCE_TEST_FEE = 10000
@@ -47,11 +66,11 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const supabase = createClient()
 
-  // 커스텀 훅 사용
+  // 커스텀 훅 사용 (각 훅이 자체적으로 초기 로드 수행)
   const { stats, isLoading: statsLoading, refresh: refreshStats } = useDashboardStats()
-  const { consultations, saveConsultation, deleteConsultation, refresh: refreshConsultations } = useConsultations()
-  const { entranceTests, createTest, saveTest, deleteTest, refresh: refreshEntranceTests } = useEntranceTests()
-  const { students: churnRiskStudents, refresh: refreshChurnRisk } = useChurnRiskStudents()
+  const { consultations, isLoading: consultationsLoading, saveConsultation, deleteConsultation, refresh: refreshConsultations } = useConsultations()
+  const { entranceTests, isLoading: testsLoading, createTest, saveTest, deleteTest, refresh: refreshEntranceTests } = useEntranceTests()
+  const { students: churnRiskStudents, isLoading: churnLoading, refresh: refreshChurnRisk } = useChurnRiskStudents()
   const { handleCreateCalendarEvent } = useDashboardCalendar()
   const {
     editingStudentForTest,
@@ -69,7 +88,6 @@ export default function DashboardPage() {
 
   // 로컬 상태 (모달 관련)
   const [employeeId, setEmployeeId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [editingConsultation, setEditingConsultation] = useState<ConsultationData | null>(null)
   const [editingTest, setEditingTest] = useState<EntranceTestData | null>(null)
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false)
@@ -85,7 +103,7 @@ export default function DashboardPage() {
     testDate: string
   } | null>(null)
 
-  // 모든 데이터 새로고침
+  // 모든 데이터 새로고침 (사용자 액션 후에만 호출)
   const refreshAllData = useCallback(async () => {
     await Promise.all([
       refreshStats(),
@@ -119,16 +137,8 @@ export default function DashboardPage() {
     loadEmployeeId()
   }, [user, supabase])
 
-  // 초기 데이터 로드
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true)
-      await refreshAllData()
-      setLoading(false)
-    }
-
-    loadData()
-  }, [refreshAllData])
+  // 중복 fetch 제거: 각 훅이 자체적으로 초기 로드를 수행하므로
+  // 별도의 초기 데이터 로드 useEffect 불필요
 
   // 입학테스트 생성 핸들러
   const handleCreateTest = useCallback((consultationId: string) => {
@@ -254,7 +264,10 @@ export default function DashboardPage() {
     await handleStudentFormSuccess(refreshAllData)
   }, [handleStudentFormSuccess, refreshAllData])
 
-  if (loading || statsLoading) {
+  // 로딩 상태: 핵심 데이터만 체크 (stats)
+  const isInitialLoading = statsLoading
+
+  if (isInitialLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -311,15 +324,19 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-3">
-                <ConsultationTable
-                  consultations={consultations}
-                  onEdit={(consultation) => {
-                    setEditingConsultation(consultation)
-                    setIsConsultationModalOpen(true)
-                  }}
-                  onDelete={handleConsultationDelete}
-                  onCreateTest={handleCreateTest}
-                />
+                {consultationsLoading ? (
+                  <div className="text-center py-4 text-muted-foreground">로딩 중...</div>
+                ) : (
+                  <ConsultationTable
+                    consultations={consultations}
+                    onEdit={(consultation) => {
+                      setEditingConsultation(consultation)
+                      setIsConsultationModalOpen(true)
+                    }}
+                    onDelete={handleConsultationDelete}
+                    onCreateTest={handleCreateTest}
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -334,15 +351,19 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-3">
-                <EntranceTestTable
-                  entranceTests={entranceTests}
-                  onEdit={(test) => {
-                    setEditingTest(test)
-                    setIsTestModalOpen(true)
-                  }}
-                  onDelete={handleTestDelete}
-                  onEnrollmentDecision={handleEnrollmentDecision}
-                />
+                {testsLoading ? (
+                  <div className="text-center py-4 text-muted-foreground">로딩 중...</div>
+                ) : (
+                  <EntranceTestTable
+                    entranceTests={entranceTests}
+                    onEdit={(test) => {
+                      setEditingTest(test)
+                      setIsTestModalOpen(true)
+                    }}
+                    onDelete={handleTestDelete}
+                    onEnrollmentDecision={handleEnrollmentDecision}
+                  />
+                )}
               </CardContent>
             </Card>
           </div>
@@ -355,7 +376,7 @@ export default function DashboardPage() {
             {/* 오른쪽: 이탈 위험 학생 */}
             <ChurnRiskCard
               students={churnRiskStudents}
-              loading={loading}
+              loading={churnLoading}
               onStudentClick={(student) => {
                 setSelectedStudent(student)
                 setIsStudentDetailModalOpen(true)
@@ -364,75 +385,85 @@ export default function DashboardPage() {
           </div>
 
           {/* 신규상담 편집 모달 - StudentFormModal 사용 */}
-          <StudentFormModal
-            open={isConsultationModalOpen}
-            onOpenChange={(open) => {
-              setIsConsultationModalOpen(open)
-              if (!open) {
+          {isConsultationModalOpen && (
+            <StudentFormModal
+              open={isConsultationModalOpen}
+              onOpenChange={(open) => {
+                setIsConsultationModalOpen(open)
+                if (!open) {
+                  setEditingConsultation(null)
+                }
+              }}
+              student={editingConsultation}
+              onSuccess={async () => {
+                await refreshConsultations()
+                await refreshStats()
+                setIsConsultationModalOpen(false)
                 setEditingConsultation(null)
-              }
-            }}
-            student={editingConsultation}
-            onSuccess={async () => {
-              await refreshConsultations()
-              await refreshStats()
-              setIsConsultationModalOpen(false)
-              setEditingConsultation(null)
-            }}
-            isConsultationMode={true}
-          />
+              }}
+              isConsultationMode={true}
+            />
+          )}
 
           {/* 입학테스트 편집 모달 */}
-          <TestModal
-            open={isTestModalOpen}
-            onOpenChange={(open) => {
-              setIsTestModalOpen(open)
-              if (!open) {
-                setEditingTest(null)
-              }
-            }}
-            test={editingTest}
-            onSave={handleTestSave}
-            onStatusChange={() => {
-              refreshConsultations()
-              refreshStats()
-            }}
-          />
+          {isTestModalOpen && (
+            <TestModal
+              open={isTestModalOpen}
+              onOpenChange={(open) => {
+                setIsTestModalOpen(open)
+                if (!open) {
+                  setEditingTest(null)
+                }
+              }}
+              test={editingTest}
+              onSave={handleTestSave}
+              onStatusChange={() => {
+                refreshConsultations()
+                refreshStats()
+              }}
+            />
+          )}
 
           {/* 학생 상세 정보 모달 */}
-          <StudentDetailModal
-            isOpen={isStudentDetailModalOpen}
-            onClose={() => {
-              setIsStudentDetailModalOpen(false)
-              setSelectedStudent(null)
-            }}
-            student={selectedStudent}
-          />
+          {isStudentDetailModalOpen && (
+            <StudentDetailModal
+              isOpen={isStudentDetailModalOpen}
+              onClose={() => {
+                setIsStudentDetailModalOpen(false)
+                setSelectedStudent(null)
+              }}
+              student={selectedStudent}
+            />
+          )}
 
           {/* 학생 정보 수정 모달 (등록 결정 시) */}
-          <StudentFormModal
-            open={isStudentFormModalOpen}
-            onOpenChange={setIsStudentFormModalOpen}
-            student={editingStudentForTest}
-            onSuccess={handleStudentFormSuccessWrapper}
-          />
+          {isStudentFormModalOpen && (
+            <StudentFormModal
+              open={isStudentFormModalOpen}
+              onOpenChange={setIsStudentFormModalOpen}
+              student={editingStudentForTest}
+              onSuccess={handleStudentFormSuccessWrapper}
+            />
+          )}
 
           {/* 반 등록 모달 */}
-          <ClassFormModal
-            open={isClassFormModalOpen}
-            onClose={() => {
-              setIsClassFormModalOpen(false)
-            }}
-            teachers={teachers}
-            students={allStudents}
-            mode="create"
-            initialData={newlyEnrolledStudent ? {
-              name: '',
-              subject: '',
-              teacher_id: '',
-              selectedStudentIds: [newlyEnrolledStudent.id]
-            } : undefined}
-          />
+          {isClassFormModalOpen && (
+            <ClassFormModal
+              open={isClassFormModalOpen}
+              onClose={() => {
+                setIsClassFormModalOpen(false)
+              }}
+              teachers={teachers}
+              students={allStudents}
+              mode="create"
+              initialData={newlyEnrolledStudent ? {
+                name: '',
+                subject: '',
+                teacher_id: '',
+                selectedStudentIds: [newlyEnrolledStudent.id]
+              } : undefined}
+            />
+          )}
 
           {/* 입학테스트비 등록 확인 다이얼로그 */}
           <AlertDialog open={showTuitionFeeConfirm} onOpenChange={setShowTuitionFeeConfirm}>

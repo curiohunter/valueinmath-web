@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
+import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { calendarService } from '@/services/calendar'
 import { cleanObj } from '@/lib/utils'
@@ -18,68 +19,63 @@ interface UseEntranceTestsReturn {
   refresh: () => Promise<void>
 }
 
+// SWR fetcher
+async function fetchEntranceTests(): Promise<EntranceTestData[]> {
+  const supabase = createClient()
+
+  // 먼저 신규상담 학생들의 ID를 가져옴
+  const { data: consultationStudents } = await supabase
+    .from('students')
+    .select('id')
+    .eq('is_active', true)
+    .eq('status', '신규상담')
+
+  const studentIds = consultationStudents?.map(s => s.id) || []
+
+  if (studentIds.length === 0) {
+    return []
+  }
+
+  // 해당 학생들의 입학테스트만 가져옴 (calendar_event_id 포함)
+  const { data, error } = await supabase
+    .from('entrance_tests')
+    .select(`
+      *,
+      calendar_event_id,
+      students!student_id (
+        name,
+        status
+      )
+    `)
+    .in('student_id', studentIds)
+    .order('test_date', { ascending: true, nullsFirst: true })
+    .limit(20)
+
+  if (error) throw error
+
+  // 학생 이름 추가
+  return data?.map(test => ({
+    ...test,
+    student_name: (test.students as any)?.name || '이름 없음'
+  })) || []
+}
+
 /**
  * 입학테스트 데이터를 관리하는 커스텀 훅
- * 입학테스트 CRUD 및 캘린더 동기화를 처리합니다.
+ * SWR을 사용하여 캐싱 및 중복 요청 방지
  */
 export function useEntranceTests(): UseEntranceTestsReturn {
   const supabase = createClient()
-  const [entranceTests, setEntranceTests] = useState<EntranceTestData[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  // 입학테스트 데이터 로딩 - 신규상담 상태인 학생만
-  const loadEntranceTests = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      // 먼저 신규상담 학생들의 ID를 가져옴
-      const { data: consultationStudents } = await supabase
-        .from('students')
-        .select('id')
-        .eq('is_active', true)
-        .eq('status', '신규상담')
-
-      const studentIds = consultationStudents?.map(s => s.id) || []
-
-      if (studentIds.length === 0) {
-        setEntranceTests([])
-        setIsLoading(false)
-        return
-      }
-
-      // 해당 학생들의 입학테스트만 가져옴 (calendar_event_id 포함)
-      const { data, error: queryError } = await supabase
-        .from('entrance_tests')
-        .select(`
-          *,
-          calendar_event_id,
-          students!student_id (
-            name,
-            status
-          )
-        `)
-        .in('student_id', studentIds)
-        .order('test_date', { ascending: true, nullsFirst: true })
-        .limit(20)
-
-      if (queryError) throw queryError
-
-      // 학생 이름 추가
-      const testsWithNames = data?.map(test => ({
-        ...test,
-        student_name: (test.students as any)?.name || '이름 없음'
-      })) || []
-
-      setEntranceTests(testsWithNames)
-    } catch (err) {
-      console.error('입학테스트 데이터 로딩 오류:', err)
-      setError(err instanceof Error ? err : new Error('Unknown error'))
-    } finally {
-      setIsLoading(false)
+  const { data, error, isLoading, mutate } = useSWR<EntranceTestData[]>(
+    'entrance-tests',
+    fetchEntranceTests,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 30000, // 30초간 중복 요청 방지
+      errorRetryCount: 2
     }
-  }, [supabase])
+  )
 
   // 입학테스트 생성 (모달 열기용 초기 데이터 반환)
   const createTest = useCallback((
@@ -259,12 +255,12 @@ export function useEntranceTests(): UseEntranceTestsReturn {
   }, [supabase])
 
   return {
-    entranceTests,
+    entranceTests: data || [],
     isLoading,
-    error,
+    error: error || null,
     createTest,
     saveTest,
     deleteTest,
-    refresh: loadEntranceTests
+    refresh: async () => { await mutate() }
   }
 }
