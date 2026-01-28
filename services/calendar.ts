@@ -1,4 +1,5 @@
-import type { CalendarEvent, CalendarEventInput, CalendarEventUpdate, FullCalendarEvent } from '@/types/calendar'
+import type { CalendarEvent, CalendarEventInput, CalendarEventUpdate, FullCalendarEvent, RecurrenceRule } from '@/types/calendar'
+import { expandAllEvents, toFullCalendarEvent } from '@/lib/recurrence'
 
 export const calendarService = {
   /**
@@ -118,37 +119,47 @@ export const calendarService = {
     }
   },
 
+  // 카테고리별 색상 정의
+  categoryColors: {
+    'notice': '#ef4444', // red-500
+    'work': '#3b82f6', // blue-500
+    'makeup': '#10b981', // emerald-500
+    'absence': '#f59e0b', // amber-500
+    'entrance_test': '#8b5cf6', // violet-500
+    'new_consultation': '#ec4899', // pink-500
+    'new_enrollment': '#14b8a6', // teal-500
+    'regular_consultation': '#6366f1', // indigo-500
+    'school_exam': '#84cc16', // lime-500
+    'last_minute_makeup': '#f97316', // orange-500
+    'holiday': '#6b7280', // gray-500
+  } as Record<string, string>,
+
   /**
-   * Supabase 이벤트를 FullCalendar 형식으로 변환
+   * Supabase 이벤트를 FullCalendar 형식으로 변환 (반복 일정 확장 포함)
    */
-  transformToFullCalendarEvents(events: CalendarEvent[]): FullCalendarEvent[] {
-    // 카테고리별 색상 정의
-    const categoryColors: Record<string, string> = {
-      'notice': '#ef4444', // red-500
-      'work': '#3b82f6', // blue-500
-      'makeup': '#10b981', // emerald-500
-      'absence': '#f59e0b', // amber-500
-      'entrance_test': '#8b5cf6', // violet-500
-      'new_consultation': '#ec4899', // pink-500
-      'new_enrollment': '#14b8a6', // teal-500
-      'regular_consultation': '#6366f1', // indigo-500
-      'school_exam': '#84cc16', // lime-500
-      'last_minute_makeup': '#f97316', // orange-500
-      'holiday': '#6b7280', // gray-500
+  transformToFullCalendarEvents(events: CalendarEvent[], viewRange?: { start: Date; end: Date }): FullCalendarEvent[] {
+    // 뷰 범위가 없으면 현재 월 기준 ±3개월
+    const now = new Date()
+    const range = viewRange || {
+      start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+      end: new Date(now.getFullYear(), now.getMonth() + 4, 0),
     }
-    
-    return events.map(event => ({
-      id: event.id!,
-      title: event.title,
-      start: event.start_time,
-      end: event.end_time,
-      description: event.description,
-      location: event.location,
-      backgroundColor: categoryColors[event.event_type || 'notice'] || '#3b82f6',
-      borderColor: categoryColors[event.event_type || 'notice'] || '#3b82f6',
-      extendedProps: {
-        event_type: event.event_type
-      }
-    }))
+
+    // 반복 일정 확장
+    const expandedEvents = expandAllEvents(events, range)
+
+    return expandedEvents.map(event => toFullCalendarEvent(event, this.categoryColors))
+  },
+
+  /**
+   * 반복 일정의 단일 인스턴스만 수정 (아직 미구현 - 추후 필요시)
+   */
+  async updateSingleInstance(
+    originalEventId: string,
+    instanceDate: string,
+    event: CalendarEventUpdate
+  ): Promise<CalendarEvent> {
+    // TODO: 개별 인스턴스 수정 시 recurrence_parent_id로 새 이벤트 생성
+    throw new Error('Not implemented yet')
   }
 }
