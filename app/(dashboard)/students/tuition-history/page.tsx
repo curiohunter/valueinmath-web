@@ -645,7 +645,7 @@ export default function TuitionHistoryPage() {
         .update({
           reward_applied_tuition_id: null,
           reward_status: 'pending',
-          reward_applied_at: null
+          reward_paid_at: null
         })
         .eq("reward_applied_tuition_id", row.id);
 
