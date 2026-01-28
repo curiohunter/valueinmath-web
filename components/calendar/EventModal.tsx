@@ -8,7 +8,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CalendarEvent } from '@/types/calendar'
+import { CalendarEvent, RecurrenceRule, RecurrenceFrequency } from '@/types/calendar'
+import { formatRecurrenceRule } from '@/lib/recurrence'
+import { Repeat } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 
 interface EventModalProps {
   isOpen: boolean
@@ -52,6 +55,14 @@ const eventCategories = [
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'))
 const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'))
 
+// 반복 빈도 옵션 (UI에서는 사용하지 않지만 타입 호환성을 위해 유지)
+const recurrenceOptions: { value: RecurrenceFrequency | 'none'; label: string }[] = [
+  { value: 'monthly', label: '개월마다' },
+  { value: 'weekly', label: '주마다' },
+  { value: 'daily', label: '일마다' },
+  { value: 'yearly', label: '년마다' },
+]
+
 // 폼 타입 정의
 interface FormValues {
   title: string
@@ -64,6 +75,12 @@ interface FormValues {
   end_minute: string
   location: string
   description: string
+  // 반복 설정
+  recurrence_enabled: boolean
+  recurrence_freq: RecurrenceFrequency | 'none'
+  recurrence_interval: string
+  recurrence_by_day_of_month: string
+  recurrence_until: string
 }
 
 const EventModal = memo(function EventModal({ 
@@ -85,9 +102,20 @@ const EventModal = memo(function EventModal({
       end_hour: '10',
       end_minute: '00',
       location: '',
-      description: ''
+      description: '',
+      // 반복 설정 기본값
+      recurrence_enabled: false,
+      recurrence_freq: 'monthly', // 기본값을 monthly로 설정 (가장 흔한 사용 케이스)
+      recurrence_interval: '1',
+      recurrence_by_day_of_month: '',
+      recurrence_until: '',
     }
   })
+
+  // 반복 설정 감시
+  const watchRecurrenceEnabled = form.watch('recurrence_enabled')
+  const watchRecurrenceFreq = form.watch('recurrence_freq')
+  const watchRecurrenceInterval = form.watch('recurrence_interval')
 
   // 시작 시간 변경 감지
   const watchStartHour = form.watch('start_hour')
@@ -127,7 +155,11 @@ const EventModal = memo(function EventModal({
       // 기존 이벤트 편집
       const startDateTime = formatDateTimeForForm(event.start_time)
       const endDateTime = formatDateTimeForForm(event.end_time)
-      
+
+      // 반복 규칙 파싱
+      const rule = event.recurrence_rule
+      const hasRecurrence = !!rule
+
       form.reset({
         title: event.title || '',
         event_type: event.event_type || 'notice',
@@ -138,7 +170,12 @@ const EventModal = memo(function EventModal({
         end_hour: endDateTime.hour,
         end_minute: endDateTime.minute,
         location: event.location || '',
-        description: event.description || ''
+        description: event.description || '',
+        recurrence_enabled: hasRecurrence,
+        recurrence_freq: rule?.freq || 'none',
+        recurrence_interval: (rule?.interval ?? 1).toString(),
+        recurrence_by_day_of_month: rule?.byDayOfMonth?.toString() || '',
+        recurrence_until: rule?.until || '',
       })
     } else if (selectedDate) {
       // 새 이벤트 생성
@@ -152,10 +189,23 @@ const EventModal = memo(function EventModal({
         end_hour: '10',
         end_minute: '00',
         location: '',
-        description: ''
+        description: '',
+        recurrence_enabled: false,
+        recurrence_freq: 'monthly',
+        recurrence_interval: '1',
+        recurrence_by_day_of_month: new Date(selectedDate).getDate().toString(),
+        recurrence_until: '',
       })
     }
   }, [event, selectedDate, isOpen, form])
+
+  // 시작 날짜 변경 시 반복 일자 자동 설정
+  useEffect(() => {
+    if (watchStartDate && watchRecurrenceFreq === 'monthly') {
+      const day = new Date(watchStartDate).getDate()
+      form.setValue('recurrence_by_day_of_month', day.toString())
+    }
+  }, [watchStartDate, watchRecurrenceFreq, form])
 
   // 시작 시간 변경 시 종료 시간 자동 설정 (1시간 후)
   useEffect(() => {
@@ -193,14 +243,33 @@ const EventModal = memo(function EventModal({
     // KST 시간 문자열 생성 (UTC 변환 없이 그대로 저장)
     const startTimeKST = `${data.start_date}T${data.start_hour}:${data.start_minute}:00`
     const endTimeKST = `${data.end_date}T${data.end_hour}:${data.end_minute}:00`
-    
+
     // 시간 검증 (KST 기준)
     const startTime = new Date(startTimeKST)
     const endTime = new Date(endTimeKST)
-    
+
     if (endTime <= startTime) {
       form.setError('end_hour', { message: '종료 시간은 시작 시간보다 늦어야 합니다' })
       return
+    }
+
+    // 반복 규칙 생성
+    let recurrence_rule: RecurrenceRule | undefined = undefined
+    if (data.recurrence_enabled && data.recurrence_freq !== 'none') {
+      recurrence_rule = {
+        freq: data.recurrence_freq as RecurrenceFrequency,
+        interval: parseInt(data.recurrence_interval) || 1,
+      }
+
+      // 매월인 경우 날짜 지정
+      if (data.recurrence_freq === 'monthly' && data.recurrence_by_day_of_month) {
+        recurrence_rule.byDayOfMonth = parseInt(data.recurrence_by_day_of_month)
+      }
+
+      // 종료일 지정
+      if (data.recurrence_until) {
+        recurrence_rule.until = data.recurrence_until
+      }
     }
 
     const eventData = {
@@ -209,7 +278,8 @@ const EventModal = memo(function EventModal({
       end_time: endTimeKST,      // KST 그대로 저장
       description: data.description.trim() || undefined,
       location: data.location.trim() || undefined,
-      event_type: data.event_type
+      event_type: data.event_type,
+      recurrence_rule,
     }
 
     onSave(eventData)
@@ -226,17 +296,17 @@ const EventModal = memo(function EventModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {event ? '이벤트 편집' : '새 이벤트 생성'}
           </DialogTitle>
         </DialogHeader>
-        
+
         {/* 모달이 열릴 때만 내용 렌더링 (성능 최적화) */}
         {isOpen && (
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 overflow-y-auto flex-1 pr-2">
               {/* 일정 분류 */}
               <FormField
                 control={form.control}
@@ -418,6 +488,182 @@ const EventModal = memo(function EventModal({
                 </div>
               </div>
 
+              {/* 반복 설정 */}
+              <div className="space-y-3 p-4 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 rounded-xl border border-blue-100/50 dark:border-blue-900/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                      <Repeat className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <FormLabel className="mb-0 text-sm font-semibold text-gray-800 dark:text-gray-200">반복 일정</FormLabel>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">이 일정을 정기적으로 반복합니다</p>
+                    </div>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="recurrence_enabled"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {watchRecurrenceEnabled && (
+                  <div className="space-y-4 pt-3 border-t border-blue-100/50 dark:border-blue-800/30">
+                    {/* 얼마나 자주? */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">🔄 얼마나 자주 반복할까요?</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <FormField
+                          control={form.control}
+                          name="recurrence_interval"
+                          render={({ field }) => (
+                            <FormItem className="w-20">
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="12"
+                                  {...field}
+                                  className="text-center font-semibold h-9"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="recurrence_freq"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="daily">일마다</SelectItem>
+                                  <SelectItem value="weekly">주마다</SelectItem>
+                                  <SelectItem value="monthly">개월마다</SelectItem>
+                                  <SelectItem value="yearly">년마다</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
+                        <span className="text-xs text-gray-500 whitespace-nowrap">반복</span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 pl-1">
+                        예: 1개월마다 = 매달, 2주마다 = 격주
+                      </p>
+                    </div>
+
+                    {/* 매월인 경우 날짜 선택 */}
+                    {watchRecurrenceFreq === 'monthly' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">📅 매월 몇 일에?</span>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name="recurrence_by_day_of_month"
+                          render={({ field }) => (
+                            <FormItem>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">매월</span>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    max="31"
+                                    {...field}
+                                    className="w-20 text-center font-semibold h-9"
+                                  />
+                                </FormControl>
+                                <span className="text-sm text-gray-600">일</span>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+
+                    {/* 언제까지? */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">⏰ 언제까지 반복할까요?</span>
+                        <span className="text-[10px] text-gray-400">(선택)</span>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="recurrence_until"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                {...field}
+                                className="h-9"
+                                placeholder="종료일 없음"
+                              />
+                            </FormControl>
+                            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                              비워두면 계속 반복됩니다
+                            </p>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    {/* 미리보기 */}
+                    {watchRecurrenceFreq && watchRecurrenceFreq !== 'none' && (
+                      <div className="mt-3 p-2.5 bg-white/60 dark:bg-gray-800/40 rounded-lg border border-gray-200/50 dark:border-gray-700/50">
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-blue-600 dark:text-blue-400">📋 요약:</span>{' '}
+                          {(() => {
+                            const interval = parseInt(form.watch('recurrence_interval')) || 1
+                            const freq = watchRecurrenceFreq
+                            const day = form.watch('recurrence_by_day_of_month')
+                            const until = form.watch('recurrence_until')
+
+                            let text = ''
+                            if (freq === 'daily') {
+                              text = interval === 1 ? '매일' : `${interval}일마다`
+                            } else if (freq === 'weekly') {
+                              text = interval === 1 ? '매주' : `${interval}주마다`
+                            } else if (freq === 'monthly') {
+                              const dayText = day ? ` ${day}일에` : ''
+                              text = interval === 1 ? `매달${dayText}` : `${interval}개월마다${dayText}`
+                            } else if (freq === 'yearly') {
+                              text = interval === 1 ? '매년' : `${interval}년마다`
+                            }
+
+                            if (until) {
+                              text += ` (${until}까지)`
+                            } else {
+                              text += ' (계속 반복)'
+                            }
+
+                            return text
+                          })()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* 장소 */}
               <FormField
                 control={form.control}
@@ -455,7 +701,7 @@ const EventModal = memo(function EventModal({
           </Form>
         )}
         
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-shrink-0 border-t pt-4 mt-2">
           <Button variant="outline" onClick={onClose}>
             취소
           </Button>

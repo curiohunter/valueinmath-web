@@ -282,6 +282,13 @@ const vercelCalendarStyles = `
     background-color: hsl(var(--muted)) !important;
     color: hsl(var(--foreground)) !important;
   }
+
+  /* 반복 일정 표시 */
+  .fc-event[data-recurring="true"]::before {
+    content: '↻';
+    margin-right: 4px;
+    font-size: 0.75rem;
+  }
 `
 
 export default function FullCalendarWrapper() {
@@ -322,10 +329,16 @@ export default function FullCalendarWrapper() {
   const handleEventClick = async (info: any) => {
     console.log('Event clicked:', info.event.title)
     try {
+      const eventId = info.event.id
+      const extendedProps = info.event.extendedProps || {}
+
+      // 반복 인스턴스인 경우 원본 이벤트 ID 사용
+      const originalEventId = extendedProps.original_event_id || eventId
+
       // 전체 이벤트 데이터를 다시 조회 (FullCalendar 이벤트는 일부 데이터만 포함)
       const allEvents = await calendarService.getEvents()
-      const selectedEventData = allEvents.find(e => e.id === info.event.id)
-      
+      const selectedEventData = allEvents.find(e => e.id === originalEventId)
+
       if (selectedEventData) {
         setSelectedEvent(selectedEventData)
         setSelectedDate('')
