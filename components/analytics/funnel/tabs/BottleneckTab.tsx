@@ -1,9 +1,8 @@
 "use client"
 
 import { useMemo } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Phone, MessageSquare, Users, TrendingUp, CheckCircle2, AlertTriangle, XCircle, BarChart3
 } from "lucide-react"
@@ -160,507 +159,586 @@ export function BottleneckTab({
     }
   }, [consultationEffects])
 
-  // 구간별 소요일 조회
-  const getStageDuration = (fromStage: string | null, toStage: string) => {
-    return stageDurations.find(d => d.fromStage === fromStage && d.toStage === toStage)
+  // 병목 분석만 있는 경우 (상담 효과 없음)
+  const showOnlyFlow = sankeyData && !consultationAnalysis
+  // 상담 효과만 있는 경우 (병목 분석 없음)
+  const showOnlyConsultation = !sankeyData && consultationAnalysis
+
+  // 둘 다 없으면 빈 상태 표시
+  if (!sankeyData && !consultationAnalysis) {
+    return (
+      <div className="flex items-center justify-center py-12 text-muted-foreground">
+        분석 데이터가 없습니다.
+      </div>
+    )
   }
 
+  // 하나만 있는 경우 탭 없이 바로 표시
+  if (showOnlyFlow) {
+    return (
+      <div className="space-y-6 p-4 border rounded-lg bg-white">
+        <FlowAnalysis
+          sankeyData={sankeyData}
+          bottleneckDetails={bottleneckDetails}
+          successPattern={successPattern}
+        />
+      </div>
+    )
+  }
+
+  if (showOnlyConsultation) {
+    return (
+      <div className="space-y-6 p-4 border rounded-lg bg-white">
+        <ConsultationAnalysis consultationAnalysis={consultationAnalysis} />
+      </div>
+    )
+  }
+
+  // 둘 다 있는 경우 탭으로 표시
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>퍼널 흐름 분석</CardTitle>
-        <CardDescription>
-          첫 상담부터 등록까지의 학생 흐름과 이탈 지점을 시각화합니다. (2025년 7월 이후)
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="flow" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-            <TabsTrigger value="flow" className="flex items-center gap-1.5">
-              <BarChart3 className="h-4 w-4" />
-              퍼널 흐름
-            </TabsTrigger>
-            <TabsTrigger value="consultation" className="flex items-center gap-1.5">
-              <Phone className="h-4 w-4" />
-              상담 효과
-            </TabsTrigger>
-          </TabsList>
+    <div className="p-4 border rounded-lg bg-white">
+      <Tabs defaultValue="flow" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+          <TabsTrigger value="flow" className="flex items-center gap-1.5">
+            <BarChart3 className="h-4 w-4" />
+            퍼널 흐름
+          </TabsTrigger>
+          <TabsTrigger value="consultation" className="flex items-center gap-1.5">
+            <Phone className="h-4 w-4" />
+            상담 효과
+          </TabsTrigger>
+        </TabsList>
 
-          {/* 퍼널 흐름 탭 - Sankey 스타일 */}
-          <TabsContent value="flow" className="space-y-6">
-            {sankeyData ? (
-              <>
-                {/* 전체 전환율 요약 */}
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                    <div className="text-sm text-blue-600 mb-1">첫상담 → 테스트</div>
-                    <div className="text-2xl font-bold text-blue-700">{sankeyData.conversionRates.contactToTest}%</div>
-                  </div>
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
-                    <div className="text-sm text-purple-600 mb-1">테스트 → 등록</div>
-                    <div className="text-2xl font-bold text-purple-700">{sankeyData.conversionRates.testToEnroll}%</div>
-                  </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
-                    <div className="text-sm text-amber-600 mb-1">직접 등록</div>
-                    <div className="text-2xl font-bold text-amber-700">{sankeyData.conversionRates.directEnrollRate}%</div>
-                    <div className="text-xs text-amber-500">({sankeyData.flows.directEnroll}명)</div>
-                  </div>
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
-                    <div className="text-sm text-emerald-600 mb-1">전체 전환율</div>
-                    <div className="text-2xl font-bold text-emerald-700">{sankeyData.conversionRates.overall}%</div>
-                  </div>
-                </div>
+        <TabsContent value="flow" className="space-y-6">
+          {sankeyData && (
+            <FlowAnalysis
+              sankeyData={sankeyData}
+              bottleneckDetails={bottleneckDetails}
+              successPattern={successPattern}
+            />
+          )}
+        </TabsContent>
 
-                {/* 퍼널 흐름 시각화 - 스택 바 차트 */}
-                <div className="space-y-4">
-                  {/* 첫 상담 → 분기 */}
-                  <div className="bg-white border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-semibold text-lg">첫 상담</span>
-                      <span className="text-2xl font-bold">{sankeyData.stages[0].count}명</span>
-                    </div>
-                    <div className="h-8 bg-gray-100 rounded-lg overflow-hidden flex">
-                      {/* 테스트 진행 */}
-                      <div
-                        className="bg-purple-500 flex items-center justify-center text-white text-sm font-medium"
-                        style={{ width: `${sankeyData.conversionRates.contactToTest}%` }}
-                        title={`테스트 진행: ${sankeyData.stages[1].count}명`}
-                      >
-                        {sankeyData.conversionRates.contactToTest}%
-                      </div>
-                      {/* 직접 등록 */}
-                      <div
-                        className="bg-amber-400 flex items-center justify-center text-white text-sm font-medium"
-                        style={{ width: `${sankeyData.conversionRates.directEnrollRate}%` }}
-                        title={`직접 등록: ${sankeyData.flows.directEnroll}명`}
-                      >
-                        {sankeyData.conversionRates.directEnrollRate > 5 ? `${sankeyData.conversionRates.directEnrollRate}%` : ''}
-                      </div>
-                      {/* 이탈 */}
-                      <div
-                        className="bg-red-400 flex items-center justify-center text-white text-sm font-medium flex-1"
-                        title={`이탈: ${sankeyData.flows.noTestNoEnroll}명`}
-                      >
-                        {sankeyData.dropoffs[0].percentage}%
-                      </div>
-                    </div>
-                    <div className="flex gap-4 mt-2 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded bg-purple-500"></div>
-                        <span>테스트 진행 {sankeyData.stages[1].count}명</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded bg-amber-400"></div>
-                        <span>직접 등록 {sankeyData.flows.directEnroll}명</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded bg-red-400"></div>
-                        <span>이탈 {sankeyData.flows.noTestNoEnroll}명</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 테스트 완료 → 분기 */}
-                  <div className="bg-white border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-semibold text-lg">테스트 완료</span>
-                      <span className="text-2xl font-bold">{sankeyData.stages[1].count}명</span>
-                    </div>
-                    <div className="h-8 bg-gray-100 rounded-lg overflow-hidden flex">
-                      {/* 등록 */}
-                      <div
-                        className="bg-emerald-500 flex items-center justify-center text-white text-sm font-medium"
-                        style={{ width: `${sankeyData.conversionRates.testToEnroll}%` }}
-                        title={`등록: ${sankeyData.flows.testToEnroll}명`}
-                      >
-                        {sankeyData.conversionRates.testToEnroll}%
-                      </div>
-                      {/* 미등록 */}
-                      <div
-                        className="bg-red-400 flex items-center justify-center text-white text-sm font-medium flex-1"
-                        title={`미등록: ${sankeyData.flows.testNoEnroll}명`}
-                      >
-                        {sankeyData.dropoffs[1].percentage}%
-                      </div>
-                    </div>
-                    <div className="flex gap-4 mt-2 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded bg-emerald-500"></div>
-                        <span>등록 {sankeyData.flows.testToEnroll}명</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded bg-red-400"></div>
-                        <span>미등록 이탈 {sankeyData.flows.testNoEnroll}명</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 최종 등록 요약 */}
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-lg text-emerald-700">등록 완료</span>
-                        <div className="text-sm text-emerald-600 mt-1">
-                          테스트 후 등록 {sankeyData.flows.testToEnroll}명 + 직접 등록 {sankeyData.flows.directEnroll}명
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-3xl font-bold text-emerald-700">{sankeyData.stages[2].count}명</div>
-                        <div className="text-sm text-emerald-600">전체 전환율 {sankeyData.conversionRates.overall}%</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 병목 분석 카드 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 테스트 전 이탈 분석 */}
-                  <div className={`rounded-lg border-2 overflow-hidden ${
-                    sankeyData.dropoffs[0].percentage > 50 ? "border-red-200" :
-                    sankeyData.dropoffs[0].percentage > 30 ? "border-amber-200" : "border-gray-200"
-                  }`}>
-                    <div className={`px-4 py-3 ${
-                      sankeyData.dropoffs[0].percentage > 50 ? "bg-red-50" :
-                      sankeyData.dropoffs[0].percentage > 30 ? "bg-amber-50" : "bg-gray-50"
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {sankeyData.dropoffs[0].percentage > 50 ? (
-                            <XCircle className="h-5 w-5 text-red-500" />
-                          ) : sankeyData.dropoffs[0].percentage > 30 ? (
-                            <AlertTriangle className="h-5 w-5 text-amber-500" />
-                          ) : (
-                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                          )}
-                          <span className="font-semibold">테스트 미진행 이탈</span>
-                        </div>
-                        <div className={`text-xl font-bold ${
-                          sankeyData.dropoffs[0].percentage > 50 ? "text-red-600" :
-                          sankeyData.dropoffs[0].percentage > 30 ? "text-amber-600" : "text-green-600"
-                        }`}>
-                          {sankeyData.dropoffs[0].percentage}%
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <div className="text-sm text-muted-foreground mb-2">
-                        {sankeyData.flows.noTestNoEnroll}명이 테스트 없이 이탈 (직접등록 {sankeyData.flows.directEnroll}명 제외)
-                      </div>
-                      {bottleneckDetails.find(d => d.stage === "테스트미완료") && (
-                        <div className="grid grid-cols-3 gap-2 text-sm">
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-muted-foreground text-xs">평균 상담</div>
-                            <div className="font-semibold">
-                              {bottleneckDetails.find(d => d.stage === "테스트미완료")?.avgConsultations}회
-                            </div>
-                          </div>
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-muted-foreground text-xs">전화</div>
-                            <div className="font-semibold">
-                              {bottleneckDetails.find(d => d.stage === "테스트미완료")?.avgPhone}회
-                            </div>
-                          </div>
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-muted-foreground text-xs">방치일</div>
-                            <div className="font-semibold">
-                              {Math.round(bottleneckDetails.find(d => d.stage === "테스트미완료")?.avgDaysSinceLastContact || 0)}일
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 테스트 후 이탈 분석 */}
-                  <div className={`rounded-lg border-2 overflow-hidden ${
-                    sankeyData.dropoffs[1].percentage > 50 ? "border-red-200" :
-                    sankeyData.dropoffs[1].percentage > 30 ? "border-amber-200" : "border-gray-200"
-                  }`}>
-                    <div className={`px-4 py-3 ${
-                      sankeyData.dropoffs[1].percentage > 50 ? "bg-red-50" :
-                      sankeyData.dropoffs[1].percentage > 30 ? "bg-amber-50" : "bg-gray-50"
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {sankeyData.dropoffs[1].percentage > 50 ? (
-                            <XCircle className="h-5 w-5 text-red-500" />
-                          ) : sankeyData.dropoffs[1].percentage > 30 ? (
-                            <AlertTriangle className="h-5 w-5 text-amber-500" />
-                          ) : (
-                            <CheckCircle2 className="h-5 w-5 text-green-500" />
-                          )}
-                          <span className="font-semibold">테스트 → 등록</span>
-                        </div>
-                        <div className={`text-xl font-bold ${
-                          sankeyData.dropoffs[1].percentage > 50 ? "text-red-600" :
-                          sankeyData.dropoffs[1].percentage > 30 ? "text-amber-600" : "text-green-600"
-                        }`}>
-                          {sankeyData.dropoffs[1].percentage}% 이탈
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <div className="text-sm text-muted-foreground mb-2">
-                        {sankeyData.dropoffs[1].count}명이 테스트 후 미등록
-                      </div>
-                      {bottleneckDetails.find(d => d.stage === "테스트완료-미등록") && (
-                        <div className="grid grid-cols-3 gap-2 text-sm">
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-muted-foreground text-xs">평균 상담</div>
-                            <div className="font-semibold">
-                              {bottleneckDetails.find(d => d.stage === "테스트완료-미등록")?.avgConsultations}회
-                            </div>
-                          </div>
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-muted-foreground text-xs">대면</div>
-                            <div className="font-semibold">
-                              {bottleneckDetails.find(d => d.stage === "테스트완료-미등록")?.avgVisit}회
-                            </div>
-                          </div>
-                          <div className="bg-gray-50 rounded p-2 text-center">
-                            <div className="text-muted-foreground text-xs">방치일</div>
-                            <div className="font-semibold">
-                              {Math.round(bottleneckDetails.find(d => d.stage === "테스트완료-미등록")?.avgDaysSinceLastContact || 0)}일
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 성공 패턴 비교 */}
-                {successPattern && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-emerald-700 font-semibold mb-3">
-                      <CheckCircle2 className="h-5 w-5" />
-                      등록 성공 패턴 ({successPattern.studentCount}명 기준)
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-emerald-600" />
-                        <span>평균 <strong>{successPattern.avgConsultations}회</strong> 상담</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-emerald-600" />
-                        <span>전화 <strong>{successPattern.avgPhone}회</strong></span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4 text-emerald-600" />
-                        <span>문자 <strong>{successPattern.avgText}회</strong></span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-emerald-600" />
-                        <span>대면 <strong>{successPattern.avgVisit}회</strong></span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                퍼널 흐름 데이터가 없습니다.
-              </div>
-            )}
-          </TabsContent>
-
-          {/* 상담 효과 탭 */}
-          <TabsContent value="consultation" className="space-y-6">
-            {consultationAnalysis ? (
-              <>
-                {/* 인사이트 박스 */}
-                {consultationAnalysis.insights.length > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-blue-700 font-semibold mb-3">
-                      <TrendingUp className="h-5 w-5" />
-                      핵심 인사이트
-                    </div>
-                    <ul className="space-y-1.5 text-sm text-blue-800">
-                      {consultationAnalysis.insights.map((insight, i) => (
-                        <li key={i} className="flex items-start gap-2">
-                          <span className="text-blue-500 mt-0.5">•</span>
-                          {insight}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* 두 단계 병렬 배치 */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* 1단계: 테스트 유도 */}
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="bg-purple-50 border-b border-purple-100 px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center text-sm font-bold">1</div>
-                        <div>
-                          <h3 className="font-semibold text-purple-900">테스트 유도 단계</h3>
-                          <p className="text-xs text-purple-600">신규상담, 입테유도 → 목표: 테스트 진행</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 방법별 비교 바 차트 */}
-                    <div className="p-4 space-y-3">
-                      <div className="text-sm font-medium text-gray-700 mb-2">방법별 테스트 진행률</div>
-                      {consultationAnalysis.preTest.byMethod.map((m, i) => {
-                        const maxRate = Math.max(...consultationAnalysis.preTest.byMethod.map(x => x.rate))
-                        const isBest = m.rate === maxRate && m.count >= 3
-                        return (
-                          <div key={m.method} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="flex items-center gap-1.5">
-                                {m.method === "전화" && <Phone className="h-3.5 w-3.5 text-blue-500" />}
-                                {m.method === "문자" && <MessageSquare className="h-3.5 w-3.5 text-green-500" />}
-                                {m.method === "대면" && <Users className="h-3.5 w-3.5 text-purple-500" />}
-                                {m.method}
-                                <span className="text-gray-400">({m.count}건)</span>
-                                {isBest && <Badge className="bg-purple-100 text-purple-700 text-xs">Best</Badge>}
-                              </span>
-                              <span className={`font-semibold ${m.rate >= 50 ? "text-green-600" : m.rate >= 30 ? "text-amber-600" : "text-gray-600"}`}>
-                                {m.rate}%
-                              </span>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${isBest ? "bg-purple-500" : "bg-purple-300"}`}
-                                style={{ width: `${Math.min(m.rate, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* 상세 테이블 */}
-                    <div className="border-t">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 text-gray-600">
-                            <th className="text-left p-2 pl-4 font-medium">상담 유형</th>
-                            <th className="text-left p-2 font-medium">방법</th>
-                            <th className="text-center p-2 font-medium">건수</th>
-                            <th className="text-center p-2 pr-4 font-medium">테스트율</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {consultationAnalysis.preTest.data.map((item, idx) => (
-                            <tr key={idx} className="border-t hover:bg-gray-50">
-                              <td className="p-2 pl-4">
-                                <span className="text-gray-700">{item.consultationType}</span>
-                              </td>
-                              <td className="p-2">
-                                <span className="flex items-center gap-1">
-                                  {item.method === "전화" && <Phone className="h-3 w-3 text-blue-500" />}
-                                  {item.method === "문자" && <MessageSquare className="h-3 w-3 text-green-500" />}
-                                  {item.method === "대면" && <Users className="h-3 w-3 text-purple-500" />}
-                                  {item.method}
-                                </span>
-                              </td>
-                              <td className="p-2 text-center text-gray-600">{item.count}</td>
-                              <td className="p-2 pr-4 text-center">
-                                <span className={`font-medium ${item.toTestRate >= 50 ? "text-green-600" : item.toTestRate >= 30 ? "text-amber-600" : "text-gray-500"}`}>
-                                  {item.toTestRate}%
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* 2단계: 등록 유도 */}
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-bold">2</div>
-                        <div>
-                          <h3 className="font-semibold text-emerald-900">등록 유도 단계</h3>
-                          <p className="text-xs text-emerald-600">입테후상담, 등록유도 → 목표: 등록 완료</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 방법별 비교 바 차트 */}
-                    <div className="p-4 space-y-3">
-                      <div className="text-sm font-medium text-gray-700 mb-2">방법별 등록 전환률</div>
-                      {consultationAnalysis.postTest.byMethod.map((m, i) => {
-                        const maxRate = Math.max(...consultationAnalysis.postTest.byMethod.map(x => x.rate))
-                        const isBest = m.rate === maxRate && m.count >= 3
-                        return (
-                          <div key={m.method} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="flex items-center gap-1.5">
-                                {m.method === "전화" && <Phone className="h-3.5 w-3.5 text-blue-500" />}
-                                {m.method === "문자" && <MessageSquare className="h-3.5 w-3.5 text-green-500" />}
-                                {m.method === "대면" && <Users className="h-3.5 w-3.5 text-purple-500" />}
-                                {m.method}
-                                <span className="text-gray-400">({m.count}건)</span>
-                                {isBest && <Badge className="bg-emerald-100 text-emerald-700 text-xs">Best</Badge>}
-                              </span>
-                              <span className={`font-semibold ${m.rate >= 60 ? "text-green-600" : m.rate >= 40 ? "text-amber-600" : "text-red-500"}`}>
-                                {m.rate}%
-                              </span>
-                            </div>
-                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${isBest ? "bg-emerald-500" : "bg-emerald-300"}`}
-                                style={{ width: `${Math.min(m.rate, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* 상세 테이블 */}
-                    <div className="border-t">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 text-gray-600">
-                            <th className="text-left p-2 pl-4 font-medium">상담 유형</th>
-                            <th className="text-left p-2 font-medium">방법</th>
-                            <th className="text-center p-2 font-medium">건수</th>
-                            <th className="text-center p-2 pr-4 font-medium">등록률</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {consultationAnalysis.postTest.data.map((item, idx) => (
-                            <tr key={idx} className="border-t hover:bg-gray-50">
-                              <td className="p-2 pl-4">
-                                <span className="text-gray-700">{item.consultationType}</span>
-                              </td>
-                              <td className="p-2">
-                                <span className="flex items-center gap-1">
-                                  {item.method === "전화" && <Phone className="h-3 w-3 text-blue-500" />}
-                                  {item.method === "문자" && <MessageSquare className="h-3 w-3 text-green-500" />}
-                                  {item.method === "대면" && <Users className="h-3 w-3 text-purple-500" />}
-                                  {item.method}
-                                </span>
-                              </td>
-                              <td className="p-2 text-center text-gray-600">{item.count}</td>
-                              <td className="p-2 pr-4 text-center">
-                                <span className={`font-medium ${item.toEnrollRate >= 60 ? "text-green-600" : item.toEnrollRate >= 40 ? "text-amber-600" : "text-red-500"}`}>
-                                  {item.toEnrollRate}%
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                상담 효과 분석 데이터가 없습니다.
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+        <TabsContent value="consultation" className="space-y-6">
+          {consultationAnalysis && (
+            <ConsultationAnalysis consultationAnalysis={consultationAnalysis} />
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
   )
+}
+
+// 퍼널 흐름 분석 컴포넌트
+function FlowAnalysis({
+  sankeyData,
+  bottleneckDetails,
+  successPattern,
+}: {
+  sankeyData: NonNullable<ReturnType<typeof useSankeyData>>
+  bottleneckDetails: BottleneckDetail[]
+  successPattern: BottleneckDetail | null
+}) {
+  return (
+    <>
+      {/* 전체 전환율 요약 */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+          <div className="text-sm text-blue-600 mb-1">첫상담 → 테스트</div>
+          <div className="text-2xl font-bold text-blue-700">{sankeyData.conversionRates.contactToTest}%</div>
+        </div>
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+          <div className="text-sm text-purple-600 mb-1">테스트 → 등록</div>
+          <div className="text-2xl font-bold text-purple-700">{sankeyData.conversionRates.testToEnroll}%</div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+          <div className="text-sm text-amber-600 mb-1">직접 등록</div>
+          <div className="text-2xl font-bold text-amber-700">{sankeyData.conversionRates.directEnrollRate}%</div>
+          <div className="text-xs text-amber-500">({sankeyData.flows.directEnroll}명)</div>
+        </div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+          <div className="text-sm text-emerald-600 mb-1">전체 전환율</div>
+          <div className="text-2xl font-bold text-emerald-700">{sankeyData.conversionRates.overall}%</div>
+        </div>
+      </div>
+
+      {/* 퍼널 흐름 시각화 - 스택 바 차트 */}
+      <div className="space-y-4">
+        {/* 첫 상담 → 분기 */}
+        <div className="bg-white border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-semibold text-lg">첫 상담</span>
+            <span className="text-2xl font-bold">{sankeyData.stages[0].count}명</span>
+          </div>
+          <div className="h-8 bg-gray-100 rounded-lg overflow-hidden flex">
+            {/* 테스트 진행 */}
+            <div
+              className="bg-purple-500 flex items-center justify-center text-white text-sm font-medium"
+              style={{ width: `${sankeyData.conversionRates.contactToTest}%` }}
+              title={`테스트 진행: ${sankeyData.stages[1].count}명`}
+            >
+              {sankeyData.conversionRates.contactToTest}%
+            </div>
+            {/* 직접 등록 */}
+            <div
+              className="bg-amber-400 flex items-center justify-center text-white text-sm font-medium"
+              style={{ width: `${sankeyData.conversionRates.directEnrollRate}%` }}
+              title={`직접 등록: ${sankeyData.flows.directEnroll}명`}
+            >
+              {sankeyData.conversionRates.directEnrollRate > 5 ? `${sankeyData.conversionRates.directEnrollRate}%` : ''}
+            </div>
+            {/* 이탈 */}
+            <div
+              className="bg-red-400 flex items-center justify-center text-white text-sm font-medium flex-1"
+              title={`이탈: ${sankeyData.flows.noTestNoEnroll}명`}
+            >
+              {sankeyData.dropoffs[0].percentage}%
+            </div>
+          </div>
+          <div className="flex gap-4 mt-2 text-sm">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-purple-500"></div>
+              <span>테스트 진행 {sankeyData.stages[1].count}명</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-amber-400"></div>
+              <span>직접 등록 {sankeyData.flows.directEnroll}명</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-red-400"></div>
+              <span>이탈 {sankeyData.flows.noTestNoEnroll}명</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 테스트 완료 → 분기 */}
+        <div className="bg-white border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-semibold text-lg">테스트 완료</span>
+            <span className="text-2xl font-bold">{sankeyData.stages[1].count}명</span>
+          </div>
+          <div className="h-8 bg-gray-100 rounded-lg overflow-hidden flex">
+            {/* 등록 */}
+            <div
+              className="bg-emerald-500 flex items-center justify-center text-white text-sm font-medium"
+              style={{ width: `${sankeyData.conversionRates.testToEnroll}%` }}
+              title={`등록: ${sankeyData.flows.testToEnroll}명`}
+            >
+              {sankeyData.conversionRates.testToEnroll}%
+            </div>
+            {/* 미등록 */}
+            <div
+              className="bg-red-400 flex items-center justify-center text-white text-sm font-medium flex-1"
+              title={`미등록: ${sankeyData.flows.testNoEnroll}명`}
+            >
+              {sankeyData.dropoffs[1].percentage}%
+            </div>
+          </div>
+          <div className="flex gap-4 mt-2 text-sm">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-emerald-500"></div>
+              <span>등록 {sankeyData.flows.testToEnroll}명</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-red-400"></div>
+              <span>미등록 이탈 {sankeyData.flows.testNoEnroll}명</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 최종 등록 요약 */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-semibold text-lg text-emerald-700">등록 완료</span>
+              <div className="text-sm text-emerald-600 mt-1">
+                테스트 후 등록 {sankeyData.flows.testToEnroll}명 + 직접 등록 {sankeyData.flows.directEnroll}명
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-emerald-700">{sankeyData.stages[2].count}명</div>
+              <div className="text-sm text-emerald-600">전체 전환율 {sankeyData.conversionRates.overall}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 병목 분석 카드 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 테스트 전 이탈 분석 */}
+        <div className={`rounded-lg border-2 overflow-hidden ${
+          sankeyData.dropoffs[0].percentage > 50 ? "border-red-200" :
+          sankeyData.dropoffs[0].percentage > 30 ? "border-amber-200" : "border-gray-200"
+        }`}>
+          <div className={`px-4 py-3 ${
+            sankeyData.dropoffs[0].percentage > 50 ? "bg-red-50" :
+            sankeyData.dropoffs[0].percentage > 30 ? "bg-amber-50" : "bg-gray-50"
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {sankeyData.dropoffs[0].percentage > 50 ? (
+                  <XCircle className="h-5 w-5 text-red-500" />
+                ) : sankeyData.dropoffs[0].percentage > 30 ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                )}
+                <span className="font-semibold">테스트 미진행 이탈</span>
+              </div>
+              <div className={`text-xl font-bold ${
+                sankeyData.dropoffs[0].percentage > 50 ? "text-red-600" :
+                sankeyData.dropoffs[0].percentage > 30 ? "text-amber-600" : "text-green-600"
+              }`}>
+                {sankeyData.dropoffs[0].percentage}%
+              </div>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="text-sm text-muted-foreground mb-2">
+              {sankeyData.flows.noTestNoEnroll}명이 테스트 없이 이탈 (직접등록 {sankeyData.flows.directEnroll}명 제외)
+            </div>
+            {bottleneckDetails.find(d => d.stage === "테스트미완료") && (
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <div className="text-muted-foreground text-xs">평균 상담</div>
+                  <div className="font-semibold">
+                    {bottleneckDetails.find(d => d.stage === "테스트미완료")?.avgConsultations}회
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <div className="text-muted-foreground text-xs">전화</div>
+                  <div className="font-semibold">
+                    {bottleneckDetails.find(d => d.stage === "테스트미완료")?.avgPhone}회
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <div className="text-muted-foreground text-xs">방치일</div>
+                  <div className="font-semibold">
+                    {Math.round(bottleneckDetails.find(d => d.stage === "테스트미완료")?.avgDaysSinceLastContact || 0)}일
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 테스트 후 이탈 분석 */}
+        <div className={`rounded-lg border-2 overflow-hidden ${
+          sankeyData.dropoffs[1].percentage > 50 ? "border-red-200" :
+          sankeyData.dropoffs[1].percentage > 30 ? "border-amber-200" : "border-gray-200"
+        }`}>
+          <div className={`px-4 py-3 ${
+            sankeyData.dropoffs[1].percentage > 50 ? "bg-red-50" :
+            sankeyData.dropoffs[1].percentage > 30 ? "bg-amber-50" : "bg-gray-50"
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {sankeyData.dropoffs[1].percentage > 50 ? (
+                  <XCircle className="h-5 w-5 text-red-500" />
+                ) : sankeyData.dropoffs[1].percentage > 30 ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                )}
+                <span className="font-semibold">테스트 → 등록</span>
+              </div>
+              <div className={`text-xl font-bold ${
+                sankeyData.dropoffs[1].percentage > 50 ? "text-red-600" :
+                sankeyData.dropoffs[1].percentage > 30 ? "text-amber-600" : "text-green-600"
+              }`}>
+                {sankeyData.dropoffs[1].percentage}% 이탈
+              </div>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="text-sm text-muted-foreground mb-2">
+              {sankeyData.dropoffs[1].count}명이 테스트 후 미등록
+            </div>
+            {bottleneckDetails.find(d => d.stage === "테스트완료-미등록") && (
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <div className="text-muted-foreground text-xs">평균 상담</div>
+                  <div className="font-semibold">
+                    {bottleneckDetails.find(d => d.stage === "테스트완료-미등록")?.avgConsultations}회
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <div className="text-muted-foreground text-xs">대면</div>
+                  <div className="font-semibold">
+                    {bottleneckDetails.find(d => d.stage === "테스트완료-미등록")?.avgVisit}회
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded p-2 text-center">
+                  <div className="text-muted-foreground text-xs">방치일</div>
+                  <div className="font-semibold">
+                    {Math.round(bottleneckDetails.find(d => d.stage === "테스트완료-미등록")?.avgDaysSinceLastContact || 0)}일
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 성공 패턴 비교 */}
+      {successPattern && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-emerald-700 font-semibold mb-3">
+            <CheckCircle2 className="h-5 w-5" />
+            등록 성공 패턴 ({successPattern.studentCount}명 기준)
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+              <span>평균 <strong>{successPattern.avgConsultations}회</strong> 상담</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-emerald-600" />
+              <span>전화 <strong>{successPattern.avgPhone}회</strong></span>
+            </div>
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-emerald-600" />
+              <span>문자 <strong>{successPattern.avgText}회</strong></span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-emerald-600" />
+              <span>대면 <strong>{successPattern.avgVisit}회</strong></span>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// useSankeyData 타입 추론을 위한 더미 함수
+function useSankeyData() {
+  return {
+    stages: [] as { name: string; count: number; percentage: number }[],
+    flows: {
+      contactToTest: 0,
+      testToEnroll: 0,
+      directEnroll: 0,
+      noTestNoEnroll: 0,
+      testNoEnroll: 0,
+    },
+    dropoffs: [] as { from: string; to: string; count: number; percentage: number }[],
+    conversionRates: {
+      contactToTest: 0,
+      testToEnroll: 0,
+      overall: 0,
+      directEnrollRate: 0,
+    },
+  }
+}
+
+// 상담 효과 분석 컴포넌트
+function ConsultationAnalysis({
+  consultationAnalysis,
+}: {
+  consultationAnalysis: NonNullable<ReturnType<typeof useConsultationAnalysis>>
+}) {
+  return (
+    <>
+      {/* 인사이트 박스 */}
+      {consultationAnalysis.insights.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-blue-700 font-semibold mb-3">
+            <TrendingUp className="h-5 w-5" />
+            핵심 인사이트
+          </div>
+          <ul className="space-y-1.5 text-sm text-blue-800">
+            {consultationAnalysis.insights.map((insight, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="text-blue-500 mt-0.5">•</span>
+                {insight}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 두 단계 병렬 배치 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 1단계: 테스트 유도 */}
+        <div className="border rounded-lg overflow-hidden">
+          <div className="bg-purple-50 border-b border-purple-100 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center text-sm font-bold">1</div>
+              <div>
+                <h3 className="font-semibold text-purple-900">테스트 유도 단계</h3>
+                <p className="text-xs text-purple-600">신규상담, 입테유도 → 목표: 테스트 진행</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 방법별 비교 바 차트 */}
+          <div className="p-4 space-y-3">
+            <div className="text-sm font-medium text-gray-700 mb-2">방법별 테스트 진행률</div>
+            {consultationAnalysis.preTest.byMethod.map((m) => {
+              const maxRate = Math.max(...consultationAnalysis.preTest.byMethod.map(x => x.rate))
+              const isBest = m.rate === maxRate && m.count >= 3
+              return (
+                <div key={m.method} className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="flex items-center gap-1.5">
+                      {m.method === "전화" && <Phone className="h-3.5 w-3.5 text-blue-500" />}
+                      {m.method === "문자" && <MessageSquare className="h-3.5 w-3.5 text-green-500" />}
+                      {m.method === "대면" && <Users className="h-3.5 w-3.5 text-purple-500" />}
+                      {m.method}
+                      <span className="text-gray-400">({m.count}건)</span>
+                      {isBest && <Badge className="bg-purple-100 text-purple-700 text-xs">Best</Badge>}
+                    </span>
+                    <span className={`font-semibold ${m.rate >= 50 ? "text-green-600" : m.rate >= 30 ? "text-amber-600" : "text-gray-600"}`}>
+                      {m.rate}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${isBest ? "bg-purple-500" : "bg-purple-300"}`}
+                      style={{ width: `${Math.min(m.rate, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 상세 테이블 */}
+          <div className="border-t">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-gray-600">
+                  <th className="text-left p-2 pl-4 font-medium">상담 유형</th>
+                  <th className="text-left p-2 font-medium">방법</th>
+                  <th className="text-center p-2 font-medium">건수</th>
+                  <th className="text-center p-2 pr-4 font-medium">테스트율</th>
+                </tr>
+              </thead>
+              <tbody>
+                {consultationAnalysis.preTest.data.map((item, idx) => (
+                  <tr key={idx} className="border-t hover:bg-gray-50">
+                    <td className="p-2 pl-4">
+                      <span className="text-gray-700">{item.consultationType}</span>
+                    </td>
+                    <td className="p-2">
+                      <span className="flex items-center gap-1">
+                        {item.method === "전화" && <Phone className="h-3 w-3 text-blue-500" />}
+                        {item.method === "문자" && <MessageSquare className="h-3 w-3 text-green-500" />}
+                        {item.method === "대면" && <Users className="h-3 w-3 text-purple-500" />}
+                        {item.method}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center text-gray-600">{item.count}</td>
+                    <td className="p-2 pr-4 text-center">
+                      <span className={`font-medium ${item.toTestRate >= 50 ? "text-green-600" : item.toTestRate >= 30 ? "text-amber-600" : "text-gray-500"}`}>
+                        {item.toTestRate}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 2단계: 등록 유도 */}
+        <div className="border rounded-lg overflow-hidden">
+          <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm font-bold">2</div>
+              <div>
+                <h3 className="font-semibold text-emerald-900">등록 유도 단계</h3>
+                <p className="text-xs text-emerald-600">입테후상담, 등록유도 → 목표: 등록 완료</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 방법별 비교 바 차트 */}
+          <div className="p-4 space-y-3">
+            <div className="text-sm font-medium text-gray-700 mb-2">방법별 등록 전환률</div>
+            {consultationAnalysis.postTest.byMethod.map((m) => {
+              const maxRate = Math.max(...consultationAnalysis.postTest.byMethod.map(x => x.rate))
+              const isBest = m.rate === maxRate && m.count >= 3
+              return (
+                <div key={m.method} className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="flex items-center gap-1.5">
+                      {m.method === "전화" && <Phone className="h-3.5 w-3.5 text-blue-500" />}
+                      {m.method === "문자" && <MessageSquare className="h-3.5 w-3.5 text-green-500" />}
+                      {m.method === "대면" && <Users className="h-3.5 w-3.5 text-purple-500" />}
+                      {m.method}
+                      <span className="text-gray-400">({m.count}건)</span>
+                      {isBest && <Badge className="bg-emerald-100 text-emerald-700 text-xs">Best</Badge>}
+                    </span>
+                    <span className={`font-semibold ${m.rate >= 60 ? "text-green-600" : m.rate >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                      {m.rate}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${isBest ? "bg-emerald-500" : "bg-emerald-300"}`}
+                      style={{ width: `${Math.min(m.rate, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 상세 테이블 */}
+          <div className="border-t">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-gray-600">
+                  <th className="text-left p-2 pl-4 font-medium">상담 유형</th>
+                  <th className="text-left p-2 font-medium">방법</th>
+                  <th className="text-center p-2 font-medium">건수</th>
+                  <th className="text-center p-2 pr-4 font-medium">등록률</th>
+                </tr>
+              </thead>
+              <tbody>
+                {consultationAnalysis.postTest.data.map((item, idx) => (
+                  <tr key={idx} className="border-t hover:bg-gray-50">
+                    <td className="p-2 pl-4">
+                      <span className="text-gray-700">{item.consultationType}</span>
+                    </td>
+                    <td className="p-2">
+                      <span className="flex items-center gap-1">
+                        {item.method === "전화" && <Phone className="h-3 w-3 text-blue-500" />}
+                        {item.method === "문자" && <MessageSquare className="h-3 w-3 text-green-500" />}
+                        {item.method === "대면" && <Users className="h-3 w-3 text-purple-500" />}
+                        {item.method}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center text-gray-600">{item.count}</td>
+                    <td className="p-2 pr-4 text-center">
+                      <span className={`font-medium ${item.toEnrollRate >= 60 ? "text-green-600" : item.toEnrollRate >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                        {item.toEnrollRate}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// useConsultationAnalysis 타입 추론을 위한 더미 함수
+function useConsultationAnalysis() {
+  return {
+    preTest: {
+      data: [] as ConsultationEffect[],
+      byMethod: [] as { method: string; count: number; rate: number }[],
+    },
+    postTest: {
+      data: [] as ConsultationEffect[],
+      byMethod: [] as { method: string; count: number; rate: number }[],
+    },
+    insights: [] as string[],
+  }
 }
