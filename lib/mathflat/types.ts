@@ -102,3 +102,174 @@ export interface PaginationInfo {
 export interface PaginatedResponse<T> extends ApiResponse<T> {
   pagination?: PaginationInfo;
 }
+
+// ============================================
+// MathFlat API 타입 (숙제 수집 크론잡용)
+// ============================================
+
+// MathFlat 로그인 응답
+export interface MathFlatLoginResponse {
+  token: string;
+  refreshToken?: string;
+}
+
+// MathFlat 반 학생 정보
+export interface MathFlatClassStudent {
+  studentId: number;
+  name: string;
+  schoolName?: string;
+  grade?: number;
+}
+
+// MathFlat 숙제 목록 응답 (student-history/homework)
+export interface MathFlatHomeworkItem {
+  studentHomeworkId: number;
+  studentBookId: number;
+  bookId?: number;
+  progressId?: number;
+  progressIdList?: number[];       // WORKBOOK의 경우 여러 진행 ID
+  studentWorkbookId?: number;      // WORKBOOK 전용
+  title?: string;
+  bookType: 'WORKBOOK' | 'WORKSHEET';
+  homeworkStartDate?: string;
+  homeworkEndDate?: string;
+  completed: boolean;
+  score?: number;
+  totalCount?: number;
+  correctCount?: number;
+  wrongCount?: number;
+  page?: string;                   // "9~11,13~20"
+  status?: string;                 // PROGRESS, INCOMPLETE, COMPLETE
+  createDatetime?: string;         // "2026-01-30T10:49:24"
+  // 반별 숙제 조회 시 포함되는 학생 정보
+  studentId?: string;              // "I1225276" 형식 (학생별 조회 시)
+  studentName?: string;            // 학생 이름 (반별 조회 시)
+}
+
+// MathFlat 교재 문제 상세 (student-workbook)
+export interface MathFlatWorkbookProblem {
+  workbookProblemId: number;
+  problemId: number;
+  conceptId?: number;
+  conceptName?: string;
+  topicId?: number;
+  subTopicId?: number;
+  level?: number;
+  type?: string;
+  tagTop?: string;
+  correctAnswer?: string;
+  userAnswer?: string;
+  result: 'CORRECT' | 'WRONG' | 'NONE';
+  totalUsed?: number;
+  correctTimes?: number;
+  wrongTimes?: number;
+  answerRate?: number;
+  problemImageUrl?: string;
+  solutionImageUrl?: string;
+}
+
+// MathFlat 학습지 문제 상세 (student-worksheet)
+export interface MathFlatWorksheetProblem {
+  worksheetProblemId: number;
+  problemId: number;
+  conceptId?: number;
+  conceptName?: string;
+  topicId?: number;
+  subTopicId?: number;
+  level?: number;
+  type?: string;
+  tagTop?: string;
+  correctAnswer?: string;
+  userAnswer?: string;
+  result: 'CORRECT' | 'WRONG' | 'NONE';
+  totalUsed?: number;
+  correctTimes?: number;
+  wrongTimes?: number;
+  answerRate?: number;
+  problemImageUrl?: string;
+  solutionImageUrl?: string;
+}
+
+// 숙제 수집 옵션
+export interface HomeworkCollectionOptions {
+  collectionType: 'first' | 'second';
+  targetDate: Date;  // KST 기준
+  classIds?: string[];  // 특정 반만 수집 (테스트용)
+}
+
+// 숙제 수집 결과
+export interface HomeworkCollectionResult {
+  success: boolean;
+  collectionType: 'first' | 'second';
+  targetDate: string;
+  processedClasses: ProcessedClassResult[];
+  totalHomeworkCount: number;
+  totalProblemCount: number;
+  errors: string[];
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+}
+
+// 반별 처리 결과
+export interface ProcessedClassResult {
+  classId: string;
+  className: string;
+  mathflatClassId: string;
+  previousClassDate?: string;  // 2차 수집 시 업데이트한 이전 수업일
+  studentCount: number;
+  homeworkCount: number;
+  problemCount: number;
+  error?: string;
+}
+
+// DB 저장용 타입 (mathflat_homework)
+export interface DBMathflatHomework {
+  id?: string;
+  class_id?: string;
+  mathflat_class_id: string;
+  mathflat_student_id: string;
+  student_name: string;
+  homework_date: string;  // YYYY-MM-DD
+  book_type: 'WORKBOOK' | 'WORKSHEET';
+  book_id?: string;
+  student_book_id?: string;
+  student_homework_id?: string;
+  title?: string;
+  page?: string;  // 교재 페이지 범위 (예: "9~11,13~20")
+  completed?: boolean;
+  score?: number;
+}
+
+// DB 저장용 타입 (mathflat_problem_results)
+export interface DBMathflatProblemResult {
+  id?: string;
+  homework_id?: string;
+  problem_id: string;
+  workbook_problem_id?: string;
+  worksheet_problem_id?: string;
+  concept_id?: string;
+  concept_name?: string;
+  topic_id?: string;
+  sub_topic_id?: string;
+  level?: number;
+  type?: string;
+  tag_top?: string;
+  correct_answer?: string;
+  user_answer?: string;
+  result?: 'CORRECT' | 'WRONG' | 'NONE';
+  total_used?: number;
+  correct_times?: number;
+  wrong_times?: number;
+  answer_rate?: number;
+  problem_image_url?: string;
+  solution_image_url?: string;
+}
+
+// 대상 반 정보
+export interface TargetClassInfo {
+  id: string;
+  name: string;
+  mathflatClassId: string;
+  dayOfWeek: string;
+}
