@@ -374,33 +374,21 @@ export function useLearningLogs({
       let error = null
 
       if (existingRows.length > 0) {
-        const { data: latestDbData } = await supabase
-          .from("study_logs")
-          .select("*")
-          .in("id", existingRows.map(r => r.id))
-
-        const latestDbMap = new Map(latestDbData?.map(d => [d.id, d]) || [])
-
-        for (const row of existingRows) {
+        // 변경된 행만 필터링
+        const rowsToUpdate = existingRows.filter(row => {
           const rowKey = String(row.id)
           const changedFields = dirtyFields.get(rowKey)
-          const latestData = latestDbMap.get(row.id)
+          return changedFields && changedFields.size > 0
+        })
 
-          if (changedFields && changedFields.size > 0) {
+        if (rowsToUpdate.length > 0) {
+          // 병렬로 모든 update 실행
+          const updatePromises = rowsToUpdate.map(row => {
+            const rowKey = String(row.id)
+            const changedFields = dirtyFields.get(rowKey)!
+
             const updateData: any = {
               last_modified_by: currentEmployee?.id
-            }
-
-            if (latestData) {
-              updateData.attendance_status = latestData.attendance_status || 5
-              updateData.homework = latestData.homework || 5
-              updateData.focus = latestData.focus || 5
-              updateData.book1 = latestData.book1 || ""
-              updateData.book1log = latestData.book1log || ""
-              updateData.book2 = latestData.book2 || ""
-              updateData.book2log = latestData.book2log || ""
-              updateData.note = latestData.note || ""
-              updateData.date = latestData.date || row.date
             }
 
             changedFields.forEach(field => {
@@ -438,16 +426,17 @@ export function useLearningLogs({
               }
             })
 
-            const { error: updateError } = await supabase
+            return supabase
               .from("study_logs")
               .update(updateData)
               .eq('id', row.id)
+          })
 
-            if (updateError) {
-              console.error("Failed to update row", row.id, ":", updateError)
-              error = updateError
-              break
-            }
+          const results = await Promise.all(updatePromises)
+          const updateError = results.find(r => r.error)?.error
+          if (updateError) {
+            console.error("Failed to update rows:", updateError)
+            error = updateError
           }
         }
       }
@@ -501,13 +490,17 @@ export function useLearningLogs({
       alert("저장되었습니다.")
       setDeletedRowIds([])
       setDirtyFields(new Map())
+
+      // 저장 후 DB에서 최신 데이터를 다시 가져와서 UI 갱신 (중복 저장 방지)
+      await fetchLogsForDate(date)
+
       return true
     } catch (e) {
       alert("저장 중 오류가 발생했습니다.")
       console.error(e)
       return false
     }
-  }, [rows, deletedRowIds, dirtyFields, supabase])
+  }, [rows, deletedRowIds, dirtyFields, supabase, date, fetchLogsForDate])
 
   const resetDirtyState = useCallback(() => {
     setDirtyFields(new Map())
