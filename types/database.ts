@@ -2649,6 +2649,120 @@ export type Database = {
           },
         ]
       }
+      schools: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          name_en: string | null
+          school_type: string
+          province: string
+          district: string | null
+          address: string | null
+          postal_code: string | null
+          phone: string | null
+          website: string | null
+          coed_type: string | null
+          foundation_type: string | null
+          high_school_type: string | null
+          established_date: string | null
+          is_active: boolean
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          name_en?: string | null
+          school_type: string
+          province: string
+          district?: string | null
+          address?: string | null
+          postal_code?: string | null
+          phone?: string | null
+          website?: string | null
+          coed_type?: string | null
+          foundation_type?: string | null
+          high_school_type?: string | null
+          established_date?: string | null
+          is_active?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          code?: string
+          name?: string
+          name_en?: string | null
+          school_type?: string
+          province?: string
+          district?: string | null
+          address?: string | null
+          postal_code?: string | null
+          phone?: string | null
+          website?: string | null
+          coed_type?: string | null
+          foundation_type?: string | null
+          high_school_type?: string | null
+          established_date?: string | null
+          is_active?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      student_schools: {
+        Row: {
+          id: string
+          student_id: string
+          school_id: string | null
+          school_name_manual: string | null
+          school_type: string | null
+          grade: number | null
+          is_current: boolean
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          school_id?: string | null
+          school_name_manual?: string | null
+          school_type?: string | null
+          grade?: number | null
+          is_current?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          school_id?: string | null
+          school_name_manual?: string | null
+          school_type?: string | null
+          grade?: number | null
+          is_current?: boolean
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_schools_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_schools_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       students: {
         Row: {
           created_at: string | null
