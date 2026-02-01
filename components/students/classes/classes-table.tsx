@@ -17,6 +17,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { ClassSchedulePreview } from "./ClassSchedulePreview"
 
 interface Schedule {
   day_of_week: string
@@ -56,33 +57,6 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [classToDelete, setClassToDelete] = useState<Class | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  // 시간표 포맷팅 함수
-  const formatSchedule = (schedules?: Schedule[]) => {
-    if (!schedules || schedules.length === 0) return "시간표 미등록"
-
-    // 시간대별로 그룹화
-    const timeGroups = new Map<string, string[]>()
-    schedules.forEach(s => {
-      const startTime = s.start_time.substring(0, 5) // HH:mm
-      const endTime = s.end_time.substring(0, 5)
-      const timeKey = `${startTime}-${endTime}`
-      if (!timeGroups.has(timeKey)) {
-        timeGroups.set(timeKey, [])
-      }
-      timeGroups.get(timeKey)!.push(s.day_of_week)
-    })
-
-    // 포맷팅 - 줄바꿈으로 구분
-    const formatted = Array.from(timeGroups.entries()).map(([time, days], index) => (
-      <React.Fragment key={time}>
-        {index > 0 && <br />}
-        {days.join('')} {time}
-      </React.Fragment>
-    ))
-
-    return <>{formatted}</>
-  }
 
   const handleDeleteClick = (cls: Class) => {
     setClassToDelete(cls)
@@ -217,9 +191,7 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-xs text-gray-600">
-                        {formatSchedule(c.schedules)}
-                      </div>
+                      <ClassSchedulePreview schedules={c.schedules} subject={c.subject} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${

@@ -4,13 +4,16 @@ import { ClassesHeader } from "@/components/students/classes/classes-header"
 import { ClassesFilters } from "@/components/students/classes/classes-filters"
 import { ClassesTable } from "@/components/students/classes/classes-table"
 import { PrintClassesTable } from "@/components/students/classes/print-classes-table"
+import { PrintScheduleGrid } from "@/components/students/classes/PrintScheduleGrid"
+import { WeeklyScheduleGrid } from "@/components/students/classes/schedule-grid"
 import { Card, CardContent } from "@/components/ui/card"
 import { ClassFormModal } from "@/components/students/classes/class-form-modal"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useEffect, useState as useClientState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import ReactDOM from "react-dom/client"
 import type { Database } from "@/types/database"
-import { Users, UserCheck, UserX, ChevronDown, ChevronUp } from "lucide-react"
+import { Users, UserCheck, UserX, ChevronDown, ChevronUp, TableIcon, CalendarDays } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -22,9 +25,10 @@ export default function ClassesPage() {
   const [students, setStudents] = useClientState<any[]>([])
   const [classStudents, setClassStudents] = useClientState<any[]>([])
   const [loading, setLoading] = useState(false)
-  const [teacherFilter, setTeacherFilter] = useState("all")
+  const [teacherFilter, setTeacherFilter] = useState<string[]>([])
   const [subjectFilter, setSubjectFilter] = useState("all")
   const [studentSearch, setStudentSearch] = useState("")
+  const [viewMode, setViewMode] = useState<"table" | "schedule">("table")
 
   // 데이터 로드 함수
   const loadData = async () => {
@@ -34,8 +38,9 @@ export default function ClassesPage() {
     const [classesRes, teachersRes, studentsRes, classStudentsRes, schedulesRes] = await Promise.all([
       supabase.from("classes").select("*, monthly_fee").eq("is_active", true).order("teacher_id", { ascending: true }).order("name", { ascending: true }),
       supabase.from("employees")
-        .select("id, name, position")
+        .select("id, name, position, status")
         .in("position", ["원장", "강사"])
+        .eq("status", "재직")
         .order("name", { ascending: true }),
       supabase.from("students").select("id, name, status, school_type, grade").eq("is_active", true).order("name", { ascending: true }),
       supabase.from("class_students").select("class_id, student_id"),
@@ -47,7 +52,7 @@ export default function ClassesPage() {
       schedules: (schedulesRes.data ?? [])
         .filter(s => s.class_id === cls.id)
         .sort((a, b) => {
-          const dayOrder = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 }
+          const dayOrder = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 7 }
           return (dayOrder[a.day_of_week as keyof typeof dayOrder] || 7) - (dayOrder[b.day_of_week as keyof typeof dayOrder] || 7)
         })
     }))
@@ -148,8 +153,8 @@ export default function ClassesPage() {
 
   // 담당 선생님/과목/학생검색 필터 적용 및 정렬
   let filteredClasses = classes;
-  if (teacherFilter !== "all") {
-    filteredClasses = filteredClasses.filter((c: any) => c.teacher_id === teacherFilter)
+  if (teacherFilter.length > 0) {
+    filteredClasses = filteredClasses.filter((c: any) => teacherFilter.includes(c.teacher_id))
   }
   if (subjectFilter !== "all") {
     if (subjectFilter === "regular") {
@@ -235,6 +240,9 @@ export default function ClassesPage() {
   const handlePrint = () => {
     const printWindow = window.open('', '_blank')
     if (printWindow) {
+      const isScheduleView = viewMode === "schedule"
+      const title = isScheduleView ? "주간 시간표" : "반 목록 인쇄"
+
       // HTML 구조 생성
       printWindow.document.write(`
         <!DOCTYPE html>
@@ -242,7 +250,7 @@ export default function ClassesPage() {
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>반 목록 인쇄</title>
+          <title>${title}</title>
           <style>
             @media print {
               body {
@@ -381,15 +389,29 @@ export default function ClassesPage() {
       const container = printWindow.document.getElementById('print-root')
       if (container) {
         const root = ReactDOM.createRoot(container)
-        root.render(
-          <PrintClassesTable
-            classes={sortedClasses}
-            teachers={teachers}
-            students={students}
-            classStudents={classStudents}
-            currentDate={new Date()}
-          />
-        )
+
+        if (isScheduleView) {
+          // 시간표 뷰 인쇄
+          root.render(
+            <PrintScheduleGrid
+              classes={sortedClasses}
+              teachers={teachers}
+              studentsCountMap={studentsCountMap}
+              currentDate={new Date()}
+            />
+          )
+        } else {
+          // 반 목록 인쇄
+          root.render(
+            <PrintClassesTable
+              classes={sortedClasses}
+              teachers={teachers}
+              students={students}
+              classStudents={classStudents}
+              currentDate={new Date()}
+            />
+          )
+        }
 
         // 렌더링 완료 후 인쇄
         setTimeout(() => {
@@ -522,28 +544,55 @@ export default function ClassesPage() {
       )}
 
       <Card className="overflow-hidden">
-        <ClassesFilters
-          teachers={teachers}
-          onOpen={() => setModalOpen(true)}
-          onPrint={handlePrint}
-          teacherFilter={teacherFilter}
-          setTeacherFilter={setTeacherFilter}
-          subjectFilter={subjectFilter}
-          setSubjectFilter={setSubjectFilter}
-          studentSearch={studentSearch}
-          setStudentSearch={setStudentSearch}
-        />
+        <div className="flex items-center justify-between border-b border-gray-100">
+          <ClassesFilters
+            teachers={teachers}
+            onOpen={() => setModalOpen(true)}
+            onPrint={handlePrint}
+            teacherFilter={teacherFilter}
+            setTeacherFilter={setTeacherFilter}
+            subjectFilter={subjectFilter}
+            setSubjectFilter={setSubjectFilter}
+            studentSearch={studentSearch}
+            setStudentSearch={setStudentSearch}
+          />
+          <div className="pr-4">
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "table" | "schedule")}>
+              <TabsList className="grid grid-cols-2 h-9">
+                <TabsTrigger value="table" className="flex items-center gap-1.5 text-xs px-3">
+                  <TableIcon className="h-3.5 w-3.5" />
+                  반 목록
+                </TabsTrigger>
+                <TabsTrigger value="schedule" className="flex items-center gap-1.5 text-xs px-3">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  시간표
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </div>
         <CardContent className="p-0">
           <Suspense fallback={<div>로딩 중...</div>}>
-            <ClassesTable
-              classes={sortedClasses}
-              teachers={teachers}
-              students={students}
-              studentsCountMap={studentsCountMap}
-              studentNamesMap={studentNamesMap}
-              onDetail={handleEdit}
-              onDelete={handleDeleteClass}
-            />
+            {viewMode === "table" ? (
+              <ClassesTable
+                classes={sortedClasses}
+                teachers={teachers}
+                students={students}
+                studentsCountMap={studentsCountMap}
+                studentNamesMap={studentNamesMap}
+                onDetail={handleEdit}
+                onDelete={handleDeleteClass}
+              />
+            ) : (
+              <div className="p-4">
+                <WeeklyScheduleGrid
+                  classes={sortedClasses}
+                  teachers={teachers}
+                  studentsCountMap={studentsCountMap}
+                  onClassClick={handleEdit}
+                />
+              </div>
+            )}
           </Suspense>
         </CardContent>
       </Card>
