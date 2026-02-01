@@ -150,6 +150,8 @@ export interface MathFlatHomeworkItem {
 export interface MathFlatWorkbookProblem {
   workbookProblemId: number;
   problemId: number;
+  problemTitle?: string;   // 문제 섹션 (예: 유형 한 걸음)
+  problemNumber?: string;  // 문제 번호 (예: 대표 문제 1)
   conceptId?: number;
   conceptName?: string;
   topicId?: number;
@@ -172,6 +174,8 @@ export interface MathFlatWorkbookProblem {
 export interface MathFlatWorksheetProblem {
   worksheetProblemId: number;
   problemId: number;
+  problemTitle?: string;   // 문제 섹션
+  problemNumber?: string;  // 문제 번호
   conceptId?: number;
   conceptName?: string;
   topicId?: number;
@@ -192,7 +196,7 @@ export interface MathFlatWorksheetProblem {
 
 // 숙제 수집 옵션
 export interface HomeworkCollectionOptions {
-  collectionType: 'first' | 'second';
+  collectionType: 'first' | 'second' | 'third';
   targetDate: Date;  // KST 기준
   classIds?: string[];  // 특정 반만 수집 (테스트용)
 }
@@ -200,7 +204,7 @@ export interface HomeworkCollectionOptions {
 // 숙제 수집 결과
 export interface HomeworkCollectionResult {
   success: boolean;
-  collectionType: 'first' | 'second';
+  collectionType: 'first' | 'second' | 'third';
   targetDate: string;
   processedClasses: ProcessedClassResult[];
   totalHomeworkCount: number;
@@ -248,6 +252,8 @@ export interface DBMathflatProblemResult {
   problem_id: string;
   workbook_problem_id?: string;
   worksheet_problem_id?: string;
+  problem_title?: string;    // 문제 섹션 (예: 유형 한 걸음)
+  problem_number?: string;   // 문제 번호 (예: 대표 문제 1)
   concept_id?: string;
   concept_name?: string;
   topic_id?: string;

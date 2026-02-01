@@ -228,92 +228,6 @@ export type Database = {
           },
         ]
       }
-      at_risk_students_snapshots: {
-        Row: {
-          attendance_avg: number | null
-          class_names: string | null
-          created_at: string | null
-          department: string | null
-          focus_avg: number | null
-          homework_avg: number | null
-          id: string
-          missing_tests: number | null
-          risk_level: string
-          snapshot_date: string
-          student_id: string | null
-          student_name: string
-          teacher_id: string | null
-          teacher_name: string
-          test_score: number | null
-          total_score: number
-        }
-        Insert: {
-          attendance_avg?: number | null
-          class_names?: string | null
-          created_at?: string | null
-          department?: string | null
-          focus_avg?: number | null
-          homework_avg?: number | null
-          id?: string
-          missing_tests?: number | null
-          risk_level: string
-          snapshot_date: string
-          student_id?: string | null
-          student_name: string
-          teacher_id?: string | null
-          teacher_name: string
-          test_score?: number | null
-          total_score: number
-        }
-        Update: {
-          attendance_avg?: number | null
-          class_names?: string | null
-          created_at?: string | null
-          department?: string | null
-          focus_avg?: number | null
-          homework_avg?: number | null
-          id?: string
-          missing_tests?: number | null
-          risk_level?: string
-          snapshot_date?: string
-          student_id?: string | null
-          student_name?: string
-          teacher_id?: string | null
-          teacher_name?: string
-          test_score?: number | null
-          total_score?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "at_risk_students_snapshots_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "student_class_mapping"
-            referencedColumns: ["student_id"]
-          },
-          {
-            foreignKeyName: "at_risk_students_snapshots_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "student_name_mapping"
-            referencedColumns: ["student_id"]
-          },
-          {
-            foreignKeyName: "at_risk_students_snapshots_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "at_risk_students_snapshots_teacher_id_fkey"
-            columns: ["teacher_id"]
-            isOneToOne: false
-            referencedRelation: "employees"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       calendar_events: {
         Row: {
           created_at: string | null
@@ -325,6 +239,8 @@ export type Database = {
           id: string
           location: string | null
           makeup_class_id: string | null
+          recurrence_parent_id: string | null
+          recurrence_rule: Json | null
           start_time: string
           title: string
           updated_at: string | null
@@ -339,6 +255,8 @@ export type Database = {
           id?: string
           location?: string | null
           makeup_class_id?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_rule?: Json | null
           start_time: string
           title: string
           updated_at?: string | null
@@ -353,6 +271,8 @@ export type Database = {
           id?: string
           location?: string | null
           makeup_class_id?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_rule?: Json | null
           start_time?: string
           title?: string
           updated_at?: string | null
@@ -363,6 +283,13 @@ export type Database = {
             columns: ["makeup_class_id"]
             isOneToOne: false
             referencedRelation: "makeup_classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_recurrence_parent_id_fkey"
+            columns: ["recurrence_parent_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
             referencedColumns: ["id"]
           },
         ]
@@ -688,6 +615,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          mathflat_class_id: string | null
           monthly_fee: number | null
           name: string
           subject: string
@@ -701,6 +629,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          mathflat_class_id?: string | null
           monthly_fee?: number | null
           name: string
           subject: string
@@ -714,6 +643,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          mathflat_class_id?: string | null
           monthly_fee?: number | null
           name?: string
           subject?: string
@@ -1844,6 +1774,157 @@ export type Database = {
           },
         ]
       }
+      mathflat_homework: {
+        Row: {
+          book_id: string | null
+          book_type: string
+          class_id: string | null
+          completed: boolean | null
+          created_at: string | null
+          homework_date: string
+          id: string
+          mathflat_class_id: string
+          mathflat_student_id: string
+          page: string | null
+          score: number | null
+          student_book_id: string | null
+          student_homework_id: string | null
+          student_name: string
+          title: string | null
+        }
+        Insert: {
+          book_id?: string | null
+          book_type: string
+          class_id?: string | null
+          completed?: boolean | null
+          created_at?: string | null
+          homework_date: string
+          id?: string
+          mathflat_class_id: string
+          mathflat_student_id: string
+          page?: string | null
+          score?: number | null
+          student_book_id?: string | null
+          student_homework_id?: string | null
+          student_name: string
+          title?: string | null
+        }
+        Update: {
+          book_id?: string | null
+          book_type?: string
+          class_id?: string | null
+          completed?: boolean | null
+          created_at?: string | null
+          homework_date?: string
+          id?: string
+          mathflat_class_id?: string
+          mathflat_student_id?: string
+          page?: string | null
+          score?: number | null
+          student_book_id?: string | null
+          student_homework_id?: string | null
+          student_name?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mathflat_homework_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mathflat_problem_results: {
+        Row: {
+          answer_rate: number | null
+          concept_id: string | null
+          concept_name: string | null
+          correct_answer: string | null
+          correct_times: number | null
+          created_at: string | null
+          homework_id: string | null
+          id: string
+          level: number | null
+          problem_id: string
+          problem_image_url: string | null
+          problem_number: string | null
+          problem_title: string | null
+          result: string | null
+          solution_image_url: string | null
+          sub_topic_id: string | null
+          tag_top: string | null
+          topic_id: string | null
+          total_used: number | null
+          type: string | null
+          user_answer: string | null
+          workbook_problem_id: string | null
+          worksheet_problem_id: string | null
+          wrong_times: number | null
+        }
+        Insert: {
+          answer_rate?: number | null
+          concept_id?: string | null
+          concept_name?: string | null
+          correct_answer?: string | null
+          correct_times?: number | null
+          created_at?: string | null
+          homework_id?: string | null
+          id?: string
+          level?: number | null
+          problem_id: string
+          problem_image_url?: string | null
+          problem_number?: string | null
+          problem_title?: string | null
+          result?: string | null
+          solution_image_url?: string | null
+          sub_topic_id?: string | null
+          tag_top?: string | null
+          topic_id?: string | null
+          total_used?: number | null
+          type?: string | null
+          user_answer?: string | null
+          workbook_problem_id?: string | null
+          worksheet_problem_id?: string | null
+          wrong_times?: number | null
+        }
+        Update: {
+          answer_rate?: number | null
+          concept_id?: string | null
+          concept_name?: string | null
+          correct_answer?: string | null
+          correct_times?: number | null
+          created_at?: string | null
+          homework_id?: string | null
+          id?: string
+          level?: number | null
+          problem_id?: string
+          problem_image_url?: string | null
+          problem_number?: string | null
+          problem_title?: string | null
+          result?: string | null
+          solution_image_url?: string | null
+          sub_topic_id?: string | null
+          tag_top?: string | null
+          topic_id?: string | null
+          total_used?: number | null
+          type?: string | null
+          user_answer?: string | null
+          workbook_problem_id?: string | null
+          worksheet_problem_id?: string | null
+          wrong_times?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mathflat_problem_results_homework_id_fkey"
+            columns: ["homework_id"]
+            isOneToOne: false
+            referencedRelation: "mathflat_homework"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mathflat_records: {
         Row: {
           book_title: string | null
@@ -2531,6 +2612,72 @@ export type Database = {
           },
         ]
       }
+      schools: {
+        Row: {
+          address: string | null
+          code: string
+          coed_type: string | null
+          created_at: string | null
+          district: string | null
+          established_date: string | null
+          foundation_type: string | null
+          high_school_type: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          name_en: string | null
+          phone: string | null
+          postal_code: string | null
+          province: string
+          school_type: string
+          short_name: string | null
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          code: string
+          coed_type?: string | null
+          created_at?: string | null
+          district?: string | null
+          established_date?: string | null
+          foundation_type?: string | null
+          high_school_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          name_en?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          province: string
+          school_type: string
+          short_name?: string | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          coed_type?: string | null
+          created_at?: string | null
+          district?: string | null
+          established_date?: string | null
+          foundation_type?: string | null
+          high_school_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          name_en?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          province?: string
+          school_type?: string
+          short_name?: string | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
       seasonal_alerts: {
         Row: {
           alert_type: string
@@ -2649,104 +2796,56 @@ export type Database = {
           },
         ]
       }
-      schools: {
-        Row: {
-          id: string
-          code: string
-          name: string
-          name_en: string | null
-          school_type: string
-          province: string
-          district: string | null
-          address: string | null
-          postal_code: string | null
-          phone: string | null
-          website: string | null
-          coed_type: string | null
-          foundation_type: string | null
-          high_school_type: string | null
-          established_date: string | null
-          is_active: boolean
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          code: string
-          name: string
-          name_en?: string | null
-          school_type: string
-          province: string
-          district?: string | null
-          address?: string | null
-          postal_code?: string | null
-          phone?: string | null
-          website?: string | null
-          coed_type?: string | null
-          foundation_type?: string | null
-          high_school_type?: string | null
-          established_date?: string | null
-          is_active?: boolean
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          code?: string
-          name?: string
-          name_en?: string | null
-          school_type?: string
-          province?: string
-          district?: string | null
-          address?: string | null
-          postal_code?: string | null
-          phone?: string | null
-          website?: string | null
-          coed_type?: string | null
-          foundation_type?: string | null
-          high_school_type?: string | null
-          established_date?: string | null
-          is_active?: boolean
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       student_schools: {
         Row: {
-          id: string
-          student_id: string
-          school_id: string | null
-          school_name_manual: string | null
-          school_type: string | null
-          grade: number | null
-          is_current: boolean
           created_at: string | null
+          grade: number | null
+          id: string
+          is_current: boolean | null
+          school_id: string | null
+          student_id: string
           updated_at: string | null
         }
         Insert: {
-          id?: string
-          student_id: string
-          school_id?: string | null
-          school_name_manual?: string | null
-          school_type?: string | null
-          grade?: number | null
-          is_current?: boolean
           created_at?: string | null
+          grade?: number | null
+          id?: string
+          is_current?: boolean | null
+          school_id?: string | null
+          student_id: string
           updated_at?: string | null
         }
         Update: {
-          id?: string
-          student_id?: string
-          school_id?: string | null
-          school_name_manual?: string | null
-          school_type?: string | null
-          grade?: number | null
-          is_current?: boolean
           created_at?: string | null
+          grade?: number | null
+          id?: string
+          is_current?: boolean | null
+          school_id?: string | null
+          student_id?: string
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "student_schools_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_schools_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_class_mapping"
+            referencedColumns: ["student_id"]
+          },
+          {
+            foreignKeyName: "student_schools_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_name_mapping"
+            referencedColumns: ["student_id"]
+          },
           {
             foreignKeyName: "student_schools_student_id_fkey"
             columns: ["student_id"]
@@ -2754,13 +2853,6 @@ export type Database = {
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "student_schools_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          }
         ]
       }
       students: {
@@ -2778,6 +2870,7 @@ export type Database = {
           lead_source: string | null
           left_at: string | null
           left_reason: string | null
+          mathflat_student_id: string | null
           name: string
           notes: string | null
           parent_phone: string | null
@@ -2804,6 +2897,7 @@ export type Database = {
           lead_source?: string | null
           left_at?: string | null
           left_reason?: string | null
+          mathflat_student_id?: string | null
           name: string
           notes?: string | null
           parent_phone?: string | null
@@ -2830,6 +2924,7 @@ export type Database = {
           lead_source?: string | null
           left_at?: string | null
           left_reason?: string | null
+          mathflat_student_id?: string | null
           name?: string
           notes?: string | null
           parent_phone?: string | null
@@ -3548,6 +3643,32 @@ export type Database = {
         Args: { target_student_id: string }
         Returns: boolean
       }
+      get_ai_hurdle_patterns: {
+        Args: never
+        Returns: {
+          avg_days_stuck: number
+          drop_off_rate: number
+          hurdle: string
+          hurdle_count: number
+          label: string
+          suggested_action: string
+        }[]
+      }
+      get_bottleneck_by_lead_source: {
+        Args: never
+        Returns: {
+          avg_consultations: number
+          avg_days_stuck: number
+          direct_enroll_count: number
+          drop_off_rate: number
+          enroll_after_test_count: number
+          enroll_count: number
+          lead_source: string
+          stage: string
+          test_count: number
+          total_count: number
+        }[]
+      }
       get_bottleneck_details: {
         Args: never
         Returns: {
@@ -3603,6 +3724,16 @@ export type Database = {
           total_count: number
           with_test_count: number
           without_test_count: number
+        }[]
+      }
+      get_consultation_effect_analysis: {
+        Args: never
+        Returns: {
+          consultation_count: number
+          consultation_type: string
+          method: string
+          to_enroll_rate: number
+          to_test_rate: number
         }[]
       }
       get_followup_needed_students: {
@@ -3774,11 +3905,11 @@ export type Database = {
       consultation_method_enum: "대면" | "전화" | "문자"
       consultation_outcome_type:
         | "enrolled"
-        | "enrollment_scheduled"
         | "test_scheduled"
         | "deferred"
         | "rejected"
         | "lost"
+        | "enrollment_scheduled"
       consultation_readiness: "high" | "medium" | "low"
       consultation_sentiment:
         | "very_positive"
@@ -4034,11 +4165,11 @@ export const Constants = {
       consultation_method_enum: ["대면", "전화", "문자"],
       consultation_outcome_type: [
         "enrolled",
-        "enrollment_scheduled",
         "test_scheduled",
         "deferred",
         "rejected",
         "lost",
+        "enrollment_scheduled",
       ],
       consultation_readiness: ["high", "medium", "low"],
       consultation_sentiment: [

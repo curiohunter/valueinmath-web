@@ -33,6 +33,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
+import { formatSchoolGrade } from "@/lib/schools/format"
 import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import {
@@ -1146,9 +1147,9 @@ export default function MarketingPage() {
                                       className="inline-flex items-center gap-1 text-sm bg-white px-2 py-1 rounded border border-blue-200"
                                     >
                                       <span className="font-medium">{student.name}</span>
-                                      {student.grade && (
+                                      {(student.school || student.grade) && (
                                         <span className="text-xs text-muted-foreground">
-                                          ({student.school ? `${student.school} ` : ""}{student.grade}학년)
+                                          ({formatSchoolGrade(student.school, student.grade)})
                                         </span>
                                       )}
                                     </span>
@@ -1189,9 +1190,9 @@ export default function MarketingPage() {
                               >
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="font-medium text-emerald-700">{student.name}</span>
-                                  {student.grade && (
+                                  {(student.school || student.grade) && (
                                     <span className="text-xs text-emerald-600">
-                                      ({student.school ? `${student.school} ` : ""}{student.grade}학년)
+                                      ({formatSchoolGrade(student.school, student.grade)})
                                     </span>
                                   )}
                                 </div>

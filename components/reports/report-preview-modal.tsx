@@ -20,6 +20,7 @@ import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import type { ReportTableRow } from "@/types/reports"
 import { ReportStatusLabel } from "@/types/reports"
+import { formatSchoolGrade } from "@/lib/schools/format"
 
 interface ReportPreviewModalProps {
   open: boolean
@@ -123,7 +124,7 @@ export function ReportPreviewModal({
                 </div>
                 <div className="flex items-center gap-1">
                   <School className="h-4 w-4" />
-                  <span>{report.school || "학교 미등록"} {report.grade}학년</span>
+                  <span>{formatSchoolGrade(report.school, report.grade) || "학교 미등록"}</span>
                 </div>
                 {report.className && (
                   <Badge variant="secondary">{report.className}</Badge>

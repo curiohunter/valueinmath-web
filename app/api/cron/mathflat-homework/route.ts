@@ -6,12 +6,13 @@
  * 인증: Authorization: Bearer {CRON_SECRET}
  *
  * Body:
- * - collectionType: 'first' | 'second' (1차/2차 수집)
+ * - collectionType: 'first' | 'second' | 'third' (1차/2차/3차 수집)
  * - classIds?: string[] (특정 반만 수집, 테스트용)
  *
  * 스케줄:
- * - 1차 수집: 매일 23:50 KST (UTC 14:50)
- * - 2차 수집: 매일 10:00 KST (UTC 01:00)
+ * - 1차 수집: 매일 23:50 KST (UTC 14:50) - 오늘 숙제 목록 수집
+ * - 2차 수집: 매일 10:00 KST (UTC 01:00) - 오늘 숙제 상세 업데이트
+ * - 3차 수집: 매일 10:00 KST (UTC 01:00) - 이전 수업일 숙제 상세 업데이트
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -58,9 +59,9 @@ export async function POST(request: NextRequest) {
   const { collectionType, classIds } = body;
 
   // 3. collectionType 검증
-  if (!collectionType || !['first', 'second'].includes(collectionType)) {
+  if (!collectionType || !['first', 'second', 'third'].includes(collectionType)) {
     return NextResponse.json(
-      { error: 'collectionType은 "first" 또는 "second"여야 합니다' },
+      { error: 'collectionType은 "first", "second", "third" 중 하나여야 합니다' },
       { status: 400 }
     );
   }
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
   // 4. 수집 실행
   try {
     const options: HomeworkCollectionOptions = {
-      collectionType: collectionType as 'first' | 'second',
+      collectionType: collectionType as 'first' | 'second' | 'third',
       targetDate: new Date(),
       classIds,
     };
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest) {
         targetDate: result.targetDate,
         processedClasses: result.processedClasses.map((c) => ({
           className: c.className,
+          previousClassDate: c.previousClassDate,
           studentCount: c.studentCount,
           homeworkCount: c.homeworkCount,
           problemCount: c.problemCount,
@@ -129,8 +131,13 @@ export async function GET() {
     methods: ['POST'],
     authentication: 'Bearer token required (CRON_SECRET)',
     body: {
-      collectionType: "'first' | 'second' (required)",
+      collectionType: "'first' | 'second' | 'third' (required)",
       classIds: "string[] (optional, for testing specific classes)",
+    },
+    schedule: {
+      first: '매일 23:50 KST - 오늘 숙제 목록 수집',
+      second: '매일 10:00 KST - 오늘 숙제 상세 업데이트',
+      third: '매일 10:00 KST - 이전 수업일 숙제 상세 업데이트',
     },
   });
 }

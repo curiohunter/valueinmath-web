@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ChevronDown, MoreHorizontal, Edit, Trash2, Phone, Plus } from "lucide-react"
 import type { Database } from "@/types/database"
+import { formatSchoolGrade } from "@/lib/schools/format"
 
 type Student = Database['public']['Tables']['students']['Row']
 
@@ -137,10 +138,9 @@ const ConsultationCard = memo<ConsultationCardProps>(({
                       <span>{student.parent_phone}</span>
                     </div>
                   )}
-                  <div>
-                    {student.school && <span>{student.school}</span>}
-                    {student.grade && <span> {student.grade}학년</span>}
-                  </div>
+                  {(student.school || student.grade) && (
+                    <div>{formatSchoolGrade(student.school, student.grade)}</div>
+                  )}
                 </div>
 
                 <CollapsibleContent>

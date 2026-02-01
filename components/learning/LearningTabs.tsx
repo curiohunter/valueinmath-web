@@ -95,6 +95,18 @@ export default function LearningTabs() {
       >
         테스트 이력
       </Link>
+      <Link
+        href="/learning/homework-analysis"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname.startsWith("/learning/homework-analysis")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        숙제 분석
+        <span className="ml-1 text-xs text-amber-600 font-medium">Beta</span>
+      </Link>
     </div>
   );
 } 

@@ -16,10 +16,13 @@ interface UseConsultationsReturn {
   refresh: () => Promise<void>
 }
 
-// SWR fetcher
+// SWR fetcher - 단일 쿼리로 최적화 (async-parallel)
 async function fetchConsultations(): Promise<ConsultationData[]> {
   const supabase = createClient()
-  const { data, error } = await supabase
+
+  // students 테이블만 조회하고, school_display_name은 기존 school 필드 사용
+  // student_schools JOIN은 성능 이슈로 제거 (formatSchoolName으로 일관성 유지)
+  const { data: students, error } = await supabase
     .from('students')
     .select('*')
     .eq('is_active', true)
@@ -28,7 +31,7 @@ async function fetchConsultations(): Promise<ConsultationData[]> {
     .limit(20)
 
   if (error) throw error
-  return data || []
+  return students || []
 }
 
 /**

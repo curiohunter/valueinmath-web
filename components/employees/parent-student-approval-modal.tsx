@@ -26,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Check, ChevronsUpDown, Users, Plus, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { formatSchoolGrade } from "@/lib/schools/format"
 
 interface Student {
   id: string
@@ -288,7 +289,7 @@ export function ParentStudentApprovalModal({
                     className="flex items-center gap-1 px-3 py-1"
                   >
                     {index === 0 && <span className="text-[10px] mr-1">대표</span>}
-                    {student.name} ({student.school?.replace(/학교$/, "") || ""}{student.grade || ""})
+                    {student.name} ({formatSchoolGrade(student.school, student.grade)})
                     <button
                       type="button"
                       onClick={() => toggleStudent(student.id)}
@@ -319,7 +320,7 @@ export function ParentStudentApprovalModal({
                       onClick={() => addSuggestedSibling(sibling.id)}
                     >
                       <Plus className="h-3 w-3 mr-1" />
-                      {sibling.name} ({sibling.school?.replace(/학교$/, "") || ""}{sibling.grade || ""})
+                      {sibling.name} ({formatSchoolGrade(sibling.school, sibling.grade)})
                     </Button>
                   ))}
                 </div>
@@ -374,7 +375,7 @@ export function ParentStudentApprovalModal({
                               checked={isSelected}
                               className="mr-2"
                             />
-                            {student.name} ({student.school?.replace(/학교$/, "") || ""}{student.grade || ""}) - {student.status}
+                            {student.name} ({formatSchoolGrade(student.school, student.grade)}) - {student.status}
                           </CommandItem>
                         )
                       })}

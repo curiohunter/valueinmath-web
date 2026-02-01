@@ -209,6 +209,8 @@ export class MathFlatApiClient {
     interface RawWorkbookProblem {
       id: number;  // workbookProblemId
       problemId: number;
+      title?: string;     // 문제 섹션 (예: 유형 한 걸음)
+      number?: string;    // 문제 번호 (예: 대표 문제 1)
       conceptId?: number;
       topicId?: number;
       subTopicId?: number;
@@ -232,6 +234,8 @@ export class MathFlatApiClient {
     return (response.data?.content || []).map((raw) => ({
       workbookProblemId: raw.id,
       problemId: raw.problemId,
+      problemTitle: raw.title,
+      problemNumber: raw.number,
       conceptId: raw.conceptId,
       topicId: raw.topicId,
       subTopicId: raw.subTopicId,
@@ -261,6 +265,8 @@ export class MathFlatApiClient {
       result?: 'CORRECT' | 'WRONG' | 'NONE';
       problem?: {
         id: number;  // problemId
+        title?: string;     // 문제 섹션
+        number?: string;    // 문제 번호
         conceptId?: number;
         conceptName?: string;
         topicId?: number;
@@ -288,6 +294,8 @@ export class MathFlatApiClient {
     return (response.data?.content || []).map((raw) => ({
       worksheetProblemId: raw.worksheetProblemId,
       problemId: raw.problem?.id || 0,
+      problemTitle: raw.problem?.title,
+      problemNumber: raw.problem?.number,
       conceptId: raw.problem?.conceptId,
       conceptName: raw.problem?.conceptName,
       topicId: raw.problem?.topicId,

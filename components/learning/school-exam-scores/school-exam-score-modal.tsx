@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatSchoolGrade } from "@/lib/schools/format"
 import { createSchoolExamScores, updateSchoolExamScore, getActiveStudents } from "@/lib/school-exam-score-client"
 import { getSchoolExams } from "@/lib/school-exam-client"
 import type { SchoolExamScoreFormData, SchoolExamScore } from "@/types/school-exam-score"
@@ -228,7 +229,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
                   disabled={!!editingScore}
                 >
                   {selectedStudent
-                    ? `${selectedStudent.name} (${selectedStudent.school?.replace(/학교$/, "") || ""}${selectedStudent.grade})`
+                    ? `${selectedStudent.name} (${formatSchoolGrade(selectedStudent.school, selectedStudent.grade)})`
                     : "학생 선택..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -265,7 +266,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
                             <Check
                               className={cn("mr-2 h-4 w-4", studentId === student.id ? "opacity-100" : "opacity-0")}
                             />
-                            {student.name} ({student.school?.replace(/학교$/, "") || ""}{student.grade}) - {student.status}
+                            {student.name} ({formatSchoolGrade(student.school, student.grade)}) - {student.status}
                           </CommandItem>
                         ))}
                     </CommandGroup>

@@ -8,7 +8,6 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
@@ -24,11 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 
-interface School {
+export interface SchoolData {
   id: string
   name: string
   school_type: string
@@ -37,8 +34,8 @@ interface School {
 }
 
 interface SchoolSelectorProps {
-  value?: string | null // school_id
-  onSelect: (school: School | null) => void
+  initialSchool?: SchoolData | null
+  onSelect: (school: SchoolData | null) => void
   defaultProvince?: string
   defaultDistrict?: string
   className?: string
@@ -50,7 +47,7 @@ interface SchoolSelectorProps {
  * - 시/도 → 시/군/구 필터링
  */
 export function SchoolSelector({
-  value,
+  initialSchool,
   onSelect,
   defaultProvince = "서울특별시",
   defaultDistrict = "광진구",
@@ -58,8 +55,8 @@ export function SchoolSelector({
 }: SchoolSelectorProps) {
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [schools, setSchools] = useState<School[]>([])
-  const [selectedSchool, setSelectedSchool] = useState<School | null>(null)
+  const [schools, setSchools] = useState<SchoolData[]>([])
+  const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(initialSchool || null)
   const [isLoading, setIsLoading] = useState(false)
 
   // 필터 상태
@@ -67,6 +64,11 @@ export function SchoolSelector({
   const [districts, setDistricts] = useState<string[]>([])
   const [selectedProvince, setSelectedProvince] = useState(defaultProvince)
   const [selectedDistrict, setSelectedDistrict] = useState(defaultDistrict)
+
+  // initialSchool이 변경되면 selectedSchool 업데이트
+  useEffect(() => {
+    setSelectedSchool(initialSchool || null)
+  }, [initialSchool])
 
   // 시/도 목록 로드
   useEffect(() => {
@@ -138,14 +140,7 @@ export function SchoolSelector({
     return () => clearTimeout(debounce)
   }, [searchQuery, searchSchools])
 
-  // 초기 value로 학교 정보 로드
-  useEffect(() => {
-    if (value && !selectedSchool) {
-      // TODO: ID로 학교 정보 조회
-    }
-  }, [value, selectedSchool])
-
-  const handleSelect = (school: School) => {
+  const handleSelect = (school: SchoolData) => {
     setSelectedSchool(school)
     onSelect(school)
     setOpen(false)
@@ -157,44 +152,38 @@ export function SchoolSelector({
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("space-y-2", className)}>
       {/* 지역 필터 */}
       <div className="flex gap-2">
-        <div className="flex-1">
-          <Label className="text-xs text-muted-foreground mb-1 block">시/도</Label>
-          <Select value={selectedProvince} onValueChange={setSelectedProvince}>
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue placeholder="시/도 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              {provinces.map((province) => (
-                <SelectItem key={province} value={province}>
-                  {province}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex-1">
-          <Label className="text-xs text-muted-foreground mb-1 block">시/군/구</Label>
-          <Select
-            value={selectedDistrict}
-            onValueChange={setSelectedDistrict}
-            disabled={!selectedProvince}
-          >
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue placeholder="시/군/구 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">전체</SelectItem>
-              {districts.map((district) => (
-                <SelectItem key={district} value={district}>
-                  {district}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={selectedProvince} onValueChange={setSelectedProvince}>
+          <SelectTrigger className="h-9 text-sm flex-1">
+            <SelectValue placeholder="시/도" />
+          </SelectTrigger>
+          <SelectContent>
+            {provinces.map((province) => (
+              <SelectItem key={province} value={province}>
+                {province}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={selectedDistrict || "__all__"}
+          onValueChange={(v) => setSelectedDistrict(v === "__all__" ? "" : v)}
+          disabled={!selectedProvince}
+        >
+          <SelectTrigger className="h-9 text-sm flex-1">
+            <SelectValue placeholder="시/군/구" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">전체</SelectItem>
+            {districts.map((district) => (
+              <SelectItem key={district} value={district}>
+                {district}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* 학교 선택 */}
@@ -204,7 +193,7 @@ export function SchoolSelector({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between h-10"
+            className="w-full justify-between h-9"
           >
             {selectedSchool ? (
               <div className="flex items-center gap-2 truncate">
@@ -215,9 +204,19 @@ export function SchoolSelector({
                 </Badge>
               </div>
             ) : (
-              <span className="text-muted-foreground">학교를 검색하세요...</span>
+              <span className="text-muted-foreground">학교 검색...</span>
             )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            {selectedSchool ? (
+              <X
+                className="ml-2 h-4 w-4 shrink-0 opacity-50 hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleClear()
+                }}
+              />
+            ) : (
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0" align="start">
@@ -270,26 +269,6 @@ export function SchoolSelector({
           </Command>
         </PopoverContent>
       </Popover>
-
-      {/* 선택된 학교 정보 (선택 시 표시) */}
-      {selectedSchool && (
-        <div className="flex items-center justify-between p-2 bg-muted rounded-md text-sm">
-          <div>
-            <span className="font-medium">{selectedSchool.name}</span>
-            <span className="text-muted-foreground ml-2">
-              ({selectedSchool.province} {selectedSchool.district})
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClear}
-            className="h-6 w-6 p-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

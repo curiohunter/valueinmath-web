@@ -22,6 +22,7 @@ import {
 import { MoreHorizontal, Edit, Trash2, Plus, Phone, Eye } from "lucide-react"
 import { MemoDetailModal } from "./MemoDetailModal"
 import type { Database } from "@/types/database"
+import { formatSchoolGrade } from "@/lib/schools/format"
 
 type Student = Database['public']['Tables']['students']['Row']
 
@@ -46,12 +47,6 @@ const formatDate = (dateString: string | null) => {
   if (!dateString) return '-'
   const date = new Date(dateString)
   return `${date.getMonth() + 1}/${date.getDate()}`
-}
-
-const formatSchoolGrade = (school: string | null, grade: number | null) => {
-  if (!school && !grade) return '-'
-  const schoolName = school ? school.replace(/학교$/, '') : ''
-  return `${schoolName} ${grade || ''}`
 }
 
 export function ConsultationTable({
