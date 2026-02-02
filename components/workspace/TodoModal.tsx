@@ -257,7 +257,7 @@ export function TodoModal({ isOpen, onClose, todo, user }: TodoModalProps) {
           {/* 마감일 */}
           <div>
             <Label>마감일</Label>
-            <Popover>
+            <Popover modal={true}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"

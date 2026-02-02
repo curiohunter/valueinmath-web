@@ -508,7 +508,7 @@ export function ConsultationModal({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>상담 날짜</Label>
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -672,7 +672,7 @@ export function ConsultationModal({
           {/* Row 6: Next Date */}
           <div className="space-y-2">
             <Label>다음 상담 예정일</Label>
-            <Popover>
+            <Popover modal={true}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"

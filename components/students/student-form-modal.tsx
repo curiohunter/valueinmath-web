@@ -577,7 +577,7 @@ export function StudentFormModal({
               {label} {isRequired && "*"}
             </FormLabel>
             <div className="relative">
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button

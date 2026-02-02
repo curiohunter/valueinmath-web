@@ -310,7 +310,7 @@ export function FunnelActionCenter() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>상담일</Label>
-                <Popover>
+                <Popover modal={true}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -414,7 +414,7 @@ export function FunnelActionCenter() {
             {/* 다음 연락일 */}
             <div className="space-y-2">
               <Label>다음 연락 예정일 (선택)</Label>
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"

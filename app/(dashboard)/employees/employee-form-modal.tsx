@@ -303,7 +303,7 @@ export function EmployeeFormModal({ open, onOpenChange, employee, onSuccess }: E
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>입사일</FormLabel>
-                      <Popover>
+                      <Popover modal={true}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -342,7 +342,7 @@ export function EmployeeFormModal({ open, onOpenChange, employee, onSuccess }: E
                         <FormLabel className={status === "퇴직" ? "font-bold" : ""}>
                           퇴사일 {status === "퇴직" && <span className="text-destructive">*</span>}
                         </FormLabel>
-                        <Popover>
+                        <Popover modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button

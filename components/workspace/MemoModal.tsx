@@ -199,7 +199,7 @@ export function MemoModal({ isOpen, onClose, memo, user }: MemoModalProps) {
           {/* 만료일 */}
           <div>
             <Label>만료일 (선택사항)</Label>
-            <Popover>
+            <Popover modal={true}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
