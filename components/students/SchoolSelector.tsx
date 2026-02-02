@@ -187,7 +187,7 @@ export function SchoolSelector({
       </div>
 
       {/* 학교 선택 */}
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal={true}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
