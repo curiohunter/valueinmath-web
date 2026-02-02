@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Check, ChevronsUpDown, Search, School, X } from "lucide-react"
+import { Check, ChevronsUpDown, School, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Command,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
@@ -219,17 +220,16 @@ export function SchoolSelector({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[400px] p-0" align="start">
+        <PopoverContent
+          className="w-[400px] p-0 pointer-events-auto"
+          align="start"
+        >
           <Command shouldFilter={false}>
-            <div className="flex items-center border-b px-3">
-              <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-              <input
-                placeholder="학교명을 입력하세요..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>
+            <CommandInput
+              placeholder="학교명을 입력하세요..."
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
             <CommandList>
               {isLoading ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">
