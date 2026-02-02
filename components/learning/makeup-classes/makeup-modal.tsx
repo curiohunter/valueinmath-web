@@ -722,7 +722,7 @@ export function MakeupModal({
                       </div>
                     ))}
                   </div>
-                  <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                  <Popover modal={true} open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start">
                         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -782,7 +782,7 @@ export function MakeupModal({
             <Label className="text-right">보강일</Label>
             <div className="col-span-3">
               <div className="flex gap-2">
-                <Popover>
+                <Popover modal={true}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
