@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import type { User } from "@supabase/supabase-js"
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   const res = NextResponse.next()
 
@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
     if (!error.message?.includes('Failed to parse cookie') && 
         !error.message?.includes('base64') &&
         !error.message?.includes('JSON')) {
-      console.error('Auth error in middleware:', error.message)
+      console.error('Auth error in proxy:', error.message)
     }
   }
 
