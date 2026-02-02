@@ -135,6 +135,30 @@ async function getPreviousClassDate(classId: string, todayDate: Date): Promise<s
 }
 
 /**
+ * mathflat_class_id로 반 정보 직접 조회 (수동 수집용)
+ */
+async function getClassesByMathflatIds(mathflatClassIds: string[]): Promise<TargetClassInfo[]> {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
+    .from('classes')
+    .select('id, name, mathflat_class_id')
+    .in('mathflat_class_id', mathflatClassIds)
+    .eq('is_active', true);
+
+  if (error) {
+    throw new Error(`반 정보 조회 실패: ${error.message}`);
+  }
+
+  return (data || []).map(c => ({
+    id: c.id,
+    name: c.name,
+    mathflatClassId: c.mathflat_class_id,
+    dayOfWeek: '', // 수동 수집 시 요일 정보 불필요
+  }));
+}
+
+/**
  * 오늘 수업이 있는 반 조회
  */
 async function getTodayClasses(targetDate: Date): Promise<TargetClassInfo[]> {
@@ -240,6 +264,42 @@ async function upsertHomework(
 }
 
 /**
+ * concept_id로 concept_name 조회 (캐시 사용)
+ */
+const conceptNameCache = new Map<string, string>();
+
+async function getConceptNames(conceptIds: string[]): Promise<Map<string, string>> {
+  if (conceptIds.length === 0) return new Map();
+
+  const supabase = getSupabaseAdmin();
+
+  // 캐시에 없는 ID만 조회
+  const uncachedIds = conceptIds.filter(id => !conceptNameCache.has(id));
+
+  if (uncachedIds.length > 0) {
+    const { data } = await supabase
+      .from('mathflat_concepts')
+      .select('concept_id, concept_name')
+      .in('concept_id', uncachedIds.map(id => parseInt(id, 10)));
+
+    if (data) {
+      data.forEach((row: { concept_id: number; concept_name: string }) => {
+        conceptNameCache.set(String(row.concept_id), row.concept_name);
+      });
+    }
+  }
+
+  // 요청한 ID들의 이름 반환
+  const result = new Map<string, string>();
+  conceptIds.forEach(id => {
+    const name = conceptNameCache.get(id);
+    if (name) result.set(id, name);
+  });
+
+  return result;
+}
+
+/**
  * 문제 결과 upsert (bulk)
  */
 async function upsertProblemResults(
@@ -257,11 +317,23 @@ async function upsertProblemResults(
     .delete()
     .eq('homework_id', homeworkId);
 
+  // concept_name이 없는 문제들의 concept_id 수집
+  const conceptIdsToLookup = problems
+    .filter(p => p.conceptId && !p.conceptName)
+    .map(p => String(p.conceptId));
+
+  // concept_id로 concept_name 조회
+  const conceptNameMap = await getConceptNames([...new Set(conceptIdsToLookup)]);
+
   // 새로운 문제 결과 삽입
   const problemRecords: DBMathflatProblemResult[] = problems.map((p) => {
     const isWorkbook = bookType === 'WORKBOOK';
     const workbookProblem = p as MathFlatWorkbookProblem;
     const worksheetProblem = p as MathFlatWorksheetProblem;
+
+    // concept_name이 없으면 조회한 값 사용
+    const conceptName = p.conceptName ||
+      (p.conceptId ? conceptNameMap.get(String(p.conceptId)) : undefined);
 
     return {
       homework_id: homeworkId,
@@ -271,7 +343,7 @@ async function upsertProblemResults(
       problem_title: p.problemTitle,
       problem_number: p.problemNumber,
       concept_id: p.conceptId ? String(p.conceptId) : undefined,
-      concept_name: p.conceptName,
+      concept_name: conceptName,
       topic_id: p.topicId ? String(p.topicId) : undefined,
       sub_topic_id: p.subTopicId ? String(p.subTopicId) : undefined,
       level: p.level,
@@ -579,14 +651,15 @@ export async function collectHomework(
   };
 
   try {
-    // 1. 오늘 수업 있는 반 조회
-    let targetClasses = await getTodayClasses(options.targetDate);
+    // 1. 대상 반 조회
+    let targetClasses: TargetClassInfo[];
 
-    // 특정 반만 수집하는 경우 (테스트용)
+    // classIds가 주어지면 요일 체크 없이 직접 조회 (수동 수집용)
     if (options.classIds && options.classIds.length > 0) {
-      targetClasses = targetClasses.filter((c) =>
-        options.classIds!.includes(c.mathflatClassId)
-      );
+      targetClasses = await getClassesByMathflatIds(options.classIds);
+    } else {
+      // 기본: 오늘 수업 있는 반 조회
+      targetClasses = await getTodayClasses(options.targetDate);
     }
 
     if (targetClasses.length === 0) {
