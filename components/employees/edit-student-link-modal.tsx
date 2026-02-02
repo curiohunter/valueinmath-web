@@ -312,7 +312,7 @@ export function EditStudentLinkModal({
             )}
 
             {/* Student Selector */}
-            <Popover open={isStudentSelectorOpen} onOpenChange={setIsStudentSelectorOpen}>
+            <Popover open={isStudentSelectorOpen} onOpenChange={setIsStudentSelectorOpen} modal={true}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"

@@ -219,7 +219,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
           {/* 학생 선택 (검색 가능) */}
           <div className="space-y-2">
             <Label>학생 *</Label>
-            <Popover open={studentSearchOpen} onOpenChange={setStudentSearchOpen}>
+            <Popover open={studentSearchOpen} onOpenChange={setStudentSearchOpen} modal={true}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
