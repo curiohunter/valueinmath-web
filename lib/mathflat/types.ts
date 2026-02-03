@@ -248,7 +248,8 @@ export interface DBMathflatHomework {
 // DB 저장용 타입 (mathflat_problem_results)
 export interface DBMathflatProblemResult {
   id?: string;
-  homework_id?: string;
+  daily_work_id?: string;    // FK to mathflat_daily_work (모든 풀이 연결)
+  homework_id?: string;      // FK to mathflat_homework (숙제인 경우만)
   problem_id: string;
   workbook_problem_id?: string;
   worksheet_problem_id?: string;
@@ -263,7 +264,7 @@ export interface DBMathflatProblemResult {
   tag_top?: string;
   correct_answer?: string;
   user_answer?: string;
-  result?: 'CORRECT' | 'WRONG' | 'NONE';
+  result?: 'CORRECT' | 'WRONG' | 'NONE' | 'UNKNOWN';
   total_used?: number;
   correct_times?: number;
   wrong_times?: number;
@@ -350,6 +351,7 @@ export interface DBMathflatDailyWork {
 export interface DailyWorkCollectionOptions {
   targetDate: Date;  // KST 기준
   studentIds?: string[];  // 특정 학생만 수집 (테스트용)
+  collectProblemDetails?: boolean;  // 문제별 상세 수집 여부 (기본: true)
 }
 
 // 일일 풀이 수집 결과
@@ -359,6 +361,7 @@ export interface DailyWorkCollectionResult {
   totalStudents: number;
   totalWorkCount: number;
   matchedHomeworkCount: number;
+  totalProblemCount?: number;  // 문제별 상세 수집 시
   errors: string[];
   startedAt: string;
   completedAt: string;
