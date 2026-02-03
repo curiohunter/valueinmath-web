@@ -124,24 +124,13 @@ export interface StudentHomework {
   correctRate: number;
 }
 
-// 자율학습 요약 (CHALLENGE 계열만)
-export interface SelfStudySummary {
-  total: number;
-  correctRate: number;
-  categories: Record<SelfStudyCategory, number>;
-}
-
-// 학생별 학습 요약 (숙제 + 자율학습 통합)
+// 학생별 숙제 요약
 export interface StudentLearingSummary {
   studentName: string;
   mathflatStudentId: string;
-  // 숙제 관련
   homeworks: StudentHomework[];
   totalCompletionRate: number;
   totalCorrectRate: number;
-  // 자율학습 관련
-  selfStudy: SelfStudySummary;
-  // 취약 개념
   weakConcepts: string[];
 }
 
@@ -181,8 +170,6 @@ export interface ClassSummary {
   avgCompletionRate: number;
   avgCorrectRate: number;
   totalStudents: number;
-  // 추가: 자율학습 통계
-  totalSelfStudyProblems: number;
   topWeakConcepts: string[];
 }
 
