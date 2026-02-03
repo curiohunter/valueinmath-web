@@ -235,37 +235,44 @@ export default function HomeworkTab() {
         );
         const studentName = studentHomeworks[0]?.student_name || "알 수 없음";
 
-        // 숙제별 상세 계산 (매핑을 통해 daily_work 통계 활용)
+        // 숙제별 상세 계산 (매핑을 통해 완료율 계산)
         const homeworkDetails = studentHomeworks.map((hw) => {
-          // 숙제에 매핑된 daily_work 찾기
+          // 숙제의 총 페이지 수 (progress_id_list 기준)
+          const totalPages = hw.progress_id_list?.length || 0;
+
+          // 숙제에 매핑된 progress_ids (여러 daily_work에서 유니크하게 합침)
           const mappings = dwHomeworkMappings.filter(m => m.homework_id === hw.id);
+          const allMatchedProgressIds = mappings.flatMap(m => m.matched_progress_ids || []);
+          const uniqueMatchedProgressIds = [...new Set(allMatchedProgressIds)];
+          const solvedPages = uniqueMatchedProgressIds.length;
+
+          // 매핑된 daily_work에서 정답/오답 통계 가져오기
           const mappedDwIds = mappings.map(m => m.daily_work_id);
           const mappedDailyWorks = dailyWorks.filter(dw => mappedDwIds.includes(dw.id));
-
-          // daily_work 통계 합산
-          const total = mappedDailyWorks.reduce((sum, dw) => sum + (dw.assigned_count || 0), 0);
           const correct = mappedDailyWorks.reduce((sum, dw) => sum + (dw.correct_count || 0), 0);
           const wrong = mappedDailyWorks.reduce((sum, dw) => sum + (dw.wrong_count || 0), 0);
-          const solved = correct + wrong;
-          const notSolved = total - solved;
 
           return {
             title: hw.title || "",
             page: hw.page,
-            total,
-            solved,
+            total: totalPages,
+            solved: solvedPages,
             correct,
             wrong,
-            notSolved,
-            completionRate: total > 0 ? Math.round((solved / total) * 100) : 0,
-            correctRate: solved > 0 ? Math.round((correct / solved) * 100) : 0,
+            notSolved: totalPages - solvedPages,
+            completionRate: totalPages > 0 ? Math.round((solvedPages / totalPages) * 100) : 0,
+            correctRate: (correct + wrong) > 0 ? Math.round((correct / (correct + wrong)) * 100) : 0,
           };
         });
 
-        // 전체 숙제 통계
-        const totalProblems = homeworkDetails.reduce((sum, h) => sum + h.total, 0);
-        const totalSolved = homeworkDetails.reduce((sum, h) => sum + h.solved, 0);
+        // 전체 숙제 통계 (페이지 기준 완료율)
+        const totalPages = homeworkDetails.reduce((sum, h) => sum + h.total, 0);
+        const totalSolvedPages = homeworkDetails.reduce((sum, h) => sum + h.solved, 0);
+
+        // 정답률 (문제 수 기준)
         const totalCorrect = homeworkDetails.reduce((sum, h) => sum + h.correct, 0);
+        const totalWrong = homeworkDetails.reduce((sum, h) => sum + h.wrong, 0);
+        const totalAnswered = totalCorrect + totalWrong;
 
         // 취약 개념 (매핑을 통해 해당 학생의 숙제 관련 오답 찾기)
         const studentHwIds = studentHomeworks.map((h) => h.id);
@@ -288,9 +295,9 @@ export default function HomeworkTab() {
           mathflatStudentId: studentId,
           homeworks: homeworkDetails,
           totalCompletionRate:
-            totalProblems > 0 ? Math.round((totalSolved / totalProblems) * 100) : 0,
+            totalPages > 0 ? Math.round((totalSolvedPages / totalPages) * 100) : 0,
           totalCorrectRate:
-            totalSolved > 0 ? Math.round((totalCorrect / totalSolved) * 100) : 0,
+            totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0,
           weakConcepts: uniqueWeakConcepts,
         };
       });
