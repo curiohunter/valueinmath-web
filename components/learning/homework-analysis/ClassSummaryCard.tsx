@@ -1,14 +1,16 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
 import {
   Users,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   AlertTriangle,
   Target,
   Sparkles,
+  Brain,
 } from "lucide-react";
 import { ClassSummary } from "./types";
 import StudentProgressRow from "./StudentProgressRow";
@@ -21,11 +23,53 @@ interface ClassSummaryCardProps {
   onToggle: () => void;
 }
 
+// 섹션 토글 버튼 컴포넌트
+function SectionToggle({
+  isOpen,
+  onToggle,
+  icon: Icon,
+  title,
+  count,
+  colorClass = "text-slate-500",
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+  icon: React.ElementType;
+  title: string;
+  count?: number;
+  colorClass?: string;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center gap-2 py-2 px-1 hover:bg-slate-50 rounded-lg transition-colors group"
+    >
+      {isOpen ? (
+        <ChevronDown className="w-4 h-4 text-slate-400" />
+      ) : (
+        <ChevronRight className="w-4 h-4 text-slate-400" />
+      )}
+      <Icon className={`w-3.5 h-3.5 ${colorClass}`} />
+      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        {title}
+      </span>
+      {count !== undefined && count > 0 && (
+        <span className="text-xs text-slate-400 ml-1">({count})</span>
+      )}
+    </button>
+  );
+}
+
 export default function ClassSummaryCard({
   classSummary,
   isExpanded,
   onToggle,
 }: ClassSummaryCardProps) {
+  // 섹션별 토글 상태 (기본값: 접힘)
+  const [showProgress, setShowProgress] = useState(false);
+  const [showCommonWrong, setShowCommonWrong] = useState(false);
+  const [showWeakness, setShowWeakness] = useState(false);
+
   return (
     <Card className="overflow-hidden border-0 shadow-lg">
       {/* 반 헤더 (클릭 가능) */}
@@ -106,37 +150,75 @@ export default function ClassSummaryCard({
 
       {/* 펼쳐진 내용 */}
       {isExpanded && (
-        <div className="p-5">
-          {/* 학생별 현황 */}
-          <div className="mb-5">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5" />
-              학생별 현황
-            </h3>
-            <div className="space-y-2">
-              {classSummary.students.map((student) => (
-                <StudentProgressRow
-                  key={student.mathflatStudentId}
-                  student={student}
-                  showWeakConcepts={true}
-                />
-              ))}
-            </div>
+        <div className="p-5 space-y-3">
+          {/* 학생별 진행률 섹션 */}
+          <div>
+            <SectionToggle
+              isOpen={showProgress}
+              onToggle={() => setShowProgress(!showProgress)}
+              icon={Target}
+              title="학생별 진행률"
+              count={classSummary.students.length}
+              colorClass="text-blue-500"
+            />
+            {showProgress && (
+              <div className="mt-2 space-y-2 pl-6">
+                {classSummary.students.map((student) => (
+                  <StudentProgressRow
+                    key={student.mathflatStudentId}
+                    student={student}
+                    showWeakConcepts={true}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 공통 오답 문제 */}
-          <CommonWrongTable
-            problems={classSummary.commonWrongProblems}
-            students={classSummary.students}
-            totalStudents={classSummary.totalStudents}
-            classId={classSummary.classId}
-          />
+          {/* 공통 오답 섹션 */}
+          {classSummary.commonWrongProblems.length > 0 && (
+            <div>
+              <SectionToggle
+                isOpen={showCommonWrong}
+                onToggle={() => setShowCommonWrong(!showCommonWrong)}
+                icon={AlertTriangle}
+                title="공통 오답"
+                count={classSummary.commonWrongProblems.length}
+                colorClass="text-amber-500"
+              />
+              {showCommonWrong && (
+                <div className="mt-2 pl-6">
+                  <CommonWrongTable
+                    problems={classSummary.commonWrongProblems}
+                    students={classSummary.students}
+                    totalStudents={classSummary.totalStudents}
+                    classId={classSummary.classId}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* 개념별 약점 */}
-          <ConceptWeaknessCard
-            weaknesses={classSummary.conceptWeaknesses}
-            totalStudents={classSummary.totalStudents}
-          />
+          {/* 취약 유형 섹션 */}
+          {classSummary.conceptWeaknesses.length > 0 && (
+            <div>
+              <SectionToggle
+                isOpen={showWeakness}
+                onToggle={() => setShowWeakness(!showWeakness)}
+                icon={Brain}
+                title="취약 유형"
+                count={classSummary.conceptWeaknesses.length}
+                colorClass="text-red-500"
+              />
+              {showWeakness && (
+                <div className="mt-2 pl-6">
+                  <ConceptWeaknessCard
+                    weaknesses={classSummary.conceptWeaknesses}
+                    totalStudents={classSummary.totalStudents}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Card>

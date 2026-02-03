@@ -456,9 +456,8 @@ export default function HomeworkAnalysisPage() {
   }, [homeworks, dailyWorks, problemResults, classes]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <LearningTabs />
+    <div className="space-y-6">
+      <LearningTabs />
 
         {/* 날짜 헤더 */}
         <HomeworkAnalysisHeader
@@ -508,7 +507,6 @@ export default function HomeworkAnalysisPage() {
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }
