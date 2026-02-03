@@ -279,3 +279,88 @@ export interface TargetClassInfo {
   mathflatClassId: string;
   dayOfWeek: string;
 }
+
+// ============================================
+// 일일 풀이 수집 타입 (n8n 대체)
+// ============================================
+
+// MathFlat 일일 풀이 API 응답 (student-history/work)
+export interface MathFlatWorkItem {
+  bookType: 'WORKBOOK' | 'WORKSHEET';
+  bookId: number;
+  type: 'CHALLENGE' | 'SUPPLEMENTARY_WRONG_CHALLENGE' | 'CUSTOM';
+  title: string;
+  subtitle?: string;
+  chapter?: string;
+  elements?: number[];
+  studentNumber?: number;
+  autoScorable?: boolean;
+  selfLearnings?: MathFlatWorkItem[];  // 오답 챌린지 재풀이
+  components: Array<{
+    status?: string;  // COMPLETE, PROGRESS 등
+    updateDatetime: string;  // "2026-02-01T14:38:46"
+    assignedCount: number;
+    correctCount: number;
+    wrongCount: number;
+    bookType: 'WORKBOOK' | 'WORKSHEET';
+    studentBookId: number;
+    studentName: string;
+    // WORKBOOK 전용
+    studentWorkbookId?: number;
+    page?: string;
+    progressIdList?: number[];
+  }>;
+}
+
+// MathFlat 학생 정보 (students API)
+export interface MathFlatStudent {
+  id: string;  // "I123456" 형식
+  name: string;
+  schoolName?: string;
+  grade?: number;
+  status?: 'ACTIVE' | 'INACTIVE';
+}
+
+// DB 저장용 타입 (mathflat_daily_work)
+export interface DBMathflatDailyWork {
+  id?: string;
+  mathflat_student_id: string;
+  student_name: string;
+  work_date: string;  // YYYY-MM-DD
+  work_type: 'WORKBOOK' | 'WORKSHEET';
+  category: 'CHALLENGE' | 'CHALLENGE_WRONG' | 'CUSTOM';
+  book_id?: string;
+  student_book_id?: string;
+  student_workbook_id?: string;
+  progress_id_list?: number[];
+  title?: string;
+  subtitle?: string;
+  chapter?: string;
+  page?: string;
+  assigned_count: number;
+  correct_count: number;
+  wrong_count: number;
+  correct_rate: number;
+  is_homework?: boolean;
+  homework_id?: string;
+  update_datetime?: string;
+}
+
+// 일일 풀이 수집 옵션
+export interface DailyWorkCollectionOptions {
+  targetDate: Date;  // KST 기준
+  studentIds?: string[];  // 특정 학생만 수집 (테스트용)
+}
+
+// 일일 풀이 수집 결과
+export interface DailyWorkCollectionResult {
+  success: boolean;
+  targetDate: string;
+  totalStudents: number;
+  totalWorkCount: number;
+  matchedHomeworkCount: number;
+  errors: string[];
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+}

@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   // 2. 요청 파싱
-  let body: { collectionType?: string; classIds?: string[] };
+  let body: { collectionType?: string; classIds?: string[]; targetDate?: string };
   try {
     body = await request.json();
   } catch {
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { collectionType, classIds } = body;
+  const { collectionType, classIds, targetDate } = body;
 
   // 3. collectionType 검증
   if (!collectionType || !['first', 'second', 'third'].includes(collectionType)) {
@@ -66,7 +66,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  console.log(`[CronJob] MathFlat 숙제 수집 시작 - ${collectionType}차 수집`);
+  // targetDate 파싱 (기본값: 오늘 KST)
+  let parsedDate: Date;
+  if (targetDate) {
+    parsedDate = new Date(targetDate + 'T00:00:00+09:00');
+  } else {
+    parsedDate = new Date();
+  }
+
+  console.log(`[CronJob] MathFlat 숙제 수집 시작 - ${collectionType}차 수집, 날짜: ${targetDate || '오늘'}`);
   if (classIds && classIds.length > 0) {
     console.log(`[CronJob] 대상 반 제한: ${classIds.join(', ')}`);
   }
@@ -75,7 +83,7 @@ export async function POST(request: NextRequest) {
   try {
     const options: HomeworkCollectionOptions = {
       collectionType: collectionType as 'first' | 'second' | 'third',
-      targetDate: new Date(),
+      targetDate: parsedDate,
       classIds,
     };
 

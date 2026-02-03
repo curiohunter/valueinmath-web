@@ -13,6 +13,8 @@ import type {
   MathFlatHomeworkItem,
   MathFlatWorkbookProblem,
   MathFlatWorksheetProblem,
+  MathFlatWorkItem,
+  MathFlatStudent,
 } from './types';
 
 const MATHFLAT_BASE_URL = 'https://api.mathflat.com';
@@ -421,6 +423,99 @@ export class MathFlatApiClient {
     }
 
     results.students = Array.from(studentMap.values());
+    return results;
+  }
+
+  /**
+   * 전체 학생 목록 조회 (ACTIVE만)
+   * GET /students?page=0&size=1000000
+   */
+  async getAllActiveStudents(): Promise<MathFlatStudent[]> {
+    const response = await this.authenticatedFetch<{
+      data: { content: MathFlatStudent[] };
+    }>(`${MATHFLAT_BASE_URL}/students?page=0&size=1000000`);
+
+    const students = (response.data?.content || []).filter(
+      s => s.status === 'ACTIVE'
+    );
+    console.log(`[MathFlatAPI] ACTIVE 학생 ${students.length}명 조회됨`);
+    return students;
+  }
+
+  /**
+   * 학생별 일일 풀이 조회
+   * GET /student-history/work/student/{studentId}?startDate=xxx&endDate=xxx
+   */
+  async getStudentDailyWork(
+    studentId: string,
+    date: string  // YYYY-MM-DD
+  ): Promise<MathFlatWorkItem[]> {
+    const params = new URLSearchParams({ startDate: date, endDate: date });
+    const url = `${MATHFLAT_BASE_URL}/student-history/work/student/${studentId}?${params}`;
+
+    const response = await this.authenticatedFetch<{
+      data: MathFlatWorkItem[];
+    }>(url);
+
+    return response.data || [];
+  }
+
+  /**
+   * 전체 학생 일일 풀이 수집 (n8n 대체)
+   */
+  async collectAllDailyWork(
+    targetDate: string,
+    studentIds?: string[]  // 특정 학생만 수집 (테스트용)
+  ): Promise<{
+    works: Array<{
+      studentId: string;
+      studentName: string;
+      items: MathFlatWorkItem[];
+    }>;
+    errors: string[];
+  }> {
+    const results: {
+      works: Array<{
+        studentId: string;
+        studentName: string;
+        items: MathFlatWorkItem[];
+      }>;
+      errors: string[];
+    } = { works: [], errors: [] };
+
+    // 1. ACTIVE 학생 목록 조회
+    let students: MathFlatStudent[];
+    try {
+      students = await this.getAllActiveStudents();
+    } catch (error) {
+      results.errors.push(`학생 목록 조회 실패: ${error}`);
+      return results;
+    }
+
+    // 특정 학생만 필터링 (테스트용)
+    if (studentIds && studentIds.length > 0) {
+      students = students.filter(s => studentIds.includes(s.id));
+    }
+
+    // 2. 학생별 풀이 조회
+    for (const student of students) {
+      try {
+        await delay(DELAY_BETWEEN_STUDENTS);
+        const items = await this.getStudentDailyWork(student.id, targetDate);
+
+        if (items.length > 0) {
+          results.works.push({
+            studentId: student.id,
+            studentName: student.name,
+            items,
+          });
+        }
+      } catch (error) {
+        results.errors.push(`학생(${student.name}) 풀이 조회 실패: ${error}`);
+      }
+    }
+
+    console.log(`[MathFlatAPI] ${targetDate} 풀이: ${results.works.length}명, ${results.works.reduce((sum, w) => sum + w.items.length, 0)}건`);
     return results;
   }
 }
