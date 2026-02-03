@@ -19,7 +19,7 @@ export function useStudentsByStatus(status?: string) {
     try {
       const supabase = createClient()
       let query = supabase
-        .from('students')
+        .from('student_with_school_info')
         .select('*')
         .eq('is_active', true)
         .order('name', { ascending: true })
@@ -35,7 +35,7 @@ export function useStudentsByStatus(status?: string) {
         throw fetchError
       }
       
-      // 타입 변환 - database 타입을 Student 타입으로 매핑
+      // 타입 변환 - database 타입을 Student 타입으로 매핑 (view 필드 포함)
       const mappedStudents: Student[] = (data || []).map(row => ({
         id: row.id,
         name: row.name,
@@ -58,7 +58,12 @@ export function useStudentsByStatus(status?: string) {
         updated_at: row.updated_at || '',
         is_active: row.is_active,
         left_at: row.left_at,
-        left_reason: row.left_reason
+        left_reason: row.left_reason,
+        // Optional fields from view
+        current_school_id: (row as any).current_school_id,
+        school_short_name: (row as any).school_short_name,
+        school_province: (row as any).school_province,
+        school_district: (row as any).school_district,
       }))
       
       setStudents(mappedStudents)

@@ -42,6 +42,11 @@ export interface Student {
   is_active: boolean
   left_at: string | null
   left_reason: string | null
+  // Optional: enriched from student_schools JOIN (student_with_school_info view)
+  current_school_id?: string | null
+  school_short_name?: string | null
+  school_province?: string | null
+  school_district?: string | null
 }
 
 export interface StudentFilters {

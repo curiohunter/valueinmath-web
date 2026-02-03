@@ -5,8 +5,19 @@ import { requireAuthForAPI } from "@/lib/auth/get-user"
 import type { Database } from "@/types/database"
 import type { Student, StudentFilters } from "@/types/student"
 
+type StudentRow = Database["public"]["Tables"]["students"]["Row"]
+
+// View row 타입 (student_with_school_info)
+interface StudentViewRow extends StudentRow {
+  current_school_id?: string | null
+  school_short_name?: string | null
+  school_province?: string | null
+  school_district?: string | null
+}
+
 // 학생 데이터 변환 함수 (DB 타입 -> 앱 타입)
-function mapStudentRowToStudent(row: Database["public"]["Tables"]["students"]["Row"]): Student {
+function mapStudentRowToStudent(row: StudentRow | StudentViewRow): Student {
+  const viewRow = row as StudentViewRow
   return {
     id: row.id,
     name: row.name,
@@ -30,6 +41,11 @@ function mapStudentRowToStudent(row: Database["public"]["Tables"]["students"]["R
     is_active: row.is_active,
     left_at: row.left_at,
     left_reason: row.left_reason,
+    // Optional fields from view
+    current_school_id: viewRow.current_school_id,
+    school_short_name: viewRow.school_short_name,
+    school_province: viewRow.school_province,
+    school_district: viewRow.school_district,
   }
 }
 
@@ -62,7 +78,7 @@ export async function GET(request: NextRequest) {
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
-    let query = adminClient.from("students").select("*", { count: "exact" })
+    let query = adminClient.from("student_with_school_info").select("*", { count: "exact" })
 
     // 기본적으로 활성 학생만 조회 (is_active = true)
     query = query.eq("is_active", true)

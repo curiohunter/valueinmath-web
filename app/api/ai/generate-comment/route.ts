@@ -98,9 +98,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 7. 학생 정보 조회
+    // 7. 학생 정보 조회 (student_with_school_info view 사용)
     const { data: student, error: studentError } = await supabase
-      .from('students')
+      .from('student_with_school_info')
       .select('id, name, grade, school')
       .eq('id', student_id)
       .single()

@@ -42,9 +42,9 @@ export async function GET() {
       studyLogsResult,
       mathflatResult
     ] = await Promise.all([
-      // 재원 학생 조회
+      // 재원 학생 조회 (student_with_school_info view 사용)
       supabase
-        .from('students')
+        .from('student_with_school_info')
         .select(`
           id,
           name,
