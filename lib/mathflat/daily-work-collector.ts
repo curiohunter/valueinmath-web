@@ -266,7 +266,7 @@ async function collectProblemDetails(
     // 해당 날짜의 미처리 daily_work 조회
     const { data: dailyWorks, error: dwError } = await supabase
       .from('mathflat_daily_work')
-      .select('id, mathflat_student_id, student_name, work_type, student_book_id, student_workbook_id, progress_id_list, homework_id, wrong_count')
+      .select('id, mathflat_student_id, student_name, work_type, student_book_id, student_workbook_id, progress_id_list, wrong_count')
       .eq('work_date', targetDate)
       .gt('wrong_count', 0)
       .order('wrong_count', { ascending: true });
@@ -369,8 +369,7 @@ async function collectProblemDetails(
           const workbookProblem = problem as MathFlatWorkbookProblem;
           batchResults.push({
             daily_work_id: dw.id,
-            homework_id: dw.homework_id || undefined,
-            progress_id: isWorkbook ? workbookProblem.studentWorkbookProgressId : undefined,  // homework 매칭용
+            progress_id: isWorkbook ? workbookProblem.studentWorkbookProgressId : undefined,
             problem_id: String(problem.problemId),
             workbook_problem_id: isWorkbook ? String(workbookProblem.workbookProblemId) : undefined,
             worksheet_problem_id: !isWorkbook ? String((problem as MathFlatWorksheetProblem).worksheetProblemId) : undefined,

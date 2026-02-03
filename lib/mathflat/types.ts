@@ -250,8 +250,7 @@ export interface DBMathflatHomework {
 // DB 저장용 타입 (mathflat_problem_results)
 export interface DBMathflatProblemResult {
   id?: string;
-  daily_work_id?: string;    // FK to mathflat_daily_work (모든 풀이 연결)
-  homework_id?: string;      // FK to mathflat_homework (숙제인 경우만)
+  daily_work_id?: string;    // FK to mathflat_daily_work
   progress_id?: number;      // studentWorkbookProgressId (homework 매칭용)
   problem_id: string;
   workbook_problem_id?: string;

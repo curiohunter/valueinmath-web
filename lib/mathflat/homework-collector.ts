@@ -1,13 +1,11 @@
 /**
- * MathFlat 숙제 수집 로직
+ * MathFlat 숙제 수집 로직 (메타데이터만, 문제 상세는 daily-work-collector에서)
  *
  * 1차 수집 (밤 23:50):
  *   - 오늘 수업 있는 반의 숙제 목록 수집
- *   - 문제 상세 없이 목록만 저장
  *
  * 2차 수집 (아침 10:00):
  *   - 오늘 수업 있는 반의 "이전 수업일" 숙제 업데이트
- *   - 문제 상세(채점 결과) 포함
  *   - 예: 월/금 반 → 금요일 아침에 월요일 숙제 업데이트
  */
 
@@ -19,9 +17,6 @@ import type {
   ProcessedClassResult,
   TargetClassInfo,
   DBMathflatHomework,
-  DBMathflatProblemResult,
-  MathFlatWorkbookProblem,
-  MathFlatWorksheetProblem,
 } from './types';
 
 // 요일 매핑 (한국어 -> 숫자)
@@ -265,115 +260,6 @@ async function upsertHomework(
 }
 
 /**
- * concept_id로 concept_name 조회 (캐시 사용)
- */
-const conceptNameCache = new Map<string, string>();
-
-async function getConceptNames(conceptIds: string[]): Promise<Map<string, string>> {
-  if (conceptIds.length === 0) return new Map();
-
-  const supabase = getSupabaseAdmin();
-
-  // 캐시에 없는 ID만 조회
-  const uncachedIds = conceptIds.filter(id => !conceptNameCache.has(id));
-
-  if (uncachedIds.length > 0) {
-    const { data } = await supabase
-      .from('mathflat_concepts')
-      .select('concept_id, concept_name')
-      .in('concept_id', uncachedIds.map(id => parseInt(id, 10)));
-
-    if (data) {
-      data.forEach((row: { concept_id: number; concept_name: string }) => {
-        conceptNameCache.set(String(row.concept_id), row.concept_name);
-      });
-    }
-  }
-
-  // 요청한 ID들의 이름 반환
-  const result = new Map<string, string>();
-  conceptIds.forEach(id => {
-    const name = conceptNameCache.get(id);
-    if (name) result.set(id, name);
-  });
-
-  return result;
-}
-
-/**
- * 문제 결과 upsert (bulk)
- */
-async function upsertProblemResults(
-  homeworkId: string,
-  problems: Array<MathFlatWorkbookProblem | MathFlatWorksheetProblem>,
-  bookType: 'WORKBOOK' | 'WORKSHEET'
-): Promise<number> {
-  if (problems.length === 0) return 0;
-
-  const supabase = getSupabaseAdmin();
-
-  // 기존 문제 삭제 (전체 교체 방식)
-  await supabase
-    .from('mathflat_problem_results')
-    .delete()
-    .eq('homework_id', homeworkId);
-
-  // concept_name이 없는 문제들의 concept_id 수집
-  const conceptIdsToLookup = problems
-    .filter(p => p.conceptId && !p.conceptName)
-    .map(p => String(p.conceptId));
-
-  // concept_id로 concept_name 조회
-  const conceptNameMap = await getConceptNames([...new Set(conceptIdsToLookup)]);
-
-  // 새로운 문제 결과 삽입
-  const problemRecords: DBMathflatProblemResult[] = problems.map((p) => {
-    const isWorkbook = bookType === 'WORKBOOK';
-    const workbookProblem = p as MathFlatWorkbookProblem;
-    const worksheetProblem = p as MathFlatWorksheetProblem;
-
-    // concept_name이 없으면 조회한 값 사용
-    const conceptName = p.conceptName ||
-      (p.conceptId ? conceptNameMap.get(String(p.conceptId)) : undefined);
-
-    return {
-      homework_id: homeworkId,
-      problem_id: String(p.problemId),
-      workbook_problem_id: isWorkbook ? String(workbookProblem.workbookProblemId) : undefined,
-      worksheet_problem_id: !isWorkbook ? String(worksheetProblem.worksheetProblemId) : undefined,
-      problem_title: p.problemTitle,
-      problem_number: p.problemNumber,
-      concept_id: p.conceptId ? String(p.conceptId) : undefined,
-      concept_name: conceptName,
-      topic_id: p.topicId ? String(p.topicId) : undefined,
-      sub_topic_id: p.subTopicId ? String(p.subTopicId) : undefined,
-      level: p.level,
-      type: p.type,
-      tag_top: p.tagTop,
-      correct_answer: p.correctAnswer,
-      user_answer: p.userAnswer,
-      result: p.result,
-      total_used: p.totalUsed,
-      correct_times: p.correctTimes,
-      wrong_times: p.wrongTimes,
-      answer_rate: p.answerRate,
-      problem_image_url: p.problemImageUrl,
-      solution_image_url: p.solutionImageUrl,
-    };
-  });
-
-  const { error } = await supabase
-    .from('mathflat_problem_results')
-    .insert(problemRecords);
-
-  if (error) {
-    throw new Error(`문제 결과 삽입 실패: ${error.message}`);
-  }
-
-  return problems.length;
-}
-
-/**
  * 1차 수집: 오늘 숙제 목록 수집
  */
 async function collectFirstPass(
@@ -499,18 +385,8 @@ async function collectSecondPass(
             score: hw.score,
           };
 
-          const { id: homeworkId } = await upsertHomework(dbHomework);
+          await upsertHomework(dbHomework);
           classResult.homeworkCount++;
-
-          // 문제 결과 저장
-          if (homeworkData.problems.length > 0) {
-            const problemCount = await upsertProblemResults(
-              homeworkId,
-              homeworkData.problems,
-              hw.bookType
-            );
-            classResult.problemCount += problemCount;
-          }
         }
       }
 
@@ -519,7 +395,7 @@ async function collectSecondPass(
       }
 
       console.log(
-        `[2차수집] ${classInfo.name} 완료 (${targetDateStr}): 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개, 문제 ${classResult.problemCount}개`
+        `[2차수집] ${classInfo.name} 완료 (${targetDateStr}): 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개`
       );
     } catch (error) {
       classResult.error = String(error);
@@ -598,18 +474,8 @@ async function collectThirdPass(
             score: hw.score,
           };
 
-          const { id: homeworkId } = await upsertHomework(dbHomework);
+          await upsertHomework(dbHomework);
           classResult.homeworkCount++;
-
-          // 문제 결과 저장
-          if (homeworkData.problems.length > 0) {
-            const problemCount = await upsertProblemResults(
-              homeworkId,
-              homeworkData.problems,
-              hw.bookType
-            );
-            classResult.problemCount += problemCount;
-          }
         }
       }
 
@@ -618,7 +484,7 @@ async function collectThirdPass(
       }
 
       console.log(
-        `[3차수집] ${classInfo.name} 완료 (${previousDate}): 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개, 문제 ${classResult.problemCount}개`
+        `[3차수집] ${classInfo.name} 완료 (${previousDate}): 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개`
       );
     } catch (error) {
       classResult.error = String(error);
