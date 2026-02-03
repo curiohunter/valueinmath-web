@@ -337,6 +337,12 @@ async function collectProblemDetails(
                 parseInt(dw.student_book_id, 10),
                 progressId
               );
+              // 각 문제에 호출 시 사용한 progressId 부여 (API 응답에 없을 수 있음)
+              workbookProblems.forEach(p => {
+                if (!p.studentWorkbookProgressId) {
+                  p.studentWorkbookProgressId = progressId;
+                }
+              });
               problems.push(...workbookProblems);
             } catch (e) {
               errors.push(`Workbook 문제 조회 실패 (${dw.id}): ${e}`);
