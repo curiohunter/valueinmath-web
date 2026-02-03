@@ -344,8 +344,6 @@ export interface DBMathflatDailyWork {
   correct_count: number;
   wrong_count: number;
   correct_rate: number;
-  is_homework?: boolean;
-  homework_id?: string;
   update_datetime?: string;
 }
 
