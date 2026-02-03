@@ -104,12 +104,12 @@ export async function POST(request: NextRequest) {
         targetDate: result.targetDate,
         totalStudents: result.totalStudents,
         totalWorkCount: result.totalWorkCount,
-        matchedHomeworkCount: result.matchedHomeworkCount,
         batchesProcessed: result.batchesProcessed || 0,
         wrongProblemsCollected: result.totalProblemCount || 0,
         remainingDailyWorks: result.remainingDailyWorks || 0,
         errorCount: result.errors.length,
         durationMs: result.durationMs,
+        // 숙제 매칭은 DB 트리거가 자동 처리
       },
       errors: result.errors.length > 0 ? result.errors : undefined,
     });

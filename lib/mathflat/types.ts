@@ -361,7 +361,6 @@ export interface DailyWorkCollectionResult {
   targetDate: string;
   totalStudents: number;
   totalWorkCount: number;
-  matchedHomeworkCount: number;
   totalProblemCount?: number;  // 수집된 오답 수
   remainingDailyWorks?: number;  // 남은 daily_work 건수
   batchesProcessed?: number;  // 처리된 배치 수
@@ -369,4 +368,5 @@ export interface DailyWorkCollectionResult {
   startedAt: string;
   completedAt: string;
   durationMs: number;
+  // 숙제 매칭은 DB 트리거(match_homework_trigger)가 자동 처리
 }

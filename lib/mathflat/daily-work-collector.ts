@@ -187,9 +187,7 @@ export async function collectDailyWork(
       }
     }
 
-    // 4. 숙제 매칭 (student_book_id로 매칭)
-    const matchedCount = await matchHomework(supabase, targetDate);
-    result.matchedHomeworkCount = matchedCount;
+    // 4. 숙제 매칭은 DB 트리거가 자동 처리 (match_homework_trigger)
 
     // 5. 오답 상세 수집 (시간 기반 동적 배치, 최대 4분)
     if (options.collectProblemDetails !== false) {
@@ -232,52 +230,7 @@ function workDate(datetime?: string): string | null {
   return datetime.split('T')[0];
 }
 
-/**
- * 숙제 매칭
- * mathflat_homework의 student_book_id와 매칭하여 is_homework, homework_id 업데이트
- */
-async function matchHomework(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  targetDate: string
-): Promise<number> {
-  // 해당 날짜의 숙제 목록 조회
-  const { data: homeworks, error: hwError } = await supabase
-    .from('mathflat_homework')
-    .select('id, student_book_id')
-    .eq('homework_date', targetDate)
-    .not('student_book_id', 'is', null);
-
-  if (hwError || !homeworks || homeworks.length === 0) {
-    console.log(`[DailyWorkCollector] ${targetDate} 숙제 없음 또는 조회 실패`);
-    return 0;
-  }
-
-  // student_book_id → homework_id 매핑
-  const homeworkMap = new Map<string, string>();
-  for (const hw of homeworks) {
-    if (hw.student_book_id) {
-      homeworkMap.set(hw.student_book_id, hw.id);
-    }
-  }
-
-  // 매칭되는 daily_work 업데이트
-  let matchedCount = 0;
-  for (const [studentBookId, homeworkId] of Array.from(homeworkMap.entries())) {
-    const { data, error } = await supabase
-      .from('mathflat_daily_work')
-      .update({ is_homework: true, homework_id: homeworkId })
-      .eq('student_book_id', studentBookId)
-      .eq('work_date', targetDate)
-      .select('id');
-
-    if (!error && data) {
-      matchedCount += data.length;
-    }
-  }
-
-  console.log(`[DailyWorkCollector] 숙제 매칭: ${matchedCount}건`);
-  return matchedCount;
-}
+// 숙제 매칭은 DB 트리거(match_homework_trigger)가 자동 처리
 
 /**
  * 오답 문제 상세 수집 (시간 기반 동적 배치 처리)

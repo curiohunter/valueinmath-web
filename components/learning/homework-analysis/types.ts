@@ -275,3 +275,131 @@ export function getDayOfWeek(dateStr: string): string {
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   return days[date.getDay()];
 }
+
+// ============================================
+// 학생별 분석 페이지 타입
+// ============================================
+
+// 개념 데이터 (mathflat_concepts)
+export interface ConceptData {
+  id: number;
+  concept_id: number;
+  concept_name: string;
+  curriculum_key: string | null;
+  big_chapter: string | null;
+  middle_chapter: string | null;
+  little_chapter: string | null;
+  priority: number | null;
+}
+
+// 단원 트리 노드
+export interface ChapterNode {
+  name: string;
+  level: "curriculum" | "big" | "middle" | "little" | "concept";
+  children?: ChapterNode[];
+  conceptCount?: number;
+  conceptId?: number; // 개념 ID (concept 레벨에서 사용)
+  path: string[]; // 상위 경로 (예: ["공통수학1", "다항식"])
+}
+
+// 단원 선택 상태
+export interface ChapterSelection {
+  curriculum: string | null;
+  bigChapters: string[];
+  middleChapters: string[];
+  littleChapters: string[];
+}
+
+// 기간 타입
+export type PeriodPreset = 7 | 14 | 30 | 60 | 90 | "all";
+
+export interface PeriodSelection {
+  type: "preset" | "custom";
+  preset: PeriodPreset;
+  customStart: string | null;
+  customEnd: string | null;
+}
+
+// 학생별 분석 상태
+export interface StudentAnalysisState {
+  // 범위 선택 (상위, 학생 전환 시에도 유지)
+  chapterSelection: ChapterSelection;
+  isRangeLocked: boolean;
+
+  // 대상 선택
+  selectedClassId: string | null;
+  selectedStudentId: string | null;
+
+  // 기간 선택
+  period: PeriodSelection;
+}
+
+// 초기 상태
+export const INITIAL_STUDENT_ANALYSIS_STATE: StudentAnalysisState = {
+  chapterSelection: {
+    curriculum: null,
+    bigChapters: [],
+    middleChapters: [],
+    littleChapters: [],
+  },
+  isRangeLocked: false,
+  selectedClassId: null,
+  selectedStudentId: null,
+  period: {
+    type: "preset",
+    preset: 30,
+    customStart: null,
+    customEnd: null,
+  },
+};
+
+// 기간 프리셋 설정
+export const PERIOD_PRESETS: { value: PeriodPreset; label: string }[] = [
+  { value: 7, label: "7일" },
+  { value: 14, label: "14일" },
+  { value: 30, label: "30일" },
+  { value: 60, label: "60일" },
+  { value: 90, label: "90일" },
+  { value: "all", label: "전체" },
+];
+
+// 과목 목록
+export const CURRICULUM_LIST = [
+  { key: "공통수학1", label: "공통수학1", color: "bg-blue-500" },
+  { key: "공통수학2", label: "공통수학2", color: "bg-emerald-500" },
+  { key: "대수", label: "대수", color: "bg-violet-500" },
+  { key: "미적분", label: "미적분", color: "bg-amber-500" },
+];
+
+// 기간 계산 유틸리티
+export function calculatePeriodDates(period: PeriodSelection): {
+  startDate: string;
+  endDate: string;
+} {
+  const today = new Date();
+  const endDate = today.toISOString().split("T")[0];
+
+  if (period.type === "custom" && period.customStart && period.customEnd) {
+    return {
+      startDate: period.customStart,
+      endDate: period.customEnd,
+    };
+  }
+
+  if (period.preset === "all") {
+    // 1년 전부터
+    const startDate = new Date(today);
+    startDate.setFullYear(startDate.getFullYear() - 1);
+    return {
+      startDate: startDate.toISOString().split("T")[0],
+      endDate,
+    };
+  }
+
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - period.preset);
+  return {
+    startDate: startDate.toISOString().split("T")[0],
+    endDate,
+  };
+}

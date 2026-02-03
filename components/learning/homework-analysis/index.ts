@@ -7,5 +7,11 @@ export { default as CommonWrongTable } from "./CommonWrongTable";
 export { default as ProblemImageModal } from "./ProblemImageModal";
 export { default as ConceptWeaknessCard } from "./ConceptWeaknessCard";
 
+// 탭 컴포넌트
+export { default as HomeworkTab } from "./HomeworkTab";
+
+// 학생별 분석 탭
+export * from "./student-analysis";
+
 // 타입 및 유틸리티
 export * from "./types";
