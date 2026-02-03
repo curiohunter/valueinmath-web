@@ -41,7 +41,7 @@ export interface DailyWorkData {
   book_id: string | null;
   student_book_id: string | null;
   student_workbook_id: string | null;
-  progress_id_list: string[] | null;
+  progress_id_list: number[] | null;
   title: string | null;
   subtitle: string | null;
   chapter: string | null;
@@ -50,8 +50,6 @@ export interface DailyWorkData {
   correct_count: number | null;
   wrong_count: number | null;
   correct_rate: number | null;
-  is_homework: boolean;
-  homework_id: string | null;
   update_datetime: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -69,16 +67,18 @@ export interface HomeworkData {
   book_id: string | null;
   student_book_id: string | null;
   student_homework_id: string | null;
+  progress_id_list: number[] | null;
   title: string | null;
   page: string | null;
   completed: boolean | null;
   score: number | null;
 }
 
-// 문제 결과 데이터
+// 문제 결과 데이터 (오답만 저장됨)
 export interface ProblemResult {
   id: string;
-  homework_id: string | null;
+  daily_work_id: string;
+  progress_id: number | null;
   problem_id: string;
   workbook_problem_id: string | null;
   worksheet_problem_id: string | null;
@@ -100,6 +100,15 @@ export interface ProblemResult {
   solution_image_url: string | null;
   problem_title: string | null;
   problem_number: string | null;
+}
+
+// daily_work ↔ homework 매핑 데이터
+export interface DailyWorkHomeworkMapping {
+  id: string;
+  daily_work_id: string;
+  homework_id: string;
+  matched_progress_ids: number[] | null;
+  matched_count: number;
 }
 
 // 학생 숙제 요약 (개별 숙제)

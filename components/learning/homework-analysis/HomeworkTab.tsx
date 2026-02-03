@@ -17,6 +17,7 @@ import {
   DailyWorkData,
   HomeworkData,
   ProblemResult,
+  DailyWorkHomeworkMapping,
   SelfStudyCategory,
   extractFirstPage,
   extractProblemNumber,
@@ -37,6 +38,7 @@ export default function HomeworkTab() {
   const [dailyWorks, setDailyWorks] = useState<DailyWorkData[]>([]);
   const [homeworks, setHomeworks] = useState<HomeworkData[]>([]);
   const [problemResults, setProblemResults] = useState<ProblemResult[]>([]);
+  const [dwHomeworkMappings, setDwHomeworkMappings] = useState<DailyWorkHomeworkMapping[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // 반별 접기/펼치기 상태
@@ -122,13 +124,14 @@ export default function HomeworkTab() {
     });
   }, [selectedDate, classSchedules, classes, selectedTeacherId]);
 
-  // 데이터 로드 (daily_work + homework + problem_results)
+  // 데이터 로드 (homework → mapping → daily_work → problem_results)
   useEffect(() => {
     async function loadData() {
       if (!selectedDate || todayClasses.length === 0) {
         setDailyWorks([]);
         setHomeworks([]);
         setProblemResults([]);
+        setDwHomeworkMappings([]);
         return;
       }
 
@@ -137,8 +140,8 @@ export default function HomeworkTab() {
       try {
         const classIds = todayClasses.map((c) => c.id);
 
-        // 1. 숙제 데이터 로드 (기존 방식 유지 - class_id 기반)
-        const { data: hwData, error: hwError } = await (supabase as any)
+        // 1. 숙제 데이터 로드
+        const { data: hwData, error: hwError } = await supabase
           .from("mathflat_homework")
           .select("*")
           .eq("homework_date", selectedDate)
@@ -150,9 +153,9 @@ export default function HomeworkTab() {
         // 2. 숙제가 있는 학생들의 mathflat_student_id 추출
         const studentIds = [...new Set((hwData || []).map((h: HomeworkData) => h.mathflat_student_id))];
 
-        // 3. Daily work 데이터 로드 (해당 학생들의 자율학습 포함)
+        // 3. Daily work 데이터 로드 (해당 학생들의 당일 활동)
         if (studentIds.length > 0) {
-          const { data: dwData, error: dwError } = await (supabase as any)
+          const { data: dwData, error: dwError } = await supabase
             .from("mathflat_daily_work")
             .select("*")
             .eq("work_date", selectedDate)
@@ -160,21 +163,39 @@ export default function HomeworkTab() {
 
           if (dwError) throw dwError;
           setDailyWorks((dwData || []) as DailyWorkData[]);
+
+          // 4. daily_work ↔ homework 매핑 로드
+          const dailyWorkIds = (dwData || []).map((dw: DailyWorkData) => dw.id);
+          const homeworkIds = (hwData || []).map((h: HomeworkData) => h.id);
+
+          if (dailyWorkIds.length > 0 && homeworkIds.length > 0) {
+            const { data: mappingData, error: mappingError } = await supabase
+              .from("mathflat_daily_work_homework")
+              .select("*")
+              .in("daily_work_id", dailyWorkIds)
+              .in("homework_id", homeworkIds);
+
+            if (mappingError) throw mappingError;
+            setDwHomeworkMappings((mappingData || []) as DailyWorkHomeworkMapping[]);
+          } else {
+            setDwHomeworkMappings([]);
+          }
+
+          // 5. problem_results 로드 (daily_work_id 기반)
+          if (dailyWorkIds.length > 0) {
+            const { data: prData, error: prError } = await supabase
+              .from("mathflat_problem_results")
+              .select("*")
+              .in("daily_work_id", dailyWorkIds);
+
+            if (prError) throw prError;
+            setProblemResults((prData || []) as ProblemResult[]);
+          } else {
+            setProblemResults([]);
+          }
         } else {
           setDailyWorks([]);
-        }
-
-        // 4. 문제 결과 로드 (숙제 ID 기반)
-        const homeworkIds = (hwData || []).map((h: HomeworkData) => h.id);
-        if (homeworkIds.length > 0) {
-          const { data: prData, error: prError } = await (supabase as any)
-            .from("mathflat_problem_results")
-            .select("*")
-            .in("homework_id", homeworkIds);
-
-          if (prError) throw prError;
-          setProblemResults((prData || []) as ProblemResult[]);
-        } else {
+          setDwHomeworkMappings([]);
           setProblemResults([]);
         }
 
@@ -218,18 +239,19 @@ export default function HomeworkTab() {
         );
         const studentName = studentHomeworks[0]?.student_name || "알 수 없음";
 
-        // 숙제별 상세 계산
+        // 숙제별 상세 계산 (매핑을 통해 daily_work 통계 활용)
         const homeworkDetails = studentHomeworks.map((hw) => {
-          const hwProblems = problemResults.filter((p) => p.homework_id === hw.id);
-          const correct = hwProblems.filter((p) => p.result === "CORRECT").length;
-          const wrong = hwProblems.filter(
-            (p) => p.result === "WRONG" || p.result === "UNKNOWN"
-          ).length;
-          const notSolved = hwProblems.filter(
-            (p) => p.result === "NONE" || !p.result
-          ).length;
-          const total = hwProblems.length;
+          // 숙제에 매핑된 daily_work 찾기
+          const mappings = dwHomeworkMappings.filter(m => m.homework_id === hw.id);
+          const mappedDwIds = mappings.map(m => m.daily_work_id);
+          const mappedDailyWorks = dailyWorks.filter(dw => mappedDwIds.includes(dw.id));
+
+          // daily_work 통계 합산
+          const total = mappedDailyWorks.reduce((sum, dw) => sum + (dw.assigned_count || 0), 0);
+          const correct = mappedDailyWorks.reduce((sum, dw) => sum + (dw.correct_count || 0), 0);
+          const wrong = mappedDailyWorks.reduce((sum, dw) => sum + (dw.wrong_count || 0), 0);
           const solved = correct + wrong;
+          const notSolved = total - solved;
 
           return {
             title: hw.title || "",
@@ -274,12 +296,15 @@ export default function HomeworkTab() {
           }
         });
 
-        // 취약 개념
-        const studentHomeworkIds = studentHomeworks.map((h) => h.id);
+        // 취약 개념 (매핑을 통해 해당 학생의 숙제 관련 오답 찾기)
+        const studentHwIds = studentHomeworks.map((h) => h.id);
+        const studentMappedDwIds = dwHomeworkMappings
+          .filter(m => studentHwIds.includes(m.homework_id))
+          .map(m => m.daily_work_id);
         const wrongConcepts = problemResults
           .filter(
             (p) =>
-              studentHomeworkIds.includes(p.homework_id || "") &&
+              studentMappedDwIds.includes(p.daily_work_id) &&
               (p.result === "WRONG" || p.result === "UNKNOWN") &&
               p.concept_name
           )
@@ -310,16 +335,22 @@ export default function HomeworkTab() {
       // 완료율 기준 정렬 (낮은 순)
       students.sort((a, b) => a.totalCompletionRate - b.totalCompletionRate);
 
-      // 공통 오답 문제 분석
-      const homeworkIds = classHomeworks.map((h) => h.id);
+      // 공통 오답 문제 분석 (매핑을 통해 연결)
+      const classHwIds = classHomeworks.map((h) => h.id);
+      const classMappings = dwHomeworkMappings.filter(m => classHwIds.includes(m.homework_id));
+      const classMappedDwIds = classMappings.map(m => m.daily_work_id);
       const wrongProblemMap = new Map<string, CommonWrongProblem>();
 
       problemResults
-        .filter((p) => homeworkIds.includes(p.homework_id || "") && (p.result === "WRONG" || p.result === "UNKNOWN"))
+        .filter((p) => classMappedDwIds.includes(p.daily_work_id) && (p.result === "WRONG" || p.result === "UNKNOWN"))
         .forEach((p) => {
           const key = p.problem_id;
-          const hw = classHomeworks.find((h) => h.id === p.homework_id);
-          const studentName = hw?.student_name || "알 수 없음";
+          // daily_work에서 학생 이름 찾기
+          const dw = dailyWorks.find(d => d.id === p.daily_work_id);
+          const studentName = dw?.student_name || "알 수 없음";
+          // 매핑을 통해 숙제 정보 찾기
+          const mapping = classMappings.find(m => m.daily_work_id === p.daily_work_id);
+          const hw = mapping ? classHomeworks.find(h => h.id === mapping.homework_id) : null;
 
           if (wrongProblemMap.has(key)) {
             const existing = wrongProblemMap.get(key)!;
@@ -330,8 +361,8 @@ export default function HomeworkTab() {
           } else {
             wrongProblemMap.set(key, {
               problemId: p.problem_id,
-              bookTitle: hw?.title || null,
-              page: hw?.page || null,
+              bookTitle: hw?.title || dw?.title || null,
+              page: hw?.page || dw?.page || null,
               problemTitle: p.problem_title,
               problemNumber: p.problem_number,
               level: p.level,
@@ -354,19 +385,21 @@ export default function HomeworkTab() {
           return extractProblemNumber(a.problemNumber) - extractProblemNumber(b.problemNumber);
         });
 
-      // 개념별 약점 분석
+      // 개념별 약점 분석 (매핑을 통해 연결)
       const conceptWeaknessMap = new Map<string, ConceptWeakness>();
 
       problemResults
         .filter(
           (p) =>
-            homeworkIds.includes(p.homework_id || "") &&
+            classMappedDwIds.includes(p.daily_work_id) &&
             (p.result === "WRONG" || p.result === "UNKNOWN") &&
             p.concept_name
         )
         .forEach((p) => {
-          const hw = classHomeworks.find((h) => h.id === p.homework_id);
-          const studentName = hw?.student_name || "알 수 없음";
+          const dw = dailyWorks.find(d => d.id === p.daily_work_id);
+          const studentName = dw?.student_name || "알 수 없음";
+          const mapping = classMappings.find(m => m.daily_work_id === p.daily_work_id);
+          const hw = mapping ? classHomeworks.find(h => h.id === mapping.homework_id) : null;
           const key = p.concept_name!;
 
           if (conceptWeaknessMap.has(key)) {
@@ -376,7 +409,7 @@ export default function HomeworkTab() {
               existing.wrongCount++;
             }
             existing.relatedProblems.push({
-              page: hw?.page || null,
+              page: hw?.page || dw?.page || null,
               problemNumber: p.problem_number,
             });
           } else {
@@ -386,7 +419,7 @@ export default function HomeworkTab() {
               wrongStudents: [studentName],
               relatedProblems: [
                 {
-                  page: hw?.page || null,
+                  page: hw?.page || dw?.page || null,
                   problemNumber: p.problem_number,
                 },
               ],
@@ -440,7 +473,7 @@ export default function HomeworkTab() {
     summaries.sort((a, b) => a.className.localeCompare(b.className, "ko"));
 
     return summaries;
-  }, [homeworks, dailyWorks, problemResults, classes]);
+  }, [homeworks, dailyWorks, problemResults, dwHomeworkMappings, classes]);
 
   return (
     <div className="space-y-4">
