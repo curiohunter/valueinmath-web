@@ -402,7 +402,8 @@ async function collectProblemDetails(
         }
 
         // 오답만 필터링
-        const wrongProblems = problems.filter(p => p.result === 'WRONG');
+        // WRONG과 UNKNOWN 모두 오답으로 처리 (UNKNOWN = 미채점/오답 처리됨)
+        const wrongProblems = problems.filter(p => p.result === 'WRONG' || p.result === 'UNKNOWN');
 
         for (const problem of wrongProblems) {
           const isWorkbook = 'workbookProblemId' in problem;
