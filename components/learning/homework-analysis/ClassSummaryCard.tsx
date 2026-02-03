@@ -9,7 +9,6 @@ import {
   ChevronRight,
   AlertTriangle,
   Target,
-  Sparkles,
   Brain,
 } from "lucide-react";
 import { ClassSummary } from "./types";
@@ -91,17 +90,6 @@ export default function ClassSummaryCard({
           <div className="flex items-center gap-2.5 text-slate-300 text-sm">
             <Users className="w-4 h-4" />
             <span>{classSummary.totalStudents}명</span>
-
-            {/* 자율학습 통계 */}
-            {classSummary.totalSelfStudyProblems > 0 && (
-              <>
-                <span className="text-slate-500">|</span>
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <span className="text-purple-300">
-                  자율 {classSummary.totalSelfStudyProblems}문제
-                </span>
-              </>
-            )}
 
             {/* 공통오답 */}
             {classSummary.commonWrongProblems.length > 0 && (
