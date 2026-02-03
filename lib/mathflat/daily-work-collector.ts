@@ -191,12 +191,19 @@ export async function collectDailyWork(
     const matchedCount = await matchHomework(supabase, targetDate);
     result.matchedHomeworkCount = matchedCount;
 
-    // 5. 문제별 상세 수집 (optional - 시간이 오래 걸릴 수 있음)
-    // 별도 크론잡으로 분리하거나, 특정 조건에서만 실행하도록 설정 가능
+    // 5. 오답 상세 수집 (배치 처리, 기본 100개)
     if (options.collectProblemDetails !== false) {
-      console.log(`[DailyWorkCollector] 문제별 상세 수집 시작...`);
-      const problemCount = await collectProblemDetails(supabase, apiClient, targetDate, errors);
-      console.log(`[DailyWorkCollector] 문제별 상세 수집 완료: ${problemCount}개`);
+      console.log(`[DailyWorkCollector] 오답 상세 수집 시작 (최대 ${options.maxWrongProblems || 100}개)...`);
+      const { totalWrongCollected, remainingDailyWorks } = await collectProblemDetails(
+        supabase,
+        apiClient,
+        targetDate,
+        errors,
+        options.maxWrongProblems || 100
+      );
+      result.totalProblemCount = totalWrongCollected;
+      result.remainingDailyWorks = remainingDailyWorks;
+      console.log(`[DailyWorkCollector] 오답 수집 완료: ${totalWrongCollected}개, 남은 작업: ${remainingDailyWorks}건`);
     }
 
     result.success = errors.length === 0;
@@ -253,7 +260,7 @@ async function matchHomework(
 
   // 매칭되는 daily_work 업데이트
   let matchedCount = 0;
-  for (const [studentBookId, homeworkId] of homeworkMap) {
+  for (const [studentBookId, homeworkId] of Array.from(homeworkMap.entries())) {
     const { data, error } = await supabase
       .from('mathflat_daily_work')
       .update({ is_homework: true, homework_id: homeworkId })
@@ -271,25 +278,29 @@ async function matchHomework(
 }
 
 /**
- * 문제별 상세 수집
- * daily_work 레코드에 대해 문제별 상세를 수집하여 mathflat_problem_results에 저장
+ * 오답 문제 상세 수집 (배치 처리)
+ * daily_work 레코드에 대해 오답 문제만 수집하여 mathflat_problem_results에 저장
+ *
+ * @param maxWrongProblems 최대 수집할 오답 문제 수 (기본: 100)
  */
 async function collectProblemDetails(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   apiClient: ReturnType<typeof getMathFlatApiClient>,
   targetDate: string,
-  errors: string[]
-): Promise<number> {
-  // 해당 날짜의 daily_work 레코드 조회 (문제 상세가 아직 없는 것만)
+  errors: string[],
+  maxWrongProblems: number = 100
+): Promise<{ totalWrongCollected: number; remainingDailyWorks: number }> {
+  // 해당 날짜의 daily_work 레코드 조회 (오답이 있는 것만)
   const { data: dailyWorks, error: dwError } = await supabase
     .from('mathflat_daily_work')
-    .select('id, mathflat_student_id, work_type, student_book_id, student_workbook_id, progress_id_list, homework_id')
+    .select('id, mathflat_student_id, student_name, work_type, student_book_id, student_workbook_id, progress_id_list, homework_id, wrong_count')
     .eq('work_date', targetDate)
-    .gt('assigned_count', 0);  // 푼 문제가 있는 것만
+    .gt('wrong_count', 0)  // 오답이 있는 것만
+    .order('wrong_count', { ascending: true });  // 적은 것부터 처리
 
   if (dwError || !dailyWorks || dailyWorks.length === 0) {
-    console.log(`[DailyWorkCollector] ${targetDate} 문제 상세 수집 대상 없음`);
-    return 0;
+    console.log(`[DailyWorkCollector] ${targetDate} 오답 수집 대상 없음`);
+    return { totalWrongCollected: 0, remainingDailyWorks: 0 };
   }
 
   // 이미 수집된 daily_work_id 조회 (중복 방지)
@@ -303,16 +314,29 @@ async function collectProblemDetails(
   const newDailyWorks = dailyWorks.filter(dw => !existingDailyWorkIds.has(dw.id));
 
   if (newDailyWorks.length === 0) {
-    console.log(`[DailyWorkCollector] 모든 문제 상세가 이미 수집됨`);
-    return 0;
+    console.log(`[DailyWorkCollector] 모든 오답 상세가 이미 수집됨`);
+    return { totalWrongCollected: 0, remainingDailyWorks: 0 };
   }
 
-  console.log(`[DailyWorkCollector] 문제 상세 수집 대상: ${newDailyWorks.length}건`);
-
-  let totalProblemCount = 0;
-  const allProblemResults: DBMathflatProblemResult[] = [];
+  // 배치 크기 계산: 예상 오답 수가 maxWrongProblems를 넘지 않도록
+  let estimatedWrongCount = 0;
+  let batchDailyWorks: typeof newDailyWorks = [];
 
   for (const dw of newDailyWorks) {
+    if (estimatedWrongCount + (dw.wrong_count || 0) > maxWrongProblems && batchDailyWorks.length > 0) {
+      break;  // 이미 충분히 모았으면 중단
+    }
+    batchDailyWorks.push(dw);
+    estimatedWrongCount += dw.wrong_count || 0;
+  }
+
+  const remainingDailyWorks = newDailyWorks.length - batchDailyWorks.length;
+  console.log(`[DailyWorkCollector] 오답 수집 대상: ${batchDailyWorks.length}건 (예상 오답 ${estimatedWrongCount}개), 남은 건: ${remainingDailyWorks}`);
+
+  let totalWrongCollected = 0;
+  const allWrongResults: DBMathflatProblemResult[] = [];
+
+  for (const dw of batchDailyWorks) {
     try {
       let problems: (MathFlatWorkbookProblem | MathFlatWorksheetProblem)[] = [];
 
@@ -345,10 +369,12 @@ async function collectProblemDetails(
         }
       }
 
-      // DB 레코드로 변환
-      for (const problem of problems) {
+      // 오답만 필터링하여 DB 레코드로 변환
+      const wrongProblems = problems.filter(p => p.result === 'WRONG');
+
+      for (const problem of wrongProblems) {
         const isWorkbook = 'workbookProblemId' in problem;
-        allProblemResults.push({
+        allWrongResults.push({
           daily_work_id: dw.id,
           homework_id: dw.homework_id || undefined,
           problem_id: String(problem.problemId),
@@ -375,27 +401,28 @@ async function collectProblemDetails(
         });
       }
 
-      totalProblemCount += problems.length;
+      totalWrongCollected += wrongProblems.length;
+      console.log(`[DailyWorkCollector] ${dw.student_name}: ${wrongProblems.length}개 오답 수집`);
     } catch (error) {
-      errors.push(`문제 상세 수집 실패 (${dw.id}): ${error}`);
+      errors.push(`오답 수집 실패 (${dw.id}): ${error}`);
     }
   }
 
-  // 배치 저장 (100개씩)
-  if (allProblemResults.length > 0) {
-    const batchSize = 100;
-    for (let i = 0; i < allProblemResults.length; i += batchSize) {
-      const batch = allProblemResults.slice(i, i + batchSize);
+  // 배치 저장
+  if (allWrongResults.length > 0) {
+    const saveBatchSize = 100;
+    for (let i = 0; i < allWrongResults.length; i += saveBatchSize) {
+      const batch = allWrongResults.slice(i, i + saveBatchSize);
       const { error: insertError } = await supabase
         .from('mathflat_problem_results')
         .insert(batch);
 
       if (insertError) {
-        errors.push(`문제 결과 저장 실패 (batch ${i / batchSize + 1}): ${insertError.message}`);
+        errors.push(`오답 저장 실패 (batch ${i / saveBatchSize + 1}): ${insertError.message}`);
       }
     }
-    console.log(`[DailyWorkCollector] 문제 상세 ${allProblemResults.length}개 저장 완료`);
+    console.log(`[DailyWorkCollector] 오답 ${allWrongResults.length}개 저장 완료`);
   }
 
-  return totalProblemCount;
+  return { totalWrongCollected, remainingDailyWorks };
 }

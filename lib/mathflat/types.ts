@@ -351,7 +351,8 @@ export interface DBMathflatDailyWork {
 export interface DailyWorkCollectionOptions {
   targetDate: Date;  // KST 기준
   studentIds?: string[];  // 특정 학생만 수집 (테스트용)
-  collectProblemDetails?: boolean;  // 문제별 상세 수집 여부 (기본: true)
+  collectProblemDetails?: boolean;  // 오답 상세 수집 여부 (기본: true)
+  maxWrongProblems?: number;  // 배치당 최대 오답 수집 개수 (기본: 100)
 }
 
 // 일일 풀이 수집 결과
@@ -361,7 +362,8 @@ export interface DailyWorkCollectionResult {
   totalStudents: number;
   totalWorkCount: number;
   matchedHomeworkCount: number;
-  totalProblemCount?: number;  // 문제별 상세 수집 시
+  totalProblemCount?: number;  // 수집된 오답 수
+  remainingDailyWorks?: number;  // 남은 daily_work 건수 (배치 처리용)
   errors: string[];
   startedAt: string;
   completedAt: string;
