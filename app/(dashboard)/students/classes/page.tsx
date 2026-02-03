@@ -5,7 +5,7 @@ import { ClassesFilters } from "@/components/students/classes/classes-filters"
 import { ClassesTable } from "@/components/students/classes/classes-table"
 import { PrintClassesTable } from "@/components/students/classes/print-classes-table"
 import { PrintScheduleGrid } from "@/components/students/classes/PrintScheduleGrid"
-import { WeeklyScheduleGrid } from "@/components/students/classes/schedule-grid"
+import { WeeklyScheduleGridV2 } from "@/components/students/classes/schedule-grid"
 import { Card, CardContent } from "@/components/ui/card"
 import { ClassFormModal } from "@/components/students/classes/class-form-modal"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -585,7 +585,7 @@ export default function ClassesPage() {
               />
             ) : (
               <div className="p-4">
-                <WeeklyScheduleGrid
+                <WeeklyScheduleGridV2
                   classes={sortedClasses}
                   teachers={teachers}
                   studentsCountMap={studentsCountMap}

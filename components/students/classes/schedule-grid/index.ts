@@ -1,4 +1,6 @@
 export { WeeklyScheduleGrid } from './WeeklyScheduleGrid'
+export { WeeklyScheduleGridV2 } from './WeeklyScheduleGridV2'
+export { SwimLaneSchedule } from './SwimLaneSchedule'
 export { ScheduleBlock } from './ScheduleBlock'
 export { ScheduleTimeline } from './ScheduleTimeline'
 export { ScheduleLegend } from './ScheduleLegend'
