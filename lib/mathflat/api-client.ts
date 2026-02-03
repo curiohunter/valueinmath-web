@@ -223,6 +223,7 @@ export class MathFlatApiClient {
       problemImageUrl?: string;
       solutionImageUrl?: string;
       scoring?: {
+        studentWorkbookProgressId?: number;  // progress_id (homework 매칭용)
         userAnswer?: string;
         result?: 'CORRECT' | 'WRONG' | 'NONE';
       };
@@ -236,6 +237,7 @@ export class MathFlatApiClient {
     return (response.data?.content || []).map((raw) => ({
       workbookProblemId: raw.id,
       problemId: raw.problemId,
+      studentWorkbookProgressId: raw.scoring?.studentWorkbookProgressId,  // homework 매칭용
       problemTitle: raw.title,
       problemNumber: raw.number,
       conceptId: raw.conceptId,

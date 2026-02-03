@@ -360,11 +360,13 @@ async function collectProblemDetails(
 
         for (const problem of wrongProblems) {
           const isWorkbook = 'workbookProblemId' in problem;
+          const workbookProblem = problem as MathFlatWorkbookProblem;
           batchResults.push({
             daily_work_id: dw.id,
             homework_id: dw.homework_id || undefined,
+            progress_id: isWorkbook ? workbookProblem.studentWorkbookProgressId : undefined,  // homework 매칭용
             problem_id: String(problem.problemId),
-            workbook_problem_id: isWorkbook ? String((problem as MathFlatWorkbookProblem).workbookProblemId) : undefined,
+            workbook_problem_id: isWorkbook ? String(workbookProblem.workbookProblemId) : undefined,
             worksheet_problem_id: !isWorkbook ? String((problem as MathFlatWorksheetProblem).worksheetProblemId) : undefined,
             problem_title: problem.problemTitle,
             problem_number: problem.problemNumber,

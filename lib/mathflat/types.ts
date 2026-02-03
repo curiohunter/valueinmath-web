@@ -150,6 +150,7 @@ export interface MathFlatHomeworkItem {
 export interface MathFlatWorkbookProblem {
   workbookProblemId: number;
   problemId: number;
+  studentWorkbookProgressId?: number;  // homework 매칭용 progress_id
   problemTitle?: string;   // 문제 섹션 (예: 유형 한 걸음)
   problemNumber?: string;  // 문제 번호 (예: 대표 문제 1)
   conceptId?: number;
@@ -251,6 +252,7 @@ export interface DBMathflatProblemResult {
   id?: string;
   daily_work_id?: string;    // FK to mathflat_daily_work (모든 풀이 연결)
   homework_id?: string;      // FK to mathflat_homework (숙제인 경우만)
+  progress_id?: number;      // studentWorkbookProgressId (homework 매칭용)
   problem_id: string;
   workbook_problem_id?: string;
   worksheet_problem_id?: string;
