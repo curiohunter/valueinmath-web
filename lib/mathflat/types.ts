@@ -239,6 +239,7 @@ export interface DBMathflatHomework {
   book_id?: string;
   student_book_id?: string;
   student_homework_id?: string;
+  progress_id_list?: number[];  // 숙제 범위의 progress ID 목록 (daily_work 매칭용)
   title?: string;
   page?: string;  // 교재 페이지 범위 (예: "9~11,13~20")
   completed?: boolean;

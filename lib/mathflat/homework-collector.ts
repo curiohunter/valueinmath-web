@@ -239,6 +239,7 @@ async function upsertHomework(
         score: homework.score,
         title: homework.title,
         page: homework.page,
+        progress_id_list: homework.progress_id_list,  // daily_work 매칭용
       })
       .eq('id', existing.id);
 
@@ -417,6 +418,7 @@ async function collectFirstPass(
             book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
             student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
             student_homework_id: hw.studentHomeworkId ? String(hw.studentHomeworkId) : undefined,
+            progress_id_list: hw.progressIdList,  // daily_work 매칭용
             title: hw.title || '숙제',
             page: hw.page,
             completed: hw.completed,
@@ -490,6 +492,7 @@ async function collectSecondPass(
             book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
             student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
             student_homework_id: hw.studentHomeworkId ? String(hw.studentHomeworkId) : undefined,
+            progress_id_list: hw.progressIdList,  // daily_work 매칭용
             title: hw.title || '숙제',
             page: hw.page,
             completed: hw.completed,
@@ -588,6 +591,7 @@ async function collectThirdPass(
             book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
             student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
             student_homework_id: hw.studentHomeworkId ? String(hw.studentHomeworkId) : undefined,
+            progress_id_list: hw.progressIdList,  // daily_work 매칭용
             title: hw.title || '숙제',
             page: hw.page,
             completed: hw.completed,
