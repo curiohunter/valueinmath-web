@@ -68,3 +68,9 @@ database/
 scripts/
 PLAN.md
 HANDOFF.md
+
+# Claude Code 설정
+.claude/
+
+# GitHub 설정
+.github/
