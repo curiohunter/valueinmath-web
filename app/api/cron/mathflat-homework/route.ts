@@ -6,13 +6,12 @@
  * 인증: Authorization: Bearer {CRON_SECRET}
  *
  * Body:
- * - collectionType: 'first' | 'second' | 'third' (1차/2차/3차 수집)
- * - classIds?: string[] (특정 반만 수집, 테스트용)
+ * - collectionType: 'first' (하위 호환성용, 필수)
+ * - classIds?: string[] (특정 반만 수집, 수동 수집용)
+ * - targetDate?: string (YYYY-MM-DD, 기본값: 오늘)
  *
  * 스케줄:
- * - 1차 수집: 매일 23:50 KST (UTC 14:50) - 오늘 숙제 목록 수집
- * - 2차 수집: 매일 10:00 KST (UTC 01:00) - 오늘 숙제 상세 업데이트
- * - 3차 수집: 매일 10:00 KST (UTC 01:00) - 이전 수업일 숙제 상세 업데이트
+ * - 매일 23:30 KST - 오늘 수업 있는 반의 숙제 수집
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -58,10 +57,10 @@ export async function POST(request: NextRequest) {
 
   const { collectionType, classIds, targetDate } = body;
 
-  // 3. collectionType 검증
-  if (!collectionType || !['first', 'second', 'third'].includes(collectionType)) {
+  // 3. collectionType 검증 (하위 호환성: 'first'만 지원, 다른 값도 first로 처리)
+  if (!collectionType) {
     return NextResponse.json(
-      { error: 'collectionType은 "first", "second", "third" 중 하나여야 합니다' },
+      { error: 'collectionType이 필요합니다' },
       { status: 400 }
     );
   }
@@ -74,7 +73,7 @@ export async function POST(request: NextRequest) {
     parsedDate = new Date();
   }
 
-  console.log(`[CronJob] MathFlat 숙제 수집 시작 - ${collectionType}차 수집, 날짜: ${targetDate || '오늘'}`);
+  console.log(`[CronJob] MathFlat 숙제 수집 시작, 날짜: ${targetDate || '오늘'}`);
   if (classIds && classIds.length > 0) {
     console.log(`[CronJob] 대상 반 제한: ${classIds.join(', ')}`);
   }
@@ -82,7 +81,7 @@ export async function POST(request: NextRequest) {
   // 4. 수집 실행
   try {
     const options: HomeworkCollectionOptions = {
-      collectionType: collectionType as 'first' | 'second' | 'third',
+      collectionType: 'first',
       targetDate: parsedDate,
       classIds,
     };
@@ -95,22 +94,16 @@ export async function POST(request: NextRequest) {
     // 5. 결과 반환
     return NextResponse.json({
       success: result.success,
-      message: result.success
-        ? `${collectionType}차 수집 완료`
-        : `${collectionType}차 수집 실패`,
+      message: result.success ? '숙제 수집 완료' : '숙제 수집 실패',
       data: {
-        collectionType: result.collectionType,
         targetDate: result.targetDate,
         processedClasses: result.processedClasses.map((c) => ({
           className: c.className,
-          previousClassDate: c.previousClassDate,
           studentCount: c.studentCount,
           homeworkCount: c.homeworkCount,
-          problemCount: c.problemCount,
           error: c.error,
         })),
         totalHomeworkCount: result.totalHomeworkCount,
-        totalProblemCount: result.totalProblemCount,
         errorCount: result.errors.length,
         durationMs: result.durationMs,
       },
@@ -139,13 +132,10 @@ export async function GET() {
     methods: ['POST'],
     authentication: 'Bearer token required (CRON_SECRET)',
     body: {
-      collectionType: "'first' | 'second' | 'third' (required)",
-      classIds: "string[] (optional, for testing specific classes)",
+      collectionType: "'first' (required)",
+      classIds: "string[] (optional, mathflat_class_id 배열)",
+      targetDate: "YYYY-MM-DD (optional, 기본값: 오늘)",
     },
-    schedule: {
-      first: '매일 23:50 KST - 오늘 숙제 목록 수집',
-      second: '매일 10:00 KST - 오늘 숙제 상세 업데이트',
-      third: '매일 10:00 KST - 이전 수업일 숙제 상세 업데이트',
-    },
+    schedule: '매일 23:30 KST - 오늘 수업 있는 반의 숙제 수집',
   });
 }

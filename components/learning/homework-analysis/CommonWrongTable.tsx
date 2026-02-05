@@ -101,7 +101,14 @@ export default function CommonWrongTable({
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-slate-700 font-medium">
-                    {problem.bookTitle || "-"}
+                    <div className="flex items-center gap-1.5">
+                      {problem.bookType === 'WORKSHEET' && (
+                        <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 text-xs font-medium rounded">
+                          학습지
+                        </span>
+                      )}
+                      <span>{problem.bookTitle || "-"}</span>
+                    </div>
                   </td>
                   <td className="px-3 py-2.5 font-mono text-slate-600">
                     {problem.page ? `p.${problem.page}` : "-"}

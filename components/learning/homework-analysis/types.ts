@@ -67,7 +67,9 @@ export interface HomeworkData {
   book_id: string | null;
   student_book_id: string | null;
   student_homework_id: string | null;
-  progress_id_list: number[] | null;
+  progress_id_list: number[] | null;           // WORKBOOK: progress ID 목록
+  worksheet_problem_ids: number[] | null;      // WORKSHEET: 문제 ID 목록
+  total_problems: number | null;               // WORKSHEET: 총 문제 수
   title: string | null;
   page: string | null;
   completed: boolean | null;
@@ -115,6 +117,7 @@ export interface DailyWorkHomeworkMapping {
 export interface StudentHomework {
   title: string;
   page: string | null;
+  bookType: 'WORKBOOK' | 'WORKSHEET';
   total: number;
   solved: number;
   correct: number;
@@ -122,6 +125,19 @@ export interface StudentHomework {
   notSolved: number;
   completionRate: number;
   correctRate: number;
+  // WORKSHEET 전용: 오답 문제 번호 (배열 인덱스+1 기준)
+  wrongProblemNumbers?: number[];
+}
+
+// 학생별 개별 오답 문제
+export interface StudentWrongProblem {
+  bookType: 'WORKBOOK' | 'WORKSHEET';
+  bookTitle: string | null;
+  page: string | null;
+  problemTitle: string | null;
+  problemNumber: string | null;  // WORKBOOK: 원본, WORKSHEET: 배열 인덱스+1
+  conceptName: string | null;
+  level: number | null;
 }
 
 // 학생별 숙제 요약
@@ -132,11 +148,13 @@ export interface StudentLearingSummary {
   totalCompletionRate: number;
   totalCorrectRate: number;
   weakConcepts: string[];
+  wrongProblems: StudentWrongProblem[];  // 개별 오답 목록
 }
 
 // 공통 오답 문제
 export interface CommonWrongProblem {
   problemId: string;
+  bookType: 'WORKBOOK' | 'WORKSHEET';
   bookTitle: string | null;
   page: string | null;
   problemTitle: string | null;

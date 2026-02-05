@@ -1,12 +1,9 @@
 /**
- * MathFlat 숙제 수집 로직 (메타데이터만, 문제 상세는 daily-work-collector에서)
+ * MathFlat 숙제 수집 로직
  *
- * 1차 수집 (밤 23:50):
+ * 크론잡 (밤 23:30):
  *   - 오늘 수업 있는 반의 숙제 목록 수집
- *
- * 2차 수집 (아침 10:00):
- *   - 오늘 수업 있는 반의 "이전 수업일" 숙제 업데이트
- *   - 예: 월/금 반 → 금요일 아침에 월요일 숙제 업데이트
+ *   - WORKSHEET의 경우 추가 API 호출로 total_problems 저장
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -72,61 +69,6 @@ function getSupabaseAdmin() {
   }
 
   return createClient(supabaseUrl, supabaseServiceKey);
-}
-
-/**
- * 특정 반의 이전 수업일 계산
- * 예: 월/금 반, 오늘 금요일 → 이전 수업일은 월요일
- */
-async function getPreviousClassDate(classId: string, todayDate: Date): Promise<string | null> {
-  const supabase = getSupabaseAdmin();
-
-  // 해당 반의 수업 요일 목록 조회
-  const { data: schedules, error } = await supabase
-    .from('class_schedules')
-    .select('day_of_week')
-    .eq('class_id', classId);
-
-  if (error || !schedules || schedules.length === 0) {
-    return null;
-  }
-
-  // 수업 요일을 숫자로 변환하고 정렬
-  const classDays = schedules
-    .map(s => DAY_OF_WEEK_MAP[s.day_of_week])
-    .filter(d => d !== undefined)
-    .sort((a, b) => a - b);
-
-  if (classDays.length === 0) {
-    return null;
-  }
-
-  const todayDayOfWeek = getDayOfWeekKST(todayDate);
-
-  // 오늘 이전의 가장 가까운 수업일 찾기
-  let prevDay: number | null = null;
-  let daysBack = 0;
-
-  for (let i = classDays.length - 1; i >= 0; i--) {
-    if (classDays[i] < todayDayOfWeek) {
-      prevDay = classDays[i];
-      daysBack = todayDayOfWeek - prevDay;
-      break;
-    }
-  }
-
-  // 이번 주에 이전 수업일이 없으면 지난 주에서 찾기
-  if (prevDay === null) {
-    prevDay = classDays[classDays.length - 1]; // 가장 큰 요일 (예: 금요일)
-    daysBack = 7 - prevDay + todayDayOfWeek;
-  }
-
-  // 이전 수업일 날짜 계산
-  const kstOffset = 9 * 60 * 60 * 1000;
-  const todayKST = new Date(todayDate.getTime() + kstOffset);
-  const prevDate = new Date(todayKST.getTime() - daysBack * 24 * 60 * 60 * 1000);
-
-  return prevDate.toISOString().split('T')[0];
 }
 
 /**
@@ -226,16 +168,26 @@ async function upsertHomework(
     .single();
 
   if (existing) {
-    // 업데이트
+    // 업데이트 데이터 구성
+    const updateData: Record<string, unknown> = {
+      completed: homework.completed,
+      score: homework.score,
+      title: homework.title,
+      page: homework.page,
+      progress_id_list: homework.progress_id_list,
+    };
+
+    // WORKSHEET의 경우 worksheet_problem_ids, total_problems 업데이트
+    if (homework.worksheet_problem_ids !== undefined) {
+      updateData.worksheet_problem_ids = homework.worksheet_problem_ids;
+    }
+    if (homework.total_problems !== undefined) {
+      updateData.total_problems = homework.total_problems;
+    }
+
     const { error } = await supabase
       .from('mathflat_homework')
-      .update({
-        completed: homework.completed,
-        score: homework.score,
-        title: homework.title,
-        page: homework.page,
-        progress_id_list: homework.progress_id_list,  // daily_work 매칭용
-      })
+      .update(updateData)
       .eq('id', existing.id);
 
     if (error) {
@@ -260,9 +212,9 @@ async function upsertHomework(
 }
 
 /**
- * 1차 수집: 오늘 숙제 목록 수집
+ * 숙제 수집 실행
  */
-async function collectFirstPass(
+async function collectHomeworkData(
   targetClasses: TargetClassInfo[],
   targetDateStr: string,
   apiClient: ReturnType<typeof getMathFlatApiClient>,
@@ -279,7 +231,7 @@ async function collectFirstPass(
     };
 
     try {
-      console.log(`[1차수집] ${classInfo.name} (${classInfo.mathflatClassId}) 시작`);
+      console.log(`[숙제수집] ${classInfo.name} (${classInfo.mathflatClassId}) 시작`);
 
       const apiResult = await apiClient.collectClassHomework(
         classInfo.mathflatClassId,
@@ -289,10 +241,24 @@ async function collectFirstPass(
 
       classResult.studentCount = apiResult.students.length;
 
-      // DB 저장 (숙제 목록만)
+      // DB 저장
       for (const studentData of apiResult.students) {
         for (const homeworkData of studentData.homeworks) {
           const hw = homeworkData.homework;
+
+          // WORKSHEET: 추가 API 호출로 문제 ID 배열 가져오기
+          let worksheetProblemIds: number[] | undefined;
+          let totalProblems: number | undefined;
+          if (hw.bookType === 'WORKSHEET' && hw.studentBookId) {
+            try {
+              const problems = await apiClient.getWorksheetProblems(hw.studentBookId);
+              worksheetProblemIds = problems.map(p => p.worksheetProblemId);
+              totalProblems = problems.length;
+              console.log(`[숙제수집] WORKSHEET ${hw.title} 문제 수: ${totalProblems}`);
+            } catch (err) {
+              console.error(`[숙제수집] WORKSHEET 문제 조회 실패: ${err}`);
+            }
+          }
 
           const dbHomework: DBMathflatHomework = {
             class_id: classInfo.id,
@@ -304,7 +270,9 @@ async function collectFirstPass(
             book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
             student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
             student_homework_id: hw.studentHomeworkId ? String(hw.studentHomeworkId) : undefined,
-            progress_id_list: hw.progressIdList,  // daily_work 매칭용
+            progress_id_list: hw.progressIdList,
+            worksheet_problem_ids: worksheetProblemIds,
+            total_problems: totalProblems,
             title: hw.title || '숙제',
             page: hw.page,
             completed: hw.completed,
@@ -320,181 +288,15 @@ async function collectFirstPass(
         result.errors.push(...apiResult.errors);
       }
 
-      console.log(`[1차수집] ${classInfo.name} 완료: 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개`);
+      console.log(`[숙제수집] ${classInfo.name} 완료: 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개`);
     } catch (error) {
       classResult.error = String(error);
       result.errors.push(`${classInfo.name}: ${error}`);
-      console.error(`[1차수집] ${classInfo.name} 실패:`, error);
+      console.error(`[숙제수집] ${classInfo.name} 실패:`, error);
     }
 
     result.processedClasses.push(classResult);
     result.totalHomeworkCount += classResult.homeworkCount;
-  }
-}
-
-/**
- * 2차 수집: 오늘 숙제 업데이트 (문제 상세 포함)
- */
-async function collectSecondPass(
-  targetClasses: TargetClassInfo[],
-  targetDateStr: string,
-  apiClient: ReturnType<typeof getMathFlatApiClient>,
-  result: HomeworkCollectionResult
-): Promise<void> {
-  for (const classInfo of targetClasses) {
-    const classResult: ProcessedClassResult = {
-      classId: classInfo.id,
-      className: classInfo.name,
-      mathflatClassId: classInfo.mathflatClassId,
-      studentCount: 0,
-      homeworkCount: 0,
-      problemCount: 0,
-    };
-
-    try {
-      console.log(`[2차수집] ${classInfo.name} (${classInfo.mathflatClassId}) 시작 - 날짜: ${targetDateStr}`);
-
-      // 숙제 조회 및 문제 상세 수집
-      const apiResult = await apiClient.collectClassHomework(
-        classInfo.mathflatClassId,
-        targetDateStr,
-        true // 문제 상세 포함
-      );
-
-      classResult.studentCount = apiResult.students.length;
-
-      // DB 업데이트 (숙제 + 문제 상세)
-      for (const studentData of apiResult.students) {
-        for (const homeworkData of studentData.homeworks) {
-          const hw = homeworkData.homework;
-
-          const dbHomework: DBMathflatHomework = {
-            class_id: classInfo.id,
-            mathflat_class_id: classInfo.mathflatClassId,
-            mathflat_student_id: studentData.studentId ? String(studentData.studentId) : studentData.studentName,
-            student_name: studentData.studentName,
-            homework_date: targetDateStr,
-            book_type: hw.bookType,
-            book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
-            student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
-            student_homework_id: hw.studentHomeworkId ? String(hw.studentHomeworkId) : undefined,
-            progress_id_list: hw.progressIdList,  // daily_work 매칭용
-            title: hw.title || '숙제',
-            page: hw.page,
-            completed: hw.completed,
-            score: hw.score,
-          };
-
-          await upsertHomework(dbHomework);
-          classResult.homeworkCount++;
-        }
-      }
-
-      if (apiResult.errors.length > 0) {
-        result.errors.push(...apiResult.errors);
-      }
-
-      console.log(
-        `[2차수집] ${classInfo.name} 완료 (${targetDateStr}): 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개`
-      );
-    } catch (error) {
-      classResult.error = String(error);
-      result.errors.push(`${classInfo.name}: ${error}`);
-      console.error(`[2차수집] ${classInfo.name} 실패:`, error);
-    }
-
-    result.processedClasses.push(classResult);
-    result.totalHomeworkCount += classResult.homeworkCount;
-    result.totalProblemCount += classResult.problemCount;
-  }
-}
-
-/**
- * 3차 수집: 이전 수업일 숙제 업데이트 (문제 상세 포함)
- * 예: 월/금 반, 오늘 금요일 → 월요일 숙제 상세 업데이트
- */
-async function collectThirdPass(
-  targetClasses: TargetClassInfo[],
-  targetDate: Date,
-  apiClient: ReturnType<typeof getMathFlatApiClient>,
-  result: HomeworkCollectionResult
-): Promise<void> {
-  for (const classInfo of targetClasses) {
-    const classResult: ProcessedClassResult = {
-      classId: classInfo.id,
-      className: classInfo.name,
-      mathflatClassId: classInfo.mathflatClassId,
-      studentCount: 0,
-      homeworkCount: 0,
-      problemCount: 0,
-    };
-
-    try {
-      // 이전 수업일 계산
-      const previousDate = await getPreviousClassDate(classInfo.id, targetDate);
-
-      if (!previousDate) {
-        console.log(`[3차수집] ${classInfo.name}: 이전 수업일을 찾을 수 없음 (스킵)`);
-        classResult.error = '이전 수업일을 찾을 수 없음';
-        result.processedClasses.push(classResult);
-        continue;
-      }
-
-      classResult.previousClassDate = previousDate;
-      console.log(`[3차수집] ${classInfo.name} (${classInfo.mathflatClassId}) 시작 - 이전 수업일: ${previousDate}`);
-
-      // 이전 수업일 숙제 조회 및 문제 상세 수집
-      const apiResult = await apiClient.collectClassHomework(
-        classInfo.mathflatClassId,
-        previousDate,
-        true // 문제 상세 포함
-      );
-
-      classResult.studentCount = apiResult.students.length;
-
-      // DB 업데이트 (숙제 + 문제 상세)
-      for (const studentData of apiResult.students) {
-        for (const homeworkData of studentData.homeworks) {
-          const hw = homeworkData.homework;
-
-          const dbHomework: DBMathflatHomework = {
-            class_id: classInfo.id,
-            mathflat_class_id: classInfo.mathflatClassId,
-            mathflat_student_id: studentData.studentId ? String(studentData.studentId) : studentData.studentName,
-            student_name: studentData.studentName,
-            homework_date: previousDate,
-            book_type: hw.bookType,
-            book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
-            student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
-            student_homework_id: hw.studentHomeworkId ? String(hw.studentHomeworkId) : undefined,
-            progress_id_list: hw.progressIdList,  // daily_work 매칭용
-            title: hw.title || '숙제',
-            page: hw.page,
-            completed: hw.completed,
-            score: hw.score,
-          };
-
-          await upsertHomework(dbHomework);
-          classResult.homeworkCount++;
-        }
-      }
-
-      if (apiResult.errors.length > 0) {
-        result.errors.push(...apiResult.errors);
-      }
-
-      console.log(
-        `[3차수집] ${classInfo.name} 완료 (${previousDate}): 학생 ${classResult.studentCount}명, 숙제 ${classResult.homeworkCount}개`
-      );
-    } catch (error) {
-      classResult.error = String(error);
-      result.errors.push(`${classInfo.name}: ${error}`);
-      console.error(`[3차수집] ${classInfo.name} 실패:`, error);
-    }
-
-    result.processedClasses.push(classResult);
-    result.totalHomeworkCount += classResult.homeworkCount;
-    result.totalProblemCount += classResult.problemCount;
   }
 }
 
@@ -545,17 +347,9 @@ export async function collectHomework(
     const apiClient = getMathFlatApiClient();
     await apiClient.login();
 
-    // 3. 수집 타입에 따라 분기
-    if (options.collectionType === 'first') {
-      // 1차 수집: 오늘 숙제 목록 수집
-      await collectFirstPass(targetClasses, targetDateStr, apiClient, result);
-    } else if (options.collectionType === 'second') {
-      // 2차 수집: 오늘 숙제 업데이트 (문제 상세 포함)
-      await collectSecondPass(targetClasses, targetDateStr, apiClient, result);
-    } else {
-      // 3차 수집: 이전 수업일 숙제 업데이트 (문제 상세 포함)
-      await collectThirdPass(targetClasses, options.targetDate, apiClient, result);
-    }
+    // 3. 숙제 수집 실행
+    await collectHomeworkData(targetClasses, targetDateStr, apiClient, result);
+
   } catch (error) {
     result.success = false;
     result.errors.push(`전체 수집 실패: ${error}`);
@@ -566,7 +360,7 @@ export async function collectHomework(
   result.durationMs = Date.now() - startedAt.getTime();
 
   console.log(
-    `[HomeworkCollector] 수집 완료: ${result.totalHomeworkCount}개 숙제, ${result.totalProblemCount}개 문제 (${result.durationMs}ms)`
+    `[HomeworkCollector] 수집 완료: ${result.totalHomeworkCount}개 숙제 (${result.durationMs}ms)`
   );
 
   return result;

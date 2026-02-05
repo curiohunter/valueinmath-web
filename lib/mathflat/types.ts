@@ -197,9 +197,9 @@ export interface MathFlatWorksheetProblem {
 
 // 숙제 수집 옵션
 export interface HomeworkCollectionOptions {
-  collectionType: 'first' | 'second' | 'third';
+  collectionType: 'first';  // 단일 수집 타입 (하위 호환성 유지)
   targetDate: Date;  // KST 기준
-  classIds?: string[];  // 특정 반만 수집 (테스트용)
+  classIds?: string[];  // 특정 반만 수집 (수동 수집용)
 }
 
 // 숙제 수집 결과
@@ -221,7 +221,6 @@ export interface ProcessedClassResult {
   classId: string;
   className: string;
   mathflatClassId: string;
-  previousClassDate?: string;  // 2차 수집 시 업데이트한 이전 수업일
   studentCount: number;
   homeworkCount: number;
   problemCount: number;
@@ -240,7 +239,9 @@ export interface DBMathflatHomework {
   book_id?: string;
   student_book_id?: string;
   student_homework_id?: string;
-  progress_id_list?: number[];  // 숙제 범위의 progress ID 목록 (daily_work 매칭용)
+  progress_id_list?: number[];        // WORKBOOK: studentWorkbookProgressId 목록
+  worksheet_problem_ids?: number[];   // WORKSHEET: worksheetProblemId 목록
+  total_problems?: number;            // WORKSHEET: 총 문제 수 (= worksheet_problem_ids.length)
   title?: string;
   page?: string;  // 교재 페이지 범위 (예: "9~11,13~20")
   completed?: boolean;

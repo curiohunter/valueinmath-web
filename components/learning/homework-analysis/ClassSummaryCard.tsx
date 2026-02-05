@@ -155,7 +155,6 @@ export default function ClassSummaryCard({
                   <StudentProgressRow
                     key={student.mathflatStudentId}
                     student={student}
-                    showWeakConcepts={true}
                   />
                 ))}
               </div>

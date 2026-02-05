@@ -12,6 +12,7 @@ import {
   ClassSchedule,
   ClassSummary,
   StudentLearingSummary,
+  StudentWrongProblem,
   CommonWrongProblem,
   ConceptWeakness,
   DailyWorkData,
@@ -184,7 +185,37 @@ export default function HomeworkTab() {
               .in("daily_work_id", mappedDailyWorkIds);
 
             if (prError) throw prError;
-            setProblemResults((prData || []) as ProblemResult[]);
+
+            // WORKBOOK: concept_name이 없고 concept_id가 있는 경우 mathflat_concepts에서 조회
+            let enrichedPrData = prData || [];
+            const missingConceptIds = [...new Set(
+              enrichedPrData
+                .filter((p: ProblemResult) => !p.concept_name && p.concept_id)
+                .map((p: ProblemResult) => parseInt(p.concept_id!, 10))
+            )];
+
+            if (missingConceptIds.length > 0) {
+              const { data: conceptsData } = await supabase
+                .from("mathflat_concepts")
+                .select("concept_id, concept_name")
+                .in("concept_id", missingConceptIds);
+
+              if (conceptsData && conceptsData.length > 0) {
+                const conceptMap = new Map(
+                  conceptsData.map((c: { concept_id: number; concept_name: string }) =>
+                    [String(c.concept_id), c.concept_name]
+                  )
+                );
+                enrichedPrData = enrichedPrData.map((p: ProblemResult) => {
+                  if (!p.concept_name && p.concept_id && conceptMap.has(p.concept_id)) {
+                    return { ...p, concept_name: conceptMap.get(p.concept_id) };
+                  }
+                  return p;
+                });
+              }
+            }
+
+            setProblemResults(enrichedPrData as ProblemResult[]);
           } else {
             setDailyWorks([]);
             setProblemResults([]);
@@ -237,31 +268,61 @@ export default function HomeworkTab() {
 
         // 숙제별 상세 계산 (매핑을 통해 완료율 계산)
         const homeworkDetails = studentHomeworks.map((hw) => {
-          // 숙제의 총 페이지 수 (progress_id_list 기준)
-          const totalPages = hw.progress_id_list?.length || 0;
-
-          // 숙제에 매핑된 progress_ids (여러 daily_work에서 유니크하게 합침)
+          const isWorksheet = hw.book_type === 'WORKSHEET';
           const mappings = dwHomeworkMappings.filter(m => m.homework_id === hw.id);
-          const allMatchedProgressIds = mappings.flatMap(m => m.matched_progress_ids || []);
-          const uniqueMatchedProgressIds = [...new Set(allMatchedProgressIds)];
-          const solvedPages = uniqueMatchedProgressIds.length;
-
-          // 매핑된 daily_work에서 정답/오답 통계 가져오기
           const mappedDwIds = mappings.map(m => m.daily_work_id);
           const mappedDailyWorks = dailyWorks.filter(dw => mappedDwIds.includes(dw.id));
+
+          // 정답/오답 통계
           const correct = mappedDailyWorks.reduce((sum, dw) => sum + (dw.correct_count || 0), 0);
           const wrong = mappedDailyWorks.reduce((sum, dw) => sum + (dw.wrong_count || 0), 0);
+
+          let total: number;
+          let solved: number;
+          let wrongProblemNumbers: number[] | undefined;
+
+          if (isWorksheet) {
+            // WORKSHEET: total_problems 기준
+            total = hw.total_problems || 0;
+            solved = correct + wrong;
+
+            // WORKSHEET 오답 번호 계산
+            if (hw.worksheet_problem_ids && hw.worksheet_problem_ids.length > 0) {
+              const wrongResults = problemResults.filter(
+                (p) => mappedDwIds.includes(p.daily_work_id) &&
+                       (p.result === "WRONG" || p.result === "UNKNOWN") &&
+                       p.worksheet_problem_id
+              );
+              wrongProblemNumbers = wrongResults
+                .map((p) => {
+                  const idx = hw.worksheet_problem_ids!.findIndex(
+                    (id) => String(id) === p.worksheet_problem_id
+                  );
+                  return idx >= 0 ? idx + 1 : -1;
+                })
+                .filter((n) => n > 0)
+                .sort((a, b) => a - b);
+            }
+          } else {
+            // WORKBOOK: progress_id_list 기준
+            total = hw.progress_id_list?.length || 0;
+            const allMatchedProgressIds = mappings.flatMap(m => m.matched_progress_ids || []);
+            const uniqueMatchedProgressIds = [...new Set(allMatchedProgressIds)];
+            solved = uniqueMatchedProgressIds.length;
+          }
 
           return {
             title: hw.title || "",
             page: hw.page,
-            total: totalPages,
-            solved: solvedPages,
+            bookType: hw.book_type as 'WORKBOOK' | 'WORKSHEET',
+            total,
+            solved,
             correct,
             wrong,
-            notSolved: totalPages - solvedPages,
-            completionRate: totalPages > 0 ? Math.round((solvedPages / totalPages) * 100) : 0,
+            notSolved: Math.max(0, total - solved),
+            completionRate: total > 0 ? Math.round((solved / total) * 100) : 0,
             correctRate: (correct + wrong) > 0 ? Math.round((correct / (correct + wrong)) * 100) : 0,
+            wrongProblemNumbers,
           };
         });
 
@@ -290,6 +351,59 @@ export default function HomeworkTab() {
 
         const uniqueWeakConcepts = [...new Set(wrongConcepts)];
 
+        // 학생별 개별 오답 목록 생성
+        const studentWrongProblems: StudentWrongProblem[] = problemResults
+          .filter(
+            (p) =>
+              studentMappedDwIds.includes(p.daily_work_id) &&
+              (p.result === "WRONG" || p.result === "UNKNOWN")
+          )
+          .map((p) => {
+            // 매핑을 통해 숙제 정보 찾기
+            const mapping = dwHomeworkMappings.find(m => m.daily_work_id === p.daily_work_id);
+            const hw = mapping ? studentHomeworks.find(h => h.id === mapping.homework_id) : null;
+            const dw = dailyWorks.find(d => d.id === p.daily_work_id);
+
+            // bookType 결정
+            const bookType: 'WORKBOOK' | 'WORKSHEET' = p.worksheet_problem_id ? 'WORKSHEET' : 'WORKBOOK';
+
+            // WORKSHEET 문제 번호 계산 (배열 인덱스 + 1)
+            let problemNumber = p.problem_number;
+            if (bookType === 'WORKSHEET' && hw?.worksheet_problem_ids && p.worksheet_problem_id) {
+              const idx = hw.worksheet_problem_ids.findIndex(
+                (id) => String(id) === p.worksheet_problem_id
+              );
+              if (idx >= 0) {
+                problemNumber = `${idx + 1}번`;
+              }
+            }
+
+            return {
+              bookType,
+              bookTitle: hw?.title || dw?.title || null,
+              page: hw?.page || dw?.page || null,
+              problemTitle: p.problem_title,
+              problemNumber,
+              conceptName: p.concept_name,
+              level: p.level,
+            };
+          })
+          // 정렬: bookType > bookTitle > page > problemNumber
+          .sort((a, b) => {
+            // WORKBOOK 먼저
+            if (a.bookType !== b.bookType) {
+              return a.bookType === 'WORKBOOK' ? -1 : 1;
+            }
+            // 같은 bookType이면 bookTitle로
+            const titleCompare = (a.bookTitle || "").localeCompare(b.bookTitle || "", "ko");
+            if (titleCompare !== 0) return titleCompare;
+            // 페이지 번호로
+            const pageCompare = extractFirstPage(a.page) - extractFirstPage(b.page);
+            if (pageCompare !== 0) return pageCompare;
+            // 문제 번호로
+            return extractProblemNumber(a.problemNumber) - extractProblemNumber(b.problemNumber);
+          });
+
         return {
           studentName,
           mathflatStudentId: studentId,
@@ -299,6 +413,7 @@ export default function HomeworkTab() {
           totalCorrectRate:
             totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0,
           weakConcepts: uniqueWeakConcepts,
+          wrongProblems: studentWrongProblems,
         };
       });
 
@@ -329,8 +444,11 @@ export default function HomeworkTab() {
               existing.wrongCount++;
             }
           } else {
+            // bookType 결정: worksheet_problem_id가 있으면 WORKSHEET
+            const bookType: 'WORKBOOK' | 'WORKSHEET' = p.worksheet_problem_id ? 'WORKSHEET' : 'WORKBOOK';
             wrongProblemMap.set(key, {
               problemId: p.problem_id,
+              bookType,
               bookTitle: hw?.title || dw?.title || null,
               page: hw?.page || dw?.page || null,
               problemTitle: p.problem_title,
