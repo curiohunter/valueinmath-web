@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { useDebounce } from "@/lib/hooks/use-debounce";
 import type { Database } from "@/types/database";
 
 type Student = Database['public']['Tables']['students']['Row'];
@@ -31,20 +32,21 @@ interface StudentsTabProps {
 export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [statusFilter, setStatusFilter] = useState("all");
   const [schoolTypeFilter, setSchoolTypeFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [sortBy, setSortBy] = useState<'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date' | 'status'>('status');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  
+
   // Filter students when search or filters change
   useEffect(() => {
     let filtered = [...students];
-    
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(s => 
-        s.name.toLowerCase().includes(searchTerm.toLowerCase())
+
+    // Apply search filter (using debounced value)
+    if (debouncedSearchTerm) {
+      filtered = filtered.filter(s =>
+        s.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
       );
     }
     
@@ -129,7 +131,7 @@ export function StudentsTab({ students, onStudentSelect }: StudentsTabProps) {
     });
     
     setFilteredStudents(filtered);
-  }, [students, searchTerm, statusFilter, schoolTypeFilter, gradeFilter, sortBy, sortOrder]);
+  }, [students, debouncedSearchTerm, statusFilter, schoolTypeFilter, gradeFilter, sortBy, sortOrder]);
   
   const handleSort = (column: 'name' | 'school_type' | 'grade' | 'school' | 'lead_source' | 'first_contact_date' | 'start_date' | 'end_date' | 'status') => {
     if (sortBy === column) {

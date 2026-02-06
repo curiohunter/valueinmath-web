@@ -217,6 +217,7 @@ async function upsertHomework(
 async function collectHomeworkData(
   targetClasses: TargetClassInfo[],
   targetDateStr: string,
+  homeworkDateStr: string,  // DB에 저장할 숙제 날짜 (수업일 기준)
   apiClient: ReturnType<typeof getMathFlatApiClient>,
   result: HomeworkCollectionResult
 ): Promise<void> {
@@ -265,7 +266,7 @@ async function collectHomeworkData(
             mathflat_class_id: classInfo.mathflatClassId,
             mathflat_student_id: studentData.studentId ? String(studentData.studentId) : studentData.studentName,
             student_name: studentData.studentName,
-            homework_date: targetDateStr,
+            homework_date: homeworkDateStr,  // 수업일 기준 날짜 (수동 수집 시 오버라이드 가능)
             book_type: hw.bookType,
             book_id: hw.bookId ? String(hw.bookId) : (hw.studentWorkbookId ? String(hw.studentWorkbookId) : undefined),
             student_book_id: hw.studentBookId ? String(hw.studentBookId) : undefined,
@@ -308,6 +309,10 @@ export async function collectHomework(
 ): Promise<HomeworkCollectionResult> {
   const startedAt = new Date();
   const targetDateStr = formatDateKST(options.targetDate);
+  // homeworkDate가 지정되면 해당 날짜로, 아니면 targetDate로 저장
+  const homeworkDateStr = options.homeworkDate
+    ? formatDateKST(options.homeworkDate)
+    : targetDateStr;
 
   const result: HomeworkCollectionResult = {
     success: true,
@@ -342,13 +347,16 @@ export async function collectHomework(
     }
 
     console.log(`[HomeworkCollector] 대상 반 ${targetClasses.length}개: ${targetClasses.map(c => c.name).join(', ')}`);
+    if (homeworkDateStr !== targetDateStr) {
+      console.log(`[HomeworkCollector] 숙제 날짜 오버라이드: ${targetDateStr} → ${homeworkDateStr}`);
+    }
 
     // 2. MathFlat API 클라이언트 초기화
     const apiClient = getMathFlatApiClient();
     await apiClient.login();
 
     // 3. 숙제 수집 실행
-    await collectHomeworkData(targetClasses, targetDateStr, apiClient, result);
+    await collectHomeworkData(targetClasses, targetDateStr, homeworkDateStr, apiClient, result);
 
   } catch (error) {
     result.success = false;

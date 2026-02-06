@@ -9,7 +9,7 @@ import {
   ClipboardCheck,
   Calendar,
   Megaphone,
-  Zap
+  Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -65,10 +65,10 @@ const quickAccessItems: QuickAccessItem[] = [
     color: "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400"
   },
   {
-    title: "마케팅 관리",
-    href: "/students/marketing",
+    title: "마케팅",
+    href: "/marketing",
     icon: Megaphone,
-    description: "캠페인 및 이벤트 관리",
+    description: "캠페인, 갤러리, 브랜딩",
     color: "bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400"
   },
   {

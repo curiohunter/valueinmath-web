@@ -13,9 +13,9 @@ import { toast } from "sonner"
 import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatSchoolGrade } from "@/lib/schools/format"
-import { createSchoolExamScores, updateSchoolExamScore, getActiveStudents } from "@/lib/school-exam-score-client"
+import { createSchoolExamScores, updateSchoolExamScore, getActiveStudents, getSchools } from "@/lib/school-exam-score-client"
 import { getSchoolExams } from "@/lib/school-exam-client"
-import type { SchoolExamScoreFormData, SchoolExamScore } from "@/types/school-exam-score"
+import type { SchoolExamScoreFormData, SchoolExamScore, School } from "@/types/school-exam-score"
 import type { SchoolExam } from "@/types/school-exam"
 
 interface SchoolExamScoreModalProps {
@@ -32,73 +32,78 @@ interface ScoreItem {
 
 export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore }: SchoolExamScoreModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [students, setStudents] = useState<Array<{ id: string; name: string; grade: number; status: string; school: string }>>([])
+  const [students, setStudents] = useState<Array<{ id: string; name: string; grade: number; status: string; school_id: string | null; school_name: string | null; school_grade: number | null }>>([])
+  const [schools, setSchools] = useState<School[]>([])
   const [availableExams, setAvailableExams] = useState<SchoolExam[]>([])
   const [studentSearchOpen, setStudentSearchOpen] = useState(false)
   const [studentSearchValue, setStudentSearchValue] = useState("")
+  const [schoolSearchOpen, setSchoolSearchOpen] = useState(false)
+  const [schoolSearchValue, setSchoolSearchValue] = useState("")
 
   // Form state
   const [studentId, setStudentId] = useState("")
-  const [schoolType, setSchoolType] = useState<"중학교" | "고등학교">("중학교")
+  const [schoolId, setSchoolId] = useState("")
   const [grade, setGrade] = useState<"1" | "2" | "3">("1")
   const [semester, setSemester] = useState<"1" | "2">("1")
-  const [schoolName, setSchoolName] = useState("")
   const [examYear, setExamYear] = useState(new Date().getFullYear().toString())
   const [examType, setExamType] = useState<"중간고사" | "기말고사">("중간고사")
   const [schoolExamId, setSchoolExamId] = useState<string>("none")
   const [scores, setScores] = useState<ScoreItem[]>([{ subject: "", score: "" }])
   const [notes, setNotes] = useState("")
 
-  // Load students on mount
+  // Load students and schools on mount
   useEffect(() => {
-    async function loadStudents() {
+    async function loadData() {
       try {
-        const data = await getActiveStudents()
-        setStudents(data)
-      } catch (error) {
-        console.error("Error loading students:", error)
+        const [studentsData, schoolsData] = await Promise.all([
+          getActiveStudents(),
+          getSchools(),
+        ])
+        setStudents(studentsData)
+        setSchools(schoolsData)
+      } catch {
+        // silently fail - will show empty lists
       }
     }
     if (isOpen) {
-      loadStudents()
+      loadData()
     }
   }, [isOpen])
 
   // Load matching school exams when exam info changes
   useEffect(() => {
     async function loadMatchingExams() {
-      if (!schoolName || !examYear) {
+      const selectedSchool = schools.find(s => s.id === schoolId)
+      if (!selectedSchool || !examYear) {
         setAvailableExams([])
         return
       }
 
       try {
         const { data } = await getSchoolExams(1, 100, {
-          school_name: schoolName,
+          school_name: selectedSchool.name,
           exam_year: examYear,
           semester: semester,
           exam_type: examType,
-          school_type: schoolType,
+          school_type: selectedSchool.school_type as "all" | "중학교" | "고등학교",
           grade: grade,
         })
         setAvailableExams(data)
-      } catch (error) {
-        console.error("Error loading exams:", error)
+      } catch {
         setAvailableExams([])
       }
     }
     loadMatchingExams()
-  }, [schoolName, examYear, semester, examType, schoolType, grade])
+  }, [schoolId, schools, examYear, semester, examType, grade])
 
   // Initialize form when editingScore changes
   useEffect(() => {
     if (editingScore && isOpen) {
       // Edit mode: populate form with existing data
       setStudentId(editingScore.student_id)
-      setSchoolType(editingScore.school_type)
+      setSchoolId(editingScore.school_id || "")
       setGrade(editingScore.grade.toString() as "1" | "2" | "3")
       setSemester(editingScore.semester.toString() as "1" | "2")
-      setSchoolName(editingScore.school_name)
       setExamYear(editingScore.exam_year.toString())
       setExamType(editingScore.exam_type)
       setSchoolExamId(editingScore.school_exam_id || "none")
@@ -132,8 +137,8 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
       toast.error("학생을 선택해주세요")
       return
     }
-    if (!schoolName) {
-      toast.error("학교명을 입력해주세요")
+    if (!schoolId) {
+      toast.error("학교를 선택해주세요")
       return
     }
     if (scores.some((s) => !s.subject)) {
@@ -146,10 +151,9 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
       if (editingScore) {
         // Edit mode: update single score
         const updateData = {
-          school_type: schoolType,
+          school_id: schoolId,
           grade: parseInt(grade) as 1 | 2 | 3,
           semester: parseInt(semester) as 1 | 2,
-          school_name: schoolName,
           exam_year: parseInt(examYear),
           exam_type: examType,
           school_exam_id: schoolExamId === "none" ? null : schoolExamId,
@@ -163,10 +167,9 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
         // Create mode: create multiple scores
         const formData: SchoolExamScoreFormData = {
           student_id: studentId,
-          school_type: schoolType,
+          school_id: schoolId,
           grade: parseInt(grade) as 1 | 2 | 3,
           semester: parseInt(semester) as 1 | 2,
-          school_name: schoolName,
           exam_year: parseInt(examYear),
           exam_type: examType,
           school_exam_id: schoolExamId === "none" ? null : schoolExamId,
@@ -182,7 +185,6 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
       onSuccess()
       handleClose()
     } catch (error: any) {
-      console.error(`Error ${editingScore ? "updating" : "creating"} scores:`, error)
       const errorMessage = error?.message || `성적 ${editingScore ? "수정" : "등록"}에 실패했습니다`
       toast.error(errorMessage)
     } finally {
@@ -194,10 +196,10 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
     // Reset form
     setStudentId("")
     setStudentSearchValue("")
-    setSchoolType("중학교")
+    setSchoolId("")
+    setSchoolSearchValue("")
     setGrade("1")
     setSemester("1")
-    setSchoolName("")
     setExamYear(new Date().getFullYear().toString())
     setExamType("중간고사")
     setSchoolExamId("none")
@@ -206,7 +208,23 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
     onClose()
   }
 
+  // 학생 선택 시 학교/학년 자동 설정
+  const handleStudentSelect = (student: typeof students[0]) => {
+    setStudentId(student.id)
+    setStudentSearchOpen(false)
+    setStudentSearchValue("")
+
+    // 학생의 현재 학교 정보가 있으면 자동 설정
+    if (student.school_id) {
+      setSchoolId(student.school_id)
+    }
+    if (student.school_grade) {
+      setGrade(student.school_grade.toString() as "1" | "2" | "3")
+    }
+  }
+
   const selectedStudent = students.find((s) => s.id === studentId)
+  const selectedSchool = schools.find((s) => s.id === schoolId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -229,7 +247,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
                   disabled={!!editingScore}
                 >
                   {selectedStudent
-                    ? `${selectedStudent.name} (${formatSchoolGrade(selectedStudent.school, selectedStudent.grade)})`
+                    ? `${selectedStudent.name} (${selectedStudent.school_name || "학교 미등록"} ${selectedStudent.school_grade || selectedStudent.grade}학년)`
                     : "학생 선택..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -257,16 +275,74 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
                           <CommandItem
                             key={student.id}
                             value={student.name}
-                            onSelect={() => {
-                              setStudentId(student.id)
-                              setStudentSearchOpen(false)
-                              setStudentSearchValue("")
-                            }}
+                            onSelect={() => handleStudentSelect(student)}
                           >
                             <Check
                               className={cn("mr-2 h-4 w-4", studentId === student.id ? "opacity-100" : "opacity-0")}
                             />
-                            {student.name} ({formatSchoolGrade(student.school, student.grade)}) - {student.status}
+                            {student.name} ({student.school_name || "학교 미등록"} {student.school_grade || student.grade}학년) - {student.status}
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* 학교 선택 */}
+          <div className="space-y-2">
+            <Label>학교 *</Label>
+            <Popover open={schoolSearchOpen} onOpenChange={setSchoolSearchOpen} modal={true}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={schoolSearchOpen}
+                  className="w-full justify-between"
+                >
+                  {selectedSchool
+                    ? `${selectedSchool.name} (${selectedSchool.school_type})`
+                    : "학교 선택..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="학교 이름 검색..."
+                    value={schoolSearchValue}
+                    onValueChange={setSchoolSearchValue}
+                  />
+                  <CommandList
+                    className="max-h-[300px] overflow-y-auto scroll-smooth"
+                    onWheel={(e) => {
+                      e.stopPropagation()
+                    }}
+                  >
+                    <CommandEmpty>검색 결과가 없습니다</CommandEmpty>
+                    <CommandGroup>
+                      {schools
+                        .filter((school) => {
+                          const search = schoolSearchValue.toLowerCase()
+                          return school.name.toLowerCase().includes(search) ||
+                            (school.short_name && school.short_name.toLowerCase().includes(search))
+                        })
+                        .slice(0, 50)
+                        .map((school) => (
+                          <CommandItem
+                            key={school.id}
+                            value={school.name}
+                            onSelect={() => {
+                              setSchoolId(school.id)
+                              setSchoolSearchOpen(false)
+                              setSchoolSearchValue("")
+                            }}
+                          >
+                            <Check
+                              className={cn("mr-2 h-4 w-4", schoolId === school.id ? "opacity-100" : "opacity-0")}
+                            />
+                            {school.name} ({school.school_type})
                           </CommandItem>
                         ))}
                     </CommandGroup>
@@ -278,19 +354,6 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
 
           {/* 시험 정보 */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="school_type">학교 타입 *</Label>
-              <Select value={schoolType} onValueChange={(value: "중학교" | "고등학교") => setSchoolType(value)}>
-                <SelectTrigger id="school_type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="중학교">중학교</SelectItem>
-                  <SelectItem value="고등학교">고등학교</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="grade">학년 *</Label>
               <Select value={grade} onValueChange={(value: "1" | "2" | "3") => setGrade(value)}>
@@ -326,17 +389,6 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
                 value={examYear}
                 onChange={(e) => setExamYear(e.target.value)}
                 placeholder="2025"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="school_name">학교명 *</Label>
-              <Input
-                id="school_name"
-                value={schoolName}
-                onChange={(e) => setSchoolName(e.target.value)}
-                placeholder="OO중학교"
                 required
               />
             </div>

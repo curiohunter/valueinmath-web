@@ -613,6 +613,7 @@ export default function ClassesPage() {
           subject: editClass.subject,
           teacher_id: editClass.teacher_id,
           monthly_fee: editClass.monthly_fee,
+          mathflat_class_id: editClass.mathflat_class_id,
           selectedStudentIds: classStudents.filter(cs => cs.class_id === editClass.id).map(cs => cs.student_id)
         } : undefined}
       />

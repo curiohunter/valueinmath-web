@@ -198,8 +198,9 @@ export interface MathFlatWorksheetProblem {
 // 숙제 수집 옵션
 export interface HomeworkCollectionOptions {
   collectionType: 'first';  // 단일 수집 타입 (하위 호환성 유지)
-  targetDate: Date;  // KST 기준
+  targetDate: Date;  // KST 기준 - MathFlat API에서 숙제 조회할 날짜
   classIds?: string[];  // 특정 반만 수집 (수동 수집용)
+  homeworkDate?: Date;  // DB에 저장할 숙제 날짜 (수업일 기준, 미지정 시 targetDate 사용)
 }
 
 // 숙제 수집 결과

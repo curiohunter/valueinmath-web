@@ -2,15 +2,16 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { BarChart3, Loader2, Layers, Users } from "lucide-react";
+import { BarChart3, Loader2, Layers, Users, BookOpen, Target, TrendingUp, CalendarDays } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ChapterTreeSelector from "./ChapterTreeSelector";
 import StudentSelector from "./StudentSelector";
 import PeriodSelector from "./PeriodSelector";
-import AnalysisOverview from "./AnalysisOverview";
+import MaterialPerformanceCard from "./MaterialPerformanceCard";
+import SelfStudyAnalysisCard from "./SelfStudyAnalysisCard";
+import DifficultyBreakdownChart from "./DifficultyBreakdownChart";
 import ChapterAnalysisChart from "./ChapterAnalysisChart";
 import WeakConceptList from "./WeakConceptList";
-import LearningPatternCard from "./LearningPatternCard";
 import GrowthTrendChart from "./GrowthTrendChart";
 import SavedRangesSelector from "./SavedRangesSelector";
 import { useStudentAnalysis } from "./useStudentAnalysis";
@@ -23,8 +24,11 @@ import {
 } from "../types";
 
 interface Student {
+  student_id: string;
   mathflat_student_id: string;
   student_name: string;
+  school_id?: string | null;
+  grade?: number | null;
   recentCorrectRate?: number;
   recentTrend?: "up" | "down" | "stable";
 }
@@ -32,7 +36,6 @@ interface Student {
 export default function StudentAnalysisTab() {
   const supabase = createClient();
 
-  // 상태
   const [concepts, setConcepts] = useState<ConceptData[]>([]);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -91,7 +94,7 @@ export default function StudentAnalysisTab() {
     loadClasses();
   }, []);
 
-  // 학생 목록 로드 (반 선택 시) - 해당 반의 재원생 전체
+  // 학생 목록 로드
   useEffect(() => {
     async function loadStudents() {
       if (!selectedClassId) {
@@ -105,7 +108,6 @@ export default function StudentAnalysisTab() {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // 1. 해당 반의 재원생 목록 가져오기 (class_students + students 조인)
         const { data: classStudentsData, error } = await supabase
           .from("class_students")
           .select(`
@@ -121,33 +123,57 @@ export default function StudentAnalysisTab() {
 
         if (error) throw error;
 
-        // 2. 재원생만 필터링 (mathflat_student_id가 있는 학생)
-        const studentList: Student[] = (classStudentsData || [])
+        const filteredStudents = (classStudentsData || [])
           .filter((cs: any) =>
             cs.students?.status === "재원" &&
             cs.students?.mathflat_student_id
-          )
-          .map((cs: any) => ({
-            mathflat_student_id: cs.students.mathflat_student_id,
-            student_name: cs.students.name,
-          }))
+          );
+
+        const studentIds = filteredStudents.map((cs: any) => cs.students.id);
+        let schoolInfoMap = new Map<string, { school_id: string | null; grade: number | null }>();
+
+        if (studentIds.length > 0) {
+          const { data: schoolData } = await supabase
+            .from("student_schools")
+            .select("student_id, school_id, grade")
+            .in("student_id", studentIds)
+            .eq("is_current", true);
+
+          if (schoolData) {
+            schoolData.forEach((ss: any) => {
+              schoolInfoMap.set(ss.student_id, {
+                school_id: ss.school_id,
+                grade: ss.grade,
+              });
+            });
+          }
+        }
+
+        const studentList: Student[] = filteredStudents
+          .map((cs: any) => {
+            const schoolInfo = schoolInfoMap.get(cs.students.id);
+            return {
+              student_id: cs.students.id,
+              mathflat_student_id: cs.students.mathflat_student_id,
+              student_name: cs.students.name,
+              school_id: schoolInfo?.school_id || null,
+              grade: schoolInfo?.grade || null,
+            };
+          })
           .sort((a, b) => a.student_name.localeCompare(b.student_name, "ko"));
 
         if (studentList.length > 0 && studentList.length <= 20) {
-          const studentIds = studentList.map((s) => s.mathflat_student_id);
+          const mathflatIds = studentList.map((s) => s.mathflat_student_id);
           const { data: dailyWorkData } = await supabase
             .from("mathflat_daily_work")
             .select("mathflat_student_id, correct_count, assigned_count")
-            .in("mathflat_student_id", studentIds)
+            .in("mathflat_student_id", mathflatIds)
             .gte("work_date", thirtyDaysAgo.toISOString().split("T")[0]);
 
           if (dailyWorkData) {
             const statsMap = new Map<string, { correct: number; total: number }>();
             dailyWorkData.forEach((dw) => {
-              const stats = statsMap.get(dw.mathflat_student_id) || {
-                correct: 0,
-                total: 0,
-              };
+              const stats = statsMap.get(dw.mathflat_student_id) || { correct: 0, total: 0 };
               stats.correct += dw.correct_count || 0;
               stats.total += dw.assigned_count || 0;
               statsMap.set(dw.mathflat_student_id, stats);
@@ -156,9 +182,7 @@ export default function StudentAnalysisTab() {
             studentList.forEach((student) => {
               const stats = statsMap.get(student.mathflat_student_id);
               if (stats && stats.total > 0) {
-                student.recentCorrectRate = Math.round(
-                  (stats.correct / stats.total) * 100
-                );
+                student.recentCorrectRate = Math.round((stats.correct / stats.total) * 100);
               }
             });
           }
@@ -181,37 +205,33 @@ export default function StudentAnalysisTab() {
     loadStudents();
   }, [selectedClassId]);
 
-  // 선택 완료 여부
-  const isSelectionComplete = useMemo(() => {
-    return (
-      chapterSelection.curriculum !== null &&
-      chapterSelection.bigChapters.length > 0 &&
-      selectedClassId !== null &&
-      selectedStudentId !== null
-    );
-  }, [chapterSelection, selectedClassId, selectedStudentId]);
+  // 기본 선택 완료 여부 (반 + 학생만)
+  const isBasicSelectionComplete = useMemo(() => {
+    return selectedClassId !== null && selectedStudentId !== null;
+  }, [selectedClassId, selectedStudentId]);
 
-  // 선택된 학생 정보
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.mathflat_student_id === selectedStudentId);
   }, [students, selectedStudentId]);
 
   // 분석 데이터 훅
   const {
-    overview,
-    chapterAnalysis,
-    weakConcepts,
-    patterns,
+    activitySummary,
+    materialPerformance,
+    selfStudyAnalysis,
     growthTrend,
+    difficultyBreakdown,
+    weakConcepts,
+    chapterAnalysis,
     isLoading: isLoadingAnalysis,
     error: analysisError,
+    hasChapterAnalysis,
   } = useStudentAnalysis({
-    mathflatStudentId: isSelectionComplete ? selectedStudentId : null,
+    mathflatStudentId: isBasicSelectionComplete ? selectedStudentId : null,
     chapterSelection,
     period,
   });
 
-  // 기간 라벨
   const periodLabel = useMemo(() => {
     if (period.type === "custom" && period.customStart && period.customEnd) {
       return `${period.customStart} ~ ${period.customEnd}`;
@@ -224,18 +244,44 @@ export default function StudentAnalysisTab() {
     <div className="space-y-4">
       {/* 상단: 좌우 분할 레이아웃 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 왼쪽: 분석 범위 */}
+        {/* 왼쪽: 분석 대상 + 기간 */}
+        <Card className="border-0 shadow-lg overflow-hidden">
+          <div className="bg-slate-800 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-white" />
+              <h3 className="font-semibold text-white">분석 대상</h3>
+            </div>
+          </div>
+          <div className="p-4 space-y-5">
+            <StudentSelector
+              classes={classes}
+              selectedClassId={selectedClassId}
+              onClassChange={setSelectedClassId}
+              students={students}
+              selectedStudentId={selectedStudentId}
+              onStudentChange={setSelectedStudentId}
+              isLoading={isLoadingStudents}
+            />
+            <div className="border-t border-slate-100" />
+            <PeriodSelector period={period} onPeriodChange={setPeriod} />
+          </div>
+        </Card>
+
+        {/* 오른쪽: 단원 범위 (선택사항) */}
         <Card className="border-0 shadow-lg overflow-hidden">
           <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-white" />
-                <h3 className="font-semibold text-white">분석 범위</h3>
+                <h3 className="font-semibold text-white">심화 분석 범위</h3>
+                <span className="text-xs text-white/60">(선택사항)</span>
               </div>
               <SavedRangesSelector
                 selection={chapterSelection}
                 onSelectionChange={setChapterSelection}
                 disabled={isRangeLocked}
+                studentSchoolId={selectedStudent?.school_id}
+                studentGrade={selectedStudent?.grade}
               />
             </div>
           </div>
@@ -258,40 +304,11 @@ export default function StudentAnalysisTab() {
             )}
           </div>
         </Card>
-
-        {/* 오른쪽: 분석 대상 + 기간 */}
-        <Card className="border-0 shadow-lg overflow-hidden">
-          <div className="bg-slate-800 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-white" />
-              <h3 className="font-semibold text-white">분석 대상</h3>
-            </div>
-          </div>
-          <div className="p-4 space-y-5">
-            {/* 반/학생 선택 */}
-            <StudentSelector
-              classes={classes}
-              selectedClassId={selectedClassId}
-              onClassChange={setSelectedClassId}
-              students={students}
-              selectedStudentId={selectedStudentId}
-              onStudentChange={setSelectedStudentId}
-              isLoading={isLoadingStudents}
-            />
-
-            {/* 구분선 */}
-            <div className="border-t border-slate-100" />
-
-            {/* 기간 선택 */}
-            <PeriodSelector period={period} onPeriodChange={setPeriod} />
-          </div>
-        </Card>
       </div>
 
-      {/* 하단: 분석 결과 */}
-      {isSelectionComplete ? (
+      {/* 분석 결과 */}
+      {isBasicSelectionComplete ? (
         <div className="space-y-4">
-          {/* 로딩 상태 */}
           {isLoadingAnalysis ? (
             <Card className="border-0 shadow-lg p-12">
               <div className="flex flex-col items-center justify-center gap-3">
@@ -304,27 +321,85 @@ export default function StudentAnalysisTab() {
               <div className="text-red-500 mb-2">오류가 발생했습니다</div>
               <p className="text-slate-500 text-sm">{analysisError}</p>
             </Card>
+          ) : activitySummary.totalProblems === 0 ? (
+            <Card className="border-0 shadow-lg p-8 text-center">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                <CalendarDays className="w-7 h-7 text-slate-400" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-700 mb-2">
+                학습 기록이 없습니다
+              </h3>
+              <p className="text-slate-500 text-sm">
+                선택한 기간에 매쓰플랫 학습 기록이 없습니다. 기간을 넓혀보세요.
+              </p>
+            </Card>
           ) : (
             <>
-              {/* Overview 카드 */}
-              <AnalysisOverview
-                data={overview}
-                studentName={selectedStudent?.student_name || ""}
-                curriculum={chapterSelection.curriculum || ""}
-                periodLabel={periodLabel}
-              />
+              {/* 상단: 학습 활동 요약 (전체 폭) */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-5 py-4">
+                  <h3 className="font-bold text-white text-lg">
+                    {selectedStudent?.student_name} 학습 분석
+                  </h3>
+                  <p className="text-slate-300 text-sm mt-0.5">{periodLabel}</p>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-slate-100">
+                  <StatCell
+                    icon={BookOpen}
+                    label="총 풀이"
+                    value={`${activitySummary.totalProblems}문제`}
+                    color="text-blue-600"
+                    bgColor="bg-blue-50"
+                  />
+                  <StatCell
+                    icon={Target}
+                    label="정답률"
+                    value={`${activitySummary.overallCorrectRate}%`}
+                    color={activitySummary.overallCorrectRate >= 70 ? "text-emerald-600" : activitySummary.overallCorrectRate >= 50 ? "text-amber-600" : "text-red-600"}
+                    bgColor={activitySummary.overallCorrectRate >= 70 ? "bg-emerald-50" : activitySummary.overallCorrectRate >= 50 ? "bg-amber-50" : "bg-red-50"}
+                  />
+                  <StatCell
+                    icon={CalendarDays}
+                    label="학습일"
+                    value={`${activitySummary.totalDays}일`}
+                    color="text-violet-600"
+                    bgColor="bg-violet-50"
+                  />
+                  <StatCell
+                    icon={TrendingUp}
+                    label="일평균"
+                    value={`${activitySummary.dailyAverage}문제`}
+                    color="text-indigo-600"
+                    bgColor="bg-indigo-50"
+                  />
+                  <StatCell
+                    icon={BookOpen}
+                    label="숙제/자율"
+                    value={`${activitySummary.homeworkRatio}% / ${100 - activitySummary.homeworkRatio}%`}
+                    color="text-slate-600"
+                    bgColor="bg-slate-50"
+                  />
+                </div>
+              </div>
 
-              {/* 소단원별 정답률 + 취약 개념 (2열 그리드) */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* 중단: 교재/학습지 성적 + 자율학습 분석 */}
+              <MaterialPerformanceCard data={materialPerformance} />
+              <SelfStudyAnalysisCard data={selfStudyAnalysis} />
+
+              {/* 하단: 심화 분석 (단원 선택시만) */}
+              {hasChapterAnalysis && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <DifficultyBreakdownChart data={difficultyBreakdown} />
+                  <WeakConceptList data={weakConcepts} />
+                </div>
+              )}
+
+              {hasChapterAnalysis && chapterAnalysis.length > 0 && (
                 <ChapterAnalysisChart data={chapterAnalysis} />
-                <WeakConceptList data={weakConcepts} />
-              </div>
+              )}
 
-              {/* Phase 3: 학습 패턴 + 성장 추이 */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <LearningPatternCard data={patterns} />
-                <GrowthTrendChart data={growthTrend} />
-              </div>
+              {/* 최하단: 성장 추이 (전체 폭) */}
+              <GrowthTrendChart data={growthTrend} />
             </>
           )}
         </div>
@@ -334,26 +409,12 @@ export default function StudentAnalysisTab() {
             <BarChart3 className="w-7 h-7 text-slate-400" />
           </div>
           <h3 className="text-lg font-bold text-slate-700 mb-2">
-            분석 조건을 선택하세요
+            분석 대상을 선택하세요
           </h3>
           <p className="text-slate-500 text-sm mb-4">
-            단원 범위, 반, 학생을 선택하면 학습 분석 결과가 표시됩니다
+            반과 학생을 선택하면 학습 분석 결과가 표시됩니다
           </p>
-
-          {/* 선택 상태 체크 */}
           <div className="flex justify-center gap-6 text-sm">
-            <div
-              className={
-                chapterSelection.curriculum && chapterSelection.bigChapters.length > 0
-                  ? "text-emerald-600"
-                  : "text-slate-400"
-              }
-            >
-              {chapterSelection.curriculum && chapterSelection.bigChapters.length > 0
-                ? "✓"
-                : "○"}{" "}
-              단원
-            </div>
             <div className={selectedClassId ? "text-emerald-600" : "text-slate-400"}>
               {selectedClassId ? "✓" : "○"} 반
             </div>
@@ -363,6 +424,33 @@ export default function StudentAnalysisTab() {
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+// 통계 셀 컴포넌트
+function StatCell({
+  icon: Icon,
+  label,
+  value,
+  color,
+  bgColor,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  color: string;
+  bgColor: string;
+}) {
+  return (
+    <div className="p-4 flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bgColor}`}>
+        <Icon className={`w-5 h-5 ${color}`} />
+      </div>
+      <div>
+        <div className={`text-xl font-bold ${color}`}>{value}</div>
+        <div className="text-xs text-slate-500">{label}</div>
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, Bot, MessageSquare, Activity, FolderOpen } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, MessageSquare, Activity, FolderOpen, Megaphone } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -89,6 +89,11 @@ export function Sidebar() {
       icon: FolderOpen,
     },
     {
+      title: "마케팅",
+      href: "/marketing",
+      icon: Megaphone,
+    },
+    {
       title: "통계 분석",
       href: "/analytics",
       icon: BarChart3,
@@ -97,11 +102,6 @@ export function Sidebar() {
       title: "직원 관리",
       href: "/employees",
       icon: UserCog,
-    },
-    {
-      title: "AI insight",
-      href: "/agent",
-      icon: Bot,
     },
     {
       title: "설정",

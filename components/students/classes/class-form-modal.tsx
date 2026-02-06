@@ -39,6 +39,7 @@ interface ClassFormModalProps {
     subject: string
     teacher_id: string
     monthly_fee?: number
+    mathflat_class_id?: string | null
     selectedStudentIds: string[]
   }
 }
@@ -63,6 +64,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
   const [name, setName] = useState("")
   const [subject, setSubject] = useState("수학")
   const [monthlyFee, setMonthlyFee] = useState("")
+  const [mathflatClassId, setMathflatClassId] = useState("")
   const [teacherSearch, setTeacherSearch] = useState("")
   const [studentSearch, setStudentSearch] = useState("")
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
@@ -79,6 +81,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
       setName(initialData.name)
       setSubject(initialData.subject)
       setMonthlyFee(initialData.monthly_fee?.toString() || "")
+      setMathflatClassId(initialData.mathflat_class_id || "")
       const teacher = teachers.find(t => t.id === initialData.teacher_id) || null
       setSelectedTeacher(teacher)
       setSelectedStudents(
@@ -112,6 +115,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
       setName("")
       setSubject("수학")
       setMonthlyFee("")
+      setMathflatClassId("")
       setSelectedTeacher(null)
       setSelectedStudents([])
       setSchedules([])
@@ -226,6 +230,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         subject,
         teacher_id: selectedTeacher.id,
         monthly_fee: parsedFee,
+        mathflat_class_id: mathflatClassId.trim() || null,
       }).select().single()
       if (error) {
         toast.error("반 생성 실패: " + error.message)
@@ -251,6 +256,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         subject,
         teacher_id: selectedTeacher.id,
         monthly_fee: parsedFee,
+        mathflat_class_id: mathflatClassId.trim() || null,
       }).eq("id", initialData.id)
       if (error) {
         setLoading(false)
@@ -338,7 +344,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4">
             {/* 1. 기본 정보 섹션 */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   반 이름 <span className="text-red-500">*</span>
@@ -382,6 +388,17 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
                     원
                   </span>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  매쓰플랫 반ID
+                </label>
+                <Input
+                  className="w-full h-10"
+                  placeholder="매쓰플랫 반 ID"
+                  value={mathflatClassId}
+                  onChange={e => setMathflatClassId(e.target.value)}
+                />
               </div>
             </div>
 

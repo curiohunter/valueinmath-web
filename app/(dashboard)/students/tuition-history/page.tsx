@@ -1,6 +1,6 @@
 // @ts-nocheck
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import StudentClassTabs from "@/components/students/StudentClassTabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,27 +32,47 @@ const formatAmount = (amount: number) => {
   return amount.toLocaleString() + "원";
 };
 
-// 통계 계산 함수
+// 통계 계산 함수 - 단일 순회로 최적화 (js-combine-iterations)
 // 분할납부(분할청구) 학생은 이미 이전 청구에서 계산되었으므로 총 금액에서 제외
 const calculateStats = (data: TuitionRow[]) => {
-  const totalCount = data.length;
-  const paidRows = data.filter(row => row.paymentStatus === '완납');
-  const unpaidRows = data.filter(row => row.paymentStatus === '미납');
-  const partialRows = data.filter(row => row.paymentStatus === '분할청구');
+  let totalAmount = 0;
+  let paidCount = 0;
+  let paidAmount = 0;
+  let unpaidCount = 0;
+  let unpaidAmount = 0;
+  let partialCount = 0;
+  let partialAmount = 0;
 
-  // 분할청구 제외한 총 금액 (분할납부는 이미 이전에 계산됨)
-  const nonPartialRows = data.filter(row => row.paymentStatus !== '분할청구');
-  const totalAmount = nonPartialRows.reduce((sum, row) => sum + row.amount, 0);
+  for (const row of data) {
+    const amount = row.amount;
+    const status = row.paymentStatus;
+
+    if (status === '완납') {
+      paidCount++;
+      paidAmount += amount;
+      totalAmount += amount;
+    } else if (status === '미납') {
+      unpaidCount++;
+      unpaidAmount += amount;
+      totalAmount += amount;
+    } else if (status === '분할청구') {
+      partialCount++;
+      partialAmount += amount;
+      // 분할청구는 totalAmount에 포함하지 않음
+    } else {
+      totalAmount += amount;
+    }
+  }
 
   return {
-    totalCount,
+    totalCount: data.length,
     totalAmount,
-    paidCount: paidRows.length,
-    paidAmount: paidRows.reduce((sum, row) => sum + row.amount, 0),
-    unpaidCount: unpaidRows.length,
-    unpaidAmount: unpaidRows.reduce((sum, row) => sum + row.amount, 0),
-    partialCount: partialRows.length,
-    partialAmount: partialRows.reduce((sum, row) => sum + row.amount, 0)
+    paidCount,
+    paidAmount,
+    unpaidCount,
+    unpaidAmount,
+    partialCount,
+    partialAmount
   };
 };
 
@@ -545,31 +565,40 @@ export default function TuitionHistoryPage() {
 
   // 페이지당 아이템 수
   const pageSize = 12;
-  
-  // 검색 및 필터링 적용
-  const filteredData = data.filter(row => {
-    // 검색어 필터
-    const searchMatches = !searchTerm || 
-      row.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (row.note && row.note.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    // 납부 상태 필터
-    const statusMatches = paymentStatusFilter === "all" || row.paymentStatus === paymentStatusFilter;
-    
-    // 수업 유형 필터
-    const classTypeMatches = classTypeFilter === "all" || row.classType === classTypeFilter;
-    
-    return searchMatches && statusMatches && classTypeMatches;
-  });
-  
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
-  
-  // 통계 계산
-  const stats = calculateStats(filteredData);
+
+  // 검색 및 필터링 적용 - useMemo로 캐싱
+  const filteredData = useMemo(() => {
+    const searchLower = searchTerm.toLowerCase();
+    return data.filter(row => {
+      // 검색어 필터
+      const searchMatches = !searchTerm ||
+        row.studentName.toLowerCase().includes(searchLower) ||
+        row.className.toLowerCase().includes(searchLower) ||
+        (row.note && row.note.toLowerCase().includes(searchLower));
+
+      // 납부 상태 필터
+      const statusMatches = paymentStatusFilter === "all" || row.paymentStatus === paymentStatusFilter;
+
+      // 수업 유형 필터
+      const classTypeMatches = classTypeFilter === "all" || row.classType === classTypeFilter;
+
+      return searchMatches && statusMatches && classTypeMatches;
+    });
+  }, [data, searchTerm, paymentStatusFilter, classTypeFilter]);
+
+  // 페이지네이션 계산 - useMemo로 캐싱
+  const { totalPages, paginatedData } = useMemo(() => {
+    const total = Math.ceil(filteredData.length / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return {
+      totalPages: total,
+      paginatedData: filteredData.slice(startIndex, endIndex)
+    };
+  }, [filteredData, page, pageSize]);
+
+  // 통계 계산 - useMemo로 캐싱
+  const stats = useMemo(() => calculateStats(filteredData), [filteredData]);
 
   // 개별 행 수정 핸들러
   const handleRowChange = (index: number, field: keyof TuitionRow, value: any) => {
@@ -1066,9 +1095,9 @@ export default function TuitionHistoryPage() {
     }
   };
 
-  // 선택된 항목 중 발송/현장결제 가능한 건수 계산
+  // 선택된 항목 중 발송/현장결제 가능한 건수 계산 - useMemo로 캐싱
   // PaysSam에서는 "발송"이 곧 "등록"이므로 1단계 워크플로우로 통합
-  const getInvoiceActionCounts = () => {
+  const invoiceActionCounts = useMemo(() => {
     // selectedRows는 data 배열의 global index를 저장하고 있으므로
     // data[index]로 접근해야 함 (filteredData[index]가 아님)
     const selectedFees = selectedRows.map(index => data[index]).filter(Boolean);
@@ -1084,15 +1113,28 @@ export default function TuitionHistoryPage() {
     ).length;
 
     return { sendableCount, offlinePayableCount };
-  };
+  }, [selectedRows, data]);
 
-  // 선택된 행들의 TuitionRow 데이터 가져오기
-  const getSelectedFeesForInvoice = (): TuitionRow[] => {
+  // 선택된 행들의 TuitionRow 데이터 - useMemo로 캐싱
+  const selectedFeesForInvoice = useMemo((): TuitionRow[] => {
     // selectedRows는 data 배열의 global index를 저장하므로 data[index]로 접근
     return selectedRows
       .map(index => data[index])
       .filter(Boolean);
-  };
+  }, [selectedRows, data]);
+
+  // TuitionTable에 전달할 selectedRows (현재 페이지 기준) - useMemo로 캐싱
+  const tableSelectedRows = useMemo(() => {
+    return paginatedData.map((row, idx) => {
+      const globalIndex = data.findIndex(item => item.id === row.id);
+      return selectedRows.includes(globalIndex) ? idx : -1;
+    }).filter(i => i !== -1);
+  }, [paginatedData, data, selectedRows]);
+
+  // 데이터 새로고침 콜백 - useCallback으로 안정화
+  const handleRefresh = useCallback(() => {
+    fetchTuitionHistoryWithFilters(false);
+  }, []);
 
   // 초기 데이터 로드 - 날짜 범위가 설정되면 한 번만 로드
   useEffect(() => {
@@ -1101,9 +1143,24 @@ export default function TuitionHistoryPage() {
     }
   }, [dateRange.from, dateRange.to]);
 
-  // 데이터 변경 감지
+  // 데이터 변경 감지 - 효율적인 비교 (JSON.stringify 대신 필드별 비교)
   useEffect(() => {
-    const hasChanges = JSON.stringify(data) !== JSON.stringify(originalData);
+    if (data.length !== originalData.length) {
+      setHasUnsavedChanges(true);
+      return;
+    }
+    // 빠른 변경 감지: 주요 편집 가능 필드만 비교
+    const hasChanges = data.some((row, index) => {
+      const orig = originalData[index];
+      if (!orig) return true;
+      return (
+        row.paymentStatus !== orig.paymentStatus ||
+        row.amount !== orig.amount ||
+        row.note !== orig.note ||
+        row.classType !== orig.classType ||
+        row.isSibling !== orig.isSibling
+      );
+    });
     setHasUnsavedChanges(hasChanges);
   }, [data, originalData]);
 
@@ -1148,7 +1205,7 @@ export default function TuitionHistoryPage() {
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Send className={`w-4 h-4 mr-2 ${isSendingInvoices ? 'animate-pulse' : ''}`} />
-            {isSendingInvoices ? '발송 중...' : `청구서 발송 (${getInvoiceActionCounts().sendableCount})`}
+            {isSendingInvoices ? '발송 중...' : `청구서 발송 (${invoiceActionCounts.sendableCount})`}
           </Button>
 
           {/* 현장결제 완료 */}
@@ -1160,7 +1217,7 @@ export default function TuitionHistoryPage() {
             className="text-green-600 border-green-200 hover:bg-green-50"
           >
             <CreditCard className={`w-4 h-4 mr-2 ${isProcessingOfflinePayment ? 'animate-pulse' : ''}`} />
-            {isProcessingOfflinePayment ? '처리 중...' : `현장결제 완료 (${getInvoiceActionCounts().offlinePayableCount})`}
+            {isProcessingOfflinePayment ? '처리 중...' : `현장결제 완료 (${invoiceActionCounts.offlinePayableCount})`}
           </Button>
         </div>
       </div>
@@ -1398,10 +1455,7 @@ export default function TuitionHistoryPage() {
             onRowSave={handleRowSave}
             onSave={handleSave}
             isSaving={isSaving}
-            selectedRows={paginatedData.map((row, idx) => {
-              const globalIndex = data.findIndex(item => item.id === row.id);
-              return selectedRows.includes(globalIndex) ? idx : -1;
-            }).filter(i => i !== -1)}
+            selectedRows={tableSelectedRows}
             totalSelectedCount={selectedRows.length}
             onRowSelect={handleRowSelect}
             onSelectAll={handleSelectAll}
@@ -1428,7 +1482,7 @@ export default function TuitionHistoryPage() {
             teachers={teachers}
             onSearch={handleSearch}
             onExport={handleExport}
-            onRefresh={() => fetchTuitionHistoryWithFilters(false)}
+            onRefresh={handleRefresh}
             onCancelDiscount={handleCancelDiscount}
             policiesByStudent={policiesByStudent}
             pendingRewardsByStudent={pendingRewardsByStudent}
@@ -1509,7 +1563,7 @@ export default function TuitionHistoryPage() {
       <SendInvoiceModal
         open={showSendInvoiceModal}
         onOpenChange={setShowSendInvoiceModal}
-        selectedFees={getSelectedFeesForInvoice()}
+        selectedFees={selectedFeesForInvoice}
         onSuccess={() => {
           setSelectedRows([]);
           fetchTuitionHistoryWithFilters(false);

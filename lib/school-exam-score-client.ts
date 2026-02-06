@@ -14,20 +14,37 @@ export async function getSchoolExamScores(
     const from = (page - 1) * pageSize
     const to = from + pageSize - 1
 
+    // 학생명 검색 시 먼저 student_id 목록 조회
+    let studentIds: string[] | null = null
+    if (filters.search) {
+      const { data: students } = await supabase
+        .from("students")
+        .select("id")
+        .ilike("name", `%${filters.search}%`)
+
+      if (students && students.length > 0) {
+        studentIds = students.map(s => s.id)
+      } else {
+        // 검색 결과 없음
+        return { data: [], count: 0 }
+      }
+    }
+
     let query = supabase
       .from("school_exam_scores")
       .select(
         `
         *,
         student:students!inner(name, grade, status),
+        school:schools(id, name, school_type),
         school_exam:school_exams(pdf_file_path)
       `,
         { count: "exact" }
       )
 
-    // 학생명 검색 필터
-    if (filters.search) {
-      query = query.ilike("student.name", `%${filters.search}%`)
+    // 학생명 검색 필터 (student_id로 필터)
+    if (studentIds) {
+      query = query.in("student_id", studentIds)
     }
 
     // 학교명 검색 필터
@@ -65,22 +82,35 @@ export async function getSchoolExamScores(
       query = query.ilike("subject", `%${filters.subject}%`)
     }
 
-    // 정렬: 최신순 (출제연도 내림차순, 학생명 오름차순, 과목명 오름차순)
+    // 서버 정렬: 연도↓ → 학기↓ → 시험유형 → 학교유형 → 학년↓ → 학교명 → 과목명
     query = query.order("exam_year", { ascending: false })
+    query = query.order("semester", { ascending: false })
+    query = query.order("exam_type", { ascending: true })  // 기말 < 중간 (가나다순)
+    query = query.order("school_type", { ascending: true }) // 고등학교 < 중학교 (가나다순)
+    query = query.order("grade", { ascending: false })     // 3 → 2 → 1
     query = query.order("school_name", { ascending: true })
     query = query.order("subject", { ascending: true })
 
     // 페이지네이션
     const { data, error, count } = await query.range(from, to)
 
-    if (error) throw error
+    if (error) {
+      // PGRST103: offset이 총 row 수보다 클 때 발생
+      // 필터 적용 후 결과가 줄어든 경우 - 빈 배열 반환 (UI에서 페이지 리셋 처리)
+      if (error.code === "PGRST103") {
+        return {
+          data: [],
+          count: count || 0,
+        }
+      }
+      throw error
+    }
 
     return {
       data: (data as SchoolExamScore[]) || [],
       count: count || 0,
     }
-  } catch (error) {
-    console.error("Error fetching school exam scores:", error)
+  } catch (error: any) {
     throw error
   }
 }
@@ -95,6 +125,7 @@ export async function getSchoolExamScore(id: string): Promise<SchoolExamScore | 
         `
         *,
         student:students(name, grade, status),
+        school:schools(id, name, school_type),
         school_exam:school_exams(pdf_file_path)
       `
       )
@@ -103,8 +134,7 @@ export async function getSchoolExamScore(id: string): Promise<SchoolExamScore | 
 
     if (error) throw error
     return data as SchoolExamScore
-  } catch (error) {
-    console.error("Error fetching school exam score:", error)
+  } catch {
     return null
   }
 }
@@ -130,13 +160,23 @@ export async function createSchoolExamScores(formData: SchoolExamScoreFormData):
 
     if (!employee) throw new Error("Employee not found")
 
+    // 학교 정보 가져오기 (school_name, school_type 저장을 위해)
+    const { data: school } = await supabase
+      .from("schools")
+      .select("name, school_type")
+      .eq("id", formData.school_id)
+      .single()
+
+    if (!school) throw new Error("School not found")
+
     // 각 과목별로 개별 행 생성
     const scoresData = formData.scores.map((scoreItem) => ({
       student_id: formData.student_id,
-      school_type: formData.school_type,
+      school_id: formData.school_id,
+      school_name: school.name,
+      school_type: school.school_type,
       grade: formData.grade,
       semester: formData.semester,
-      school_name: formData.school_name,
       exam_year: formData.exam_year,
       exam_type: formData.exam_type,
       school_exam_id: formData.school_exam_id || null,
@@ -158,7 +198,6 @@ export async function createSchoolExamScores(formData: SchoolExamScoreFormData):
 
     return { success: true }
   } catch (error: any) {
-    console.error("Error creating school exam scores:", error)
     throw error
   }
 }
@@ -167,10 +206,9 @@ export async function createSchoolExamScores(formData: SchoolExamScoreFormData):
 export async function updateSchoolExamScore(
   id: string,
   formData: {
-    school_type: "중학교" | "고등학교"
+    school_id: string
     grade: 1 | 2 | 3
     semester: 1 | 2
-    school_name: string
     exam_year: number
     exam_type: "중간고사" | "기말고사"
     school_exam_id?: string | null
@@ -182,11 +220,21 @@ export async function updateSchoolExamScore(
   try {
     const supabase = getSupabaseBrowserClient()
 
+    // 학교 정보 가져오기 (school_name, school_type 저장을 위해)
+    const { data: school } = await supabase
+      .from("schools")
+      .select("name, school_type")
+      .eq("id", formData.school_id)
+      .single()
+
+    if (!school) throw new Error("School not found")
+
     const updateData = {
-      school_type: formData.school_type,
+      school_id: formData.school_id,
+      school_name: school.name,
+      school_type: school.school_type,
       grade: formData.grade,
       semester: formData.semester,
-      school_name: formData.school_name,
       exam_year: formData.exam_year,
       exam_type: formData.exam_type,
       school_exam_id: formData.school_exam_id || null,
@@ -201,7 +249,6 @@ export async function updateSchoolExamScore(
 
     return { success: true }
   } catch (error) {
-    console.error("Error updating school exam score:", error)
     throw error
   }
 }
@@ -217,7 +264,6 @@ export async function deleteSchoolExamScore(id: string): Promise<{ success: bool
 
     return { success: true }
   } catch (error) {
-    console.error("Error deleting school exam score:", error)
     throw error
   }
 }
@@ -236,13 +282,31 @@ export async function getScoreExamYears(): Promise<number[]> {
     // 중복 제거
     const years = Array.from(new Set(data.map((item) => item.exam_year)))
     return years
-  } catch (error) {
-    console.error("Error fetching score exam years:", error)
+  } catch {
     return []
   }
 }
 
-// 학교명 목록 조회 (필터용)
+// 학교 목록 조회 (중학교, 고등학교만)
+export async function getSchools(): Promise<Array<{ id: string; name: string; school_type: string; short_name: string | null }>> {
+  try {
+    const supabase = getSupabaseBrowserClient()
+    const { data, error } = await supabase
+      .from("schools")
+      .select("id, name, school_type, short_name")
+      .in("school_type", ["중학교", "고등학교"])
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+
+    if (error) throw error
+
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+// 학교명 목록 조회 (필터용 - 기존 데이터 기반)
 export async function getSchoolNames(): Promise<string[]> {
   try {
     const supabase = getSupabaseBrowserClient()
@@ -256,8 +320,7 @@ export async function getSchoolNames(): Promise<string[]> {
     // 중복 제거
     const schools = Array.from(new Set(data.map((item) => item.school_name)))
     return schools
-  } catch (error) {
-    console.error("Error fetching school names:", error)
+  } catch {
     return []
   }
 }
@@ -276,30 +339,60 @@ export async function getSubjects(): Promise<string[]> {
     // 중복 제거
     const subjects = Array.from(new Set(data.map((item) => item.subject)))
     return subjects
-  } catch (error) {
-    console.error("Error fetching subjects:", error)
+  } catch {
     return []
   }
 }
 
 // 재원/퇴원 학생 목록 조회 (등록 모달용)
 export async function getActiveStudents(): Promise<
-  Array<{ id: string; name: string; grade: number; status: string; school: string }>
+  Array<{ id: string; name: string; grade: number; status: string; school_id: string | null; school_name: string | null; school_grade: number | null }>
 > {
   try {
     const supabase = getSupabaseBrowserClient()
-    const { data, error } = await supabase
+
+    // 학생 기본 정보
+    const { data: students, error } = await supabase
       .from("students")
-      .select("id, name, grade, status, school")
+      .select("id, name, grade, status")
       .in("status", ["재원", "퇴원"])
-      .order("status", { ascending: true }) // 재원(ㅈ)이 퇴원(ㅌ)보다 먼저 (ㄱㄴㄷ순)
-      .order("name", { ascending: true }) // 이름 ㄱㄴㄷ순
+      .order("status", { ascending: true })
+      .order("name", { ascending: true })
 
     if (error) throw error
+    if (!students || students.length === 0) return []
 
-    return data || []
-  } catch (error) {
-    console.error("Error fetching active students:", error)
+    // student_schools에서 현재 학교 정보 가져오기
+    const studentIds = students.map(s => s.id)
+    const { data: studentSchools } = await supabase
+      .from("student_schools")
+      .select(`
+        student_id,
+        school_id,
+        grade,
+        school:schools(name)
+      `)
+      .in("student_id", studentIds)
+      .eq("is_current", true)
+
+    // 학교 정보 맵 생성
+    const schoolMap = new Map<string, { school_id: string | null; school_name: string | null; school_grade: number | null }>()
+    studentSchools?.forEach((ss: any) => {
+      schoolMap.set(ss.student_id, {
+        school_id: ss.school_id,
+        school_name: ss.school?.name || null,
+        school_grade: ss.grade,
+      })
+    })
+
+    // 학생 데이터에 학교 정보 합치기
+    return students.map(student => ({
+      ...student,
+      school_id: schoolMap.get(student.id)?.school_id || null,
+      school_name: schoolMap.get(student.id)?.school_name || null,
+      school_grade: schoolMap.get(student.id)?.school_grade || null,
+    }))
+  } catch {
     return []
   }
 }

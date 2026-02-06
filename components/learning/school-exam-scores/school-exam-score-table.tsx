@@ -56,8 +56,30 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
         return a.exam_type === "기말고사" ? -1 : 1
       }
       // 4. 학교 유형 (고등학교가 위로)
-      if (a.school_type !== b.school_type) {
-        return a.school_type === "고등학교" ? -1 : 1
+      const aSchoolType = a.school?.school_type || a.school_type
+      const bSchoolType = b.school?.school_type || b.school_type
+      if (aSchoolType !== bSchoolType) {
+        return aSchoolType === "고등학교" ? -1 : 1
+      }
+      // 5. 학년 내림차순 (3학년 → 2학년 → 1학년)
+      if (a.grade !== b.grade) {
+        return b.grade - a.grade
+      }
+      // 6. 학교명 가나다순
+      const aSchoolName = a.school?.name || a.school_name
+      const bSchoolName = b.school?.name || b.school_name
+      if (aSchoolName !== bSchoolName) {
+        return aSchoolName.localeCompare(bSchoolName, "ko")
+      }
+      // 7. 학생명 가나다순
+      const aStudentName = a.student?.name || ""
+      const bStudentName = b.student?.name || ""
+      if (aStudentName !== bStudentName) {
+        return aStudentName.localeCompare(bStudentName, "ko")
+      }
+      // 8. 과목명 가나다순
+      if (a.subject !== b.subject) {
+        return a.subject.localeCompare(b.subject, "ko")
       }
       return 0
     })
@@ -78,8 +100,7 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
       setDeleteDialogOpen(false)
       setScoreToDelete(null)
       onDelete()
-    } catch (error) {
-      console.error("Error deleting score:", error)
+    } catch {
       toast.error("성적 삭제에 실패했습니다")
     } finally {
       setIsDeleting(false)
@@ -97,8 +118,7 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
       const url = await getPDFDownloadUrl(score.school_exam.pdf_file_path)
       window.open(url, '_blank')
       toast.success("새 탭에서 PDF를 열었습니다")
-    } catch (error) {
-      console.error("Error previewing PDF:", error)
+    } catch {
       toast.error("PDF 미리보기에 실패했습니다")
     } finally {
       setDownloadingId(null)
@@ -149,8 +169,8 @@ export function SchoolExamScoreTable({ scores, onDelete, onEdit }: SchoolExamSco
                   {score.student?.name}
                 </TableCell>
                 <TableCell className="w-[150px]">
-                  <div className="truncate" title={score.school_name}>
-                    {score.school_name}
+                  <div className="truncate" title={score.school?.name || score.school_name}>
+                    {score.school?.name || score.school_name}
                   </div>
                 </TableCell>
                 <TableCell className="w-[60px]">{score.grade}학년</TableCell>

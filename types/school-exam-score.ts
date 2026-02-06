@@ -2,10 +2,11 @@ export interface SchoolExamScore {
   id: string
   school_exam_id: string | null
   student_id: string
-  school_type: "중학교" | "고등학교"
+  school_id: string | null
+  school_type: "중학교" | "고등학교"  // legacy, fallback용
   grade: 1 | 2 | 3
   semester: 1 | 2
-  school_name: string
+  school_name: string  // legacy, fallback용
   exam_year: number
   exam_type: "중간고사" | "기말고사"
   subject: string
@@ -20,6 +21,11 @@ export interface SchoolExamScore {
     name: string
     grade: number
     status: string
+  }
+  school?: {
+    id: string
+    name: string
+    school_type: string
   }
   school_exam?: {
     pdf_file_path: string | null
@@ -39,10 +45,9 @@ export interface SchoolExamScoreFilters {
 
 export interface SchoolExamScoreFormData {
   student_id: string
-  school_type: "중학교" | "고등학교"
+  school_id: string
   grade: 1 | 2 | 3
   semester: 1 | 2
-  school_name: string
   exam_year: number
   exam_type: "중간고사" | "기말고사"
   school_exam_id?: string | null
@@ -51,4 +56,11 @@ export interface SchoolExamScoreFormData {
     score: number | null
   }[]
   notes?: string
+}
+
+export interface School {
+  id: string
+  name: string
+  school_type: string
+  short_name?: string | null
 }

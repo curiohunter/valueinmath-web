@@ -34,7 +34,7 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
     examScoresData,
     makeupClassesData,
     consultationsData,
-    mathflatData,
+    mathflatStudentIdData,
     tuitionFeesData,
     consultationRequestsData,
     testScoresWithAvgData,
@@ -88,10 +88,10 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
       .eq("student_id", studentId)
       .order("date", { ascending: false }),
     supabase
-      .from("mathflat_records")
-      .select("*")
-      .eq("student_id", studentId)
-      .order("event_date", { ascending: false }),
+      .from("students")
+      .select("mathflat_student_id")
+      .eq("id", studentId)
+      .single(),
     supabase
       .from("tuition_fees")
       .select("*")
@@ -134,7 +134,7 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
   if (examScoresData.error) throw examScoresData.error
   if (makeupClassesData.error) throw makeupClassesData.error
   if (consultationsData.error) throw consultationsData.error
-  if (mathflatData.error) throw mathflatData.error
+  // mathflatStudentIdData error is non-fatal (student may not have mathflat mapping)
   if (tuitionFeesData.error) throw tuitionFeesData.error
   if (consultationRequestsData.error) throw consultationRequestsData.error
   // RPC 에러는 무시 (데이터 없으면 빈 배열 반환)
@@ -229,16 +229,30 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
     next_date: consult.next_date,
   }))
 
-  const mathflatRecords: MathflatRecordItem[] = mathflatData.data.map((record) => ({
-    id: record.id,
-    event_date: record.event_date,
-    mathflat_type: record.mathflat_type,
-    book_title: record.book_title,
-    problem_solved: record.problem_solved,
-    correct_count: record.correct_count,
-    wrong_count: record.wrong_count,
-    correct_rate: record.correct_rate,
-  }))
+  // Fetch mathflat data from new system (mathflat_daily_work)
+  const mathflatStudentId = mathflatStudentIdData.data?.mathflat_student_id
+  let mathflatRecords: MathflatRecordItem[] = []
+
+  if (mathflatStudentId) {
+    const { data: dailyWorkData, error: dailyWorkError } = await supabase
+      .from("mathflat_daily_work")
+      .select("id, work_date, work_type, category, title, assigned_count, correct_count, wrong_count, correct_rate")
+      .eq("mathflat_student_id", mathflatStudentId)
+      .order("work_date", { ascending: false })
+
+    if (!dailyWorkError && dailyWorkData) {
+      mathflatRecords = dailyWorkData.map((dw) => ({
+        id: dw.id,
+        event_date: dw.work_date,
+        mathflat_type: mapCategoryToMathflatType(dw.work_type, dw.category),
+        book_title: dw.title,
+        problem_solved: dw.assigned_count,
+        correct_count: dw.correct_count,
+        wrong_count: dw.wrong_count,
+        correct_rate: dw.correct_rate,
+      }))
+    }
+  }
 
   const tuitionFees: TuitionFeeItem[] = tuitionFeesData.data.map((fee) => ({
     id: fee.id,
@@ -342,6 +356,13 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
     consultation_requests: consultationRequests,
     test_scores_with_averages: testScoresWithAvg,
   }
+}
+
+function mapCategoryToMathflatType(workType: string, category: string): string {
+  if (category === "CHALLENGE") return "챌린지"
+  if (category === "CHALLENGE_WRONG") return "챌린지오답"
+  if (workType === "WORKBOOK") return "교재"
+  return "학습지"
 }
 
 function calculateStats(

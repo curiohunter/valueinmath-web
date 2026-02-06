@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Search, Edit, Trash2, Eye } from "lucide-react";
 import { ConsultationAITags } from "./ConsultationAITags";
+import { useDebounce } from "@/lib/hooks/use-debounce";
 import type { Database } from "@/types/database";
 import type { Consultation } from "@/types/consultation";
 
@@ -40,6 +41,7 @@ export function ConsultationHistoryTab({
 }: ConsultationHistoryTabProps) {
   const [filteredConsultations, setFilteredConsultations] = useState<Consultation[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [counselorFilter, setCounselorFilter] = useState("all");
@@ -47,15 +49,15 @@ export function ConsultationHistoryTab({
   const [expandedContent, setExpandedContent] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  
+
   // Filter consultations when search or filters change
   useEffect(() => {
     let filtered = [...consultations];
 
-    // Apply search filter
-    if (searchTerm) {
+    // Apply search filter (using debounced value)
+    if (debouncedSearchTerm) {
       filtered = filtered.filter(c =>
-        c.student_name_snapshot?.toLowerCase().includes(searchTerm.toLowerCase())
+        c.student_name_snapshot?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
       );
     }
 
@@ -82,12 +84,12 @@ export function ConsultationHistoryTab({
     });
 
     setFilteredConsultations(filtered);
-  }, [consultations, searchTerm, typeFilter, statusFilter, counselorFilter, dateOrder]);
+  }, [consultations, debouncedSearchTerm, typeFilter, statusFilter, counselorFilter, dateOrder]);
 
   // 필터 변경 시에만 첫 페이지로 (데이터 리로드 시에는 현재 페이지 유지)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, typeFilter, statusFilter, counselorFilter]);
+  }, [debouncedSearchTerm, typeFilter, statusFilter, counselorFilter]);
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(filteredConsultations.length / itemsPerPage);

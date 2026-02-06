@@ -68,6 +68,7 @@ interface FormValues {
   notes: string | null
   left_reason: string | null
   left_reason_detail: string | null
+  mathflat_student_id: string | null
 }
 
 
@@ -126,6 +127,7 @@ export function StudentFormModal({
       notes: "",
       left_reason: null,
       left_reason_detail: null,
+      mathflat_student_id: null,
     },
   })
 
@@ -266,6 +268,7 @@ export function StudentFormModal({
           notes: student.notes,
           left_reason: leftReason,
           left_reason_detail: leftReasonDetail,
+          mathflat_student_id: (student as any).mathflat_student_id || null,
         })
         setEndDateError(null)
         setSavedStudentId(student.id)
@@ -298,6 +301,7 @@ export function StudentFormModal({
         notes: "",
         left_reason: null,
         left_reason_detail: null,
+        mathflat_student_id: null,
       })
       setEndDateError(null)
     }
@@ -379,6 +383,12 @@ export function StudentFormModal({
       return
     }
 
+    // 재원 상태일 때 매쓰플랫 학생ID 필수 검증
+    if (values.status === "재원" && !values.mathflat_student_id?.trim()) {
+      toast.error("재원 상태인 경우 매쓰플랫 학생ID를 입력해야 합니다.")
+      return
+    }
+
     // 퇴원 상태일 때 종료일 필수 검증
     if (values.status === "퇴원" && !values.end_date) {
       setEndDateError("퇴원 상태인 경우 종료일을 입력해야 합니다")
@@ -415,6 +425,7 @@ export function StudentFormModal({
         notes: values.notes || null,
         left_reason: leftReasonValue,
         left_at: values.status === "퇴원" && values.end_date ? getKoreanDateString(values.end_date) : null,
+        mathflat_student_id: values.mathflat_student_id?.trim() || null,
       }
 
       if (student) {
@@ -833,6 +844,30 @@ export function StudentFormModal({
                           </FormItem>
                         )}
                       />
+
+                    {/* 매쓰플랫 학생ID */}
+                    <FormField
+                      control={form.control}
+                      name="mathflat_student_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            매쓰플랫 학생ID {status === "재원" && "*"}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="매쓰플랫에서 확인한 학생 ID"
+                              {...field}
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormDescription className="text-xs">
+                            매쓰플랫 시스템의 학생 고유 ID (재원 시 필수)
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <h3 className="text-lg font-medium border-b pb-2 pt-2">등록 정보</h3>
 

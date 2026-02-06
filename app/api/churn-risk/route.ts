@@ -81,11 +81,11 @@ export async function GET() {
         .gte('date', eightWeeksAgoStr)
         .not('attendance_status', 'is', null),
 
-      // 매쓰플랫 데이터 조회 (최근 8주)
+      // 매쓰플랫 데이터 조회 (최근 8주) - mathflat_daily_work 기반
       supabase
-        .from('mathflat_records')
-        .select('student_id, event_date, correct_rate')
-        .gte('event_date', eightWeeksAgoStr)
+        .from('mathflat_daily_work')
+        .select('mathflat_student_id, work_date, correct_rate')
+        .gte('work_date', eightWeeksAgoStr)
         .not('correct_rate', 'is', null)
     ])
 
@@ -111,6 +111,16 @@ export async function GET() {
     if (mathflatError) {
       console.error('Failed to fetch mathflat records:', mathflatError)
     }
+
+    // student_id → mathflat_student_id 매핑 구축
+    const { data: mathflatIdMapping } = await supabase
+      .from('students')
+      .select('id, mathflat_student_id')
+      .not('mathflat_student_id', 'is', null)
+    const mathflatStudentIdMap = new Map<string, string>()
+    mathflatIdMapping?.forEach(s => {
+      mathflatStudentIdMap.set(s.id, s.mathflat_student_id)
+    })
 
     // 상담 데이터 타입 정의
     type ConsultationType = {
@@ -159,10 +169,13 @@ export async function GET() {
         }
       }
 
-      // 매쓰플랫 정답률 추세 계산 (string 비교)
-      const studentMathflat = mathflatRecords?.filter(m => m.student_id === student.id) || []
-      const recentMathflat = studentMathflat.filter(m => m.event_date && m.event_date >= fourWeeksAgoStr)
-      const previousMathflat = studentMathflat.filter(m => m.event_date && m.event_date < fourWeeksAgoStr && m.event_date >= eightWeeksAgoStr)
+      // 매쓰플랫 정답률 추세 계산 (mathflat_student_id 기반)
+      const mathflatId = mathflatStudentIdMap.get(student.id)
+      const studentMathflat = mathflatId
+        ? (mathflatRecords?.filter(m => m.mathflat_student_id === mathflatId) || [])
+        : []
+      const recentMathflat = studentMathflat.filter(m => m.work_date && m.work_date >= fourWeeksAgoStr)
+      const previousMathflat = studentMathflat.filter(m => m.work_date && m.work_date < fourWeeksAgoStr && m.work_date >= eightWeeksAgoStr)
 
       let mathflatTrend: TrendData['mathflat'] = null
       if (recentMathflat.length >= 2 && previousMathflat.length >= 2) {

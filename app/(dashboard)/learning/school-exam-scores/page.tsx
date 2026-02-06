@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
@@ -17,6 +17,7 @@ const PAGE_SIZE = 20
 
 export default function SchoolExamScoresPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const currentPage = parseInt(searchParams.get("page") || "1", 10)
 
   const [isLoading, setIsLoading] = useState(true)
@@ -38,15 +39,25 @@ export default function SchoolExamScoresPage() {
     subject: "",
   })
 
+  // 필터 변경 시 페이지를 1로 리셋
+  const handleFiltersChange = useCallback((newFilters: SchoolExamScoreFilters) => {
+    setFilters(newFilters)
+    // 페이지가 1이 아니면 1로 리셋
+    if (currentPage !== 1) {
+      router.push("/learning/school-exam-scores?page=1")
+    }
+  }, [currentPage, router])
+
   const loadData = useCallback(async () => {
     setIsLoading(true)
     try {
       const { data, count } = await getSchoolExamScores(currentPage, PAGE_SIZE, filters)
       setScores(data)
       setTotalCount(count)
-    } catch (error) {
-      console.error("Error loading school exam scores:", error)
-      toast.error("성적 목록을 불러오는데 실패했습니다")
+    } catch (error: any) {
+      toast.error(error?.message || "성적 목록을 불러오는데 실패했습니다")
+      setScores([])
+      setTotalCount(0)
     } finally {
       setIsLoading(false)
     }
@@ -56,8 +67,8 @@ export default function SchoolExamScoresPage() {
     try {
       const years = await getScoreExamYears()
       setExamYears(years)
-    } catch (error) {
-      console.error("Error loading exam years:", error)
+    } catch {
+      // silently fail - exam years are optional for filtering
     }
   }, [])
 
@@ -116,7 +127,7 @@ export default function SchoolExamScoresPage() {
       {/* Filters */}
       <SchoolExamScoreFiltersComponent
         filters={filters}
-        onFiltersChange={setFilters}
+        onFiltersChange={handleFiltersChange}
         examYears={examYears}
       />
 

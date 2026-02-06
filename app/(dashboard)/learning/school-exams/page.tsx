@@ -3,13 +3,16 @@
 import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Plus, RefreshCw } from "lucide-react"
+import { Plus, RefreshCw, FileText, BookOpen } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import LearningTabs from "@/components/learning/LearningTabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Pagination } from "@/components/ui/pagination"
 import { SchoolExamModal } from "@/components/learning/school-exams/school-exam-modal"
 import { SchoolExamFiltersComponent } from "@/components/learning/school-exams/school-exam-filters"
 import { SchoolExamTable } from "@/components/learning/school-exams/school-exam-table"
+import ExamRangeManagement from "@/components/learning/school-exams/exam-range-management"
 import { getSchoolExams, getExamYears } from "@/lib/school-exam-client"
 import type { SchoolExam, SchoolExamFilters } from "@/types/school-exam"
 
@@ -18,7 +21,9 @@ const PAGE_SIZE = 20
 export default function SchoolExamsPage() {
   const searchParams = useSearchParams()
   const currentPage = parseInt(searchParams.get("page") || "1", 10)
+  const initialTab = searchParams.get("tab") || "papers"
 
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [isLoading, setIsLoading] = useState(true)
   const [exams, setExams] = useState<SchoolExam[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -62,8 +67,10 @@ export default function SchoolExamsPage() {
   }, [])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (activeTab === "papers") {
+      loadData()
+    }
+  }, [loadData, activeTab])
 
   useEffect(() => {
     loadExamYears()
@@ -86,7 +93,7 @@ export default function SchoolExamsPage() {
 
   const handleSuccess = () => {
     loadData()
-    loadExamYears() // 새로운 연도가 추가될 수 있으므로 연도 목록도 갱신
+    loadExamYears()
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE)
@@ -96,61 +103,102 @@ export default function SchoolExamsPage() {
       {/* Tabs */}
       <LearningTabs />
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">학교 시험지 관리</h1>
-        
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={loadData} disabled={isLoading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            새로고침
-          </Button>
-          <Button onClick={handleCreate}>
-            <Plus className="w-4 h-4 mr-2" />
-            시험지 등록
-          </Button>
-        </div>
-      </div>
+      {/* Sub Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-full justify-start h-auto p-1 bg-white border border-slate-200 rounded-xl shadow-sm">
+          <TabsTrigger
+            value="papers"
+            className={cn(
+              "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all",
+              "data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md",
+              "data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-slate-50"
+            )}
+          >
+            <FileText className="w-4 h-4" />
+            시험지 관리
+          </TabsTrigger>
+          <TabsTrigger
+            value="ranges"
+            className={cn(
+              "flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all",
+              "data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-600 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-md",
+              "data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-slate-50"
+            )}
+          >
+            <BookOpen className="w-4 h-4" />
+            시험 범위
+            <span className="ml-1 px-1.5 py-0.5 text-xs rounded bg-indigo-100 text-indigo-700 data-[state=active]:bg-white/20 data-[state=active]:text-white">
+              NEW
+            </span>
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filters */}
-      <SchoolExamFiltersComponent
-        filters={filters}
-        onFiltersChange={setFilters}
-        examYears={examYears}
-      />
+        {/* 시험지 관리 탭 */}
+        <TabsContent value="papers" className="mt-6 space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">시험지 관리</h1>
+              <p className="text-slate-500 text-sm mt-1">
+                학교별 시험지를 수집하고 관리합니다
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={loadData} disabled={isLoading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+                새로고침
+              </Button>
+              <Button onClick={handleCreate}>
+                <Plus className="w-4 h-4 mr-2" />
+                시험지 등록
+              </Button>
+            </div>
+          </div>
 
-      {/* Summary */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <div>
-          총 <span className="font-semibold text-foreground">{totalCount}</span>개의 시험지
-        </div>
-        <div>
-          {currentPage} / {totalPages || 1} 페이지
-        </div>
-      </div>
+          {/* Filters */}
+          <SchoolExamFiltersComponent
+            filters={filters}
+            onFiltersChange={setFilters}
+            examYears={examYears}
+          />
 
-      {/* Table */}
-      {isLoading ? (
-        <div className="border rounded-lg p-12 text-center">
-          <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">로딩 중...</p>
-        </div>
-      ) : (
-        <SchoolExamTable exams={exams} onEdit={handleEdit} onDelete={loadData} />
-      )}
+          {/* Summary */}
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div>
+              총 <span className="font-semibold text-foreground">{totalCount}</span>개의 시험지
+            </div>
+            <div>
+              {currentPage} / {totalPages || 1} 페이지
+            </div>
+          </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && <Pagination totalPages={totalPages} currentPage={currentPage} />}
+          {/* Table */}
+          {isLoading ? (
+            <div className="border rounded-lg p-12 text-center">
+              <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground">로딩 중...</p>
+            </div>
+          ) : (
+            <SchoolExamTable exams={exams} onEdit={handleEdit} onDelete={loadData} />
+          )}
 
-      {/* Modal */}
-      <SchoolExamModal
-        isOpen={modalOpen}
-        onClose={handleModalClose}
-        exam={editingExam}
-        onSuccess={handleSuccess}
-      />
+          {/* Pagination */}
+          {totalPages > 1 && <Pagination totalPages={totalPages} currentPage={currentPage} />}
+
+          {/* Modal */}
+          <SchoolExamModal
+            isOpen={modalOpen}
+            onClose={handleModalClose}
+            exam={editingExam}
+            onSuccess={handleSuccess}
+          />
+        </TabsContent>
+
+        {/* 시험 범위 탭 */}
+        <TabsContent value="ranges" className="mt-6">
+          <ExamRangeManagement />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

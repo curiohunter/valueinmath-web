@@ -5,6 +5,7 @@ export { default as StudentProgressRow } from "./StudentProgressRow";
 export { default as CommonWrongTable } from "./CommonWrongTable";
 export { default as ProblemImageModal } from "./ProblemImageModal";
 export { default as ConceptWeaknessCard } from "./ConceptWeaknessCard";
+export { default as ManualHomeworkCollector } from "./ManualHomeworkCollector";
 
 // 탭 컴포넌트
 export { default as HomeworkTab } from "./HomeworkTab";

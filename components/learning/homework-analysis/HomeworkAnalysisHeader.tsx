@@ -16,6 +16,7 @@ import {
   Clock,
 } from "lucide-react";
 import { TeacherInfo, ClassInfo, DateInfo, formatDate } from "./types";
+import ManualHomeworkCollector from "./ManualHomeworkCollector";
 
 interface HomeworkAnalysisHeaderProps {
   selectedDate: string;
@@ -88,6 +89,9 @@ export default function HomeworkAnalysisHeader({
 
         {/* 필터 + 날짜 네비게이션 */}
         <div className="flex items-center gap-3 flex-wrap">
+          {/* 수동 수집 버튼 */}
+          <ManualHomeworkCollector />
+
           {/* 선생님 필터 */}
           <Select value={selectedTeacherId} onValueChange={onTeacherChange}>
             <SelectTrigger className="w-[140px] bg-white/10 border-white/20 text-white text-sm">

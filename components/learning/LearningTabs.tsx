@@ -41,17 +41,6 @@ export default function LearningTabs() {
         보강 관리
       </Link>
       <Link
-        href="/learning/mathflat"
-        className={clsx(
-          "px-4 py-2 font-semibold",
-          pathname.startsWith("/learning/mathflat")
-            ? "border-b-2 border-primary text-primary"
-            : "text-muted-foreground"
-        )}
-      >
-        매쓰플랫
-      </Link>
-      <Link
         href="/learning/school-exams"
         className={clsx(
           "px-4 py-2 font-semibold",
@@ -105,7 +94,6 @@ export default function LearningTabs() {
         )}
       >
         숙제 분석
-        <span className="ml-1 text-xs text-amber-600 font-medium">Beta</span>
       </Link>
     </div>
   );
