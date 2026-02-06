@@ -22,6 +22,11 @@ function WorkbookRow({ item }: { item: MaterialPerformance }) {
     <div className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
       <div className="flex-1 min-w-0 flex items-center gap-2">
         <span className="text-sm font-medium text-slate-800 truncate">{item.title}</span>
+        {item.page && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 flex-shrink-0">
+            p.{item.page}
+          </span>
+        )}
         {item.isHomework && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 flex-shrink-0">
             숙제

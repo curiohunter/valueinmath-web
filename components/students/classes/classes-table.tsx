@@ -160,7 +160,12 @@ export function ClassesTable({ classes, teachers, students, studentsCountMap, st
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                        <div className="text-sm font-semibold text-gray-900">{c.name}</div>
+                        <div className="text-sm font-semibold text-gray-900">
+                          {c.name}
+                          {c.mathflat_class_id && (
+                            <span className="ml-1.5 text-xs font-normal text-gray-400">({c.mathflat_class_id})</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">

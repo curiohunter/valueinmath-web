@@ -40,6 +40,7 @@ function mapStudentRowToStudent(row: StudentRow | StudentViewRow): Student {
     is_active: row.is_active,
     left_at: row.left_at,
     left_reason: row.left_reason,
+    mathflat_student_id: row.mathflat_student_id,
     // Optional fields from view
     current_school_id: viewRow.current_school_id,
     school_short_name: viewRow.school_short_name,

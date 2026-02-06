@@ -20,6 +20,7 @@ export interface ActivitySummary {
 
 export interface MaterialPerformance {
   title: string;
+  page: string | null;
   workType: string;
   category: string;
   totalProblems: number;
@@ -174,7 +175,7 @@ export function useStudentAnalysis({
 
       const { data: dailyWorkData, error: dwError } = await supabase
         .from("mathflat_daily_work")
-        .select("id, work_date, work_type, category, title, assigned_count, correct_count, wrong_count, correct_rate")
+        .select("id, work_date, work_type, category, title, page, assigned_count, correct_count, wrong_count, correct_rate")
         .eq("mathflat_student_id", mathflatStudentId)
         .gte("work_date", startDate)
         .lte("work_date", endDate)
@@ -227,7 +228,7 @@ export function useStudentAnalysis({
 
       // 교재/학습지 성적 (CHALLENGE, CHALLENGE_WRONG 제외 → 자율학습 카드에서 표시)
       const customWork = dailyWorkData.filter((dw) => dw.category === "CUSTOM");
-      const titleMap = new Map<string, { workType: string; category: string; total: number; correct: number; isHomework: boolean }>();
+      const titleMap = new Map<string, { workType: string; category: string; total: number; correct: number; isHomework: boolean; pages: Set<string> }>();
       customWork.forEach((dw) => {
         const key = dw.title || "(제목 없음)";
         const existing = titleMap.get(key) || {
@@ -236,11 +237,15 @@ export function useStudentAnalysis({
           total: 0,
           correct: 0,
           isHomework: false,
+          pages: new Set<string>(),
         };
         existing.total += dw.assigned_count || 0;
         existing.correct += dw.correct_count || 0;
         if (homeworkLinkedIds.has(dw.id)) {
           existing.isHomework = true;
+        }
+        if (dw.page) {
+          existing.pages.add(dw.page);
         }
         titleMap.set(key, existing);
       });
@@ -248,6 +253,7 @@ export function useStudentAnalysis({
       const materialList: MaterialPerformance[] = Array.from(titleMap.entries())
         .map(([title, stats]) => ({
           title,
+          page: stats.pages.size > 0 ? Array.from(stats.pages).join(", ") : null,
           workType: stats.workType,
           category: stats.category,
           totalProblems: stats.total,

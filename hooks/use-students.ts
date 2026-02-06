@@ -59,6 +59,7 @@ export function useStudentsByStatus(status?: string) {
         is_active: row.is_active,
         left_at: row.left_at,
         left_reason: row.left_reason,
+        mathflat_student_id: row.mathflat_student_id,
         // Optional fields from view
         current_school_id: (row as any).current_school_id,
         school_short_name: (row as any).school_short_name,

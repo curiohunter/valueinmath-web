@@ -141,28 +141,32 @@ export default function ManualHomeworkCollector() {
     setErrorMessage("");
 
     try {
-      const response = await fetch("/api/cron/mathflat-homework", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || ""}`,
-        },
-        body: JSON.stringify({
-          collectionType: "first",
-          classIds: [selectedClass.mathflat_class_id],
-          targetDate,
-          homeworkDate: isSameDate ? undefined : homeworkDate,
-        }),
-      });
+      const { data: responseData, error: invokeError } =
+        await supabase.functions.invoke("mathflat-homework", {
+          body: {
+            collectionType: "first",
+            classIds: [selectedClass.mathflat_class_id],
+            targetDate,
+            homeworkDate: isSameDate ? undefined : homeworkDate,
+          },
+        });
 
-      const data = await response.json();
+      if (invokeError) {
+        setErrorMessage(invokeError.message || "수집 실패");
+        setStep("error");
+        return;
+      }
 
-      if (data.success) {
-        setResult(data.data);
+      if (responseData?.success) {
+        setResult(responseData.data);
         setStep("success");
-        toast.success(`${data.data.totalHomeworkCount}개 숙제 수집 완료`);
+        toast.success(
+          `${responseData.data.totalHomeworkCount}개 숙제 수집 완료`
+        );
       } else {
-        setErrorMessage(data.message || data.error || "수집 실패");
+        setErrorMessage(
+          responseData?.message || responseData?.error || "수집 실패"
+        );
         setStep("error");
       }
     } catch (error) {

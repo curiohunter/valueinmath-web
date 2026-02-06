@@ -270,7 +270,12 @@ export function StudentsTable() {
             ) : (
               students.map((student) => (
                 <TableRow key={student.id}>
-                  <TableCell className="font-medium">{student.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {student.name}
+                    {student.mathflat_student_id && (
+                      <span className="ml-1.5 text-xs font-normal text-gray-400">({student.mathflat_student_id})</span>
+                    )}
+                  </TableCell>
                   <TableCell>{student.school || "-"}</TableCell>
                   <TableCell>{student.grade ? `${student.grade}학년` : "-"}</TableCell>
                   <TableCell>

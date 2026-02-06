@@ -268,7 +268,7 @@ export function StudentFormModal({
           notes: student.notes,
           left_reason: leftReason,
           left_reason_detail: leftReasonDetail,
-          mathflat_student_id: (student as any).mathflat_student_id || null,
+          mathflat_student_id: student.mathflat_student_id || null,
         })
         setEndDateError(null)
         setSavedStudentId(student.id)
