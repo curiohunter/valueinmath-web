@@ -383,11 +383,6 @@ export function StudentFormModal({
       return
     }
 
-    // 재원 상태일 때 매쓰플랫 학생ID 필수 검증
-    if (values.status === "재원" && !values.mathflat_student_id?.trim()) {
-      toast.error("재원 상태인 경우 매쓰플랫 학생ID를 입력해야 합니다.")
-      return
-    }
 
     // 퇴원 상태일 때 종료일 필수 검증
     if (values.status === "퇴원" && !values.end_date) {
