@@ -10,13 +10,14 @@ import { CalendarEvent, FullCalendarEvent } from '@/types/calendar'
 import EventModal from '@/components/calendar/EventModal'
 import GoogleCalendarSettings from '@/components/calendar/GoogleCalendarSettings'
 import { toast } from 'sonner'
-import { MoreVertical } from 'lucide-react'
+import { MoreVertical, CalendarOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import ClosureSheet from '@/components/closures/closure-sheet'
 
 // Vercel 스타일 CSS 정의
 const vercelCalendarStyles = `
@@ -297,6 +298,7 @@ export default function FullCalendarWrapper() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [closureSheetOpen, setClosureSheetOpen] = useState(false)
 
   // 이벤트 로드
   const loadEvents = async () => {
@@ -431,8 +433,17 @@ export default function FullCalendarWrapper() {
           }}
         />
         
-        {/* 3점 메뉴 - 캘린더 위에 절대 위치 */}
-        <div className="absolute top-2 right-2 z-10">
+        {/* 상단 우측 버튼 그룹 - 캘린더 위에 절대 위치 */}
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setClosureSheetOpen(true)}
+            className="bg-white/80 backdrop-blur-sm shadow-sm"
+          >
+            <CalendarOff className="h-4 w-4 mr-1.5" />
+            휴원일 관리
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="bg-white/80 backdrop-blur-sm border shadow-sm">
@@ -454,6 +465,13 @@ export default function FullCalendarWrapper() {
         onDelete={handleDeleteEvent}
         event={selectedEvent}
         selectedDate={selectedDate}
+      />
+
+      {/* 휴원일 관리 Sheet */}
+      <ClosureSheet
+        open={closureSheetOpen}
+        onOpenChange={setClosureSheetOpen}
+        onClosuresChanged={loadEvents}
       />
     </>
   )

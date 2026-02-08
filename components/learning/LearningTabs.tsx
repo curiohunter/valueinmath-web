@@ -95,6 +95,20 @@ export default function LearningTabs() {
       >
         숙제 분석
       </Link>
+      <Link
+        href="/learning/attendance"
+        className={clsx(
+          "px-4 py-2 font-semibold flex items-center gap-1.5 ml-auto",
+          pathname.startsWith("/learning/attendance")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        출석부
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700 leading-none">
+          베타
+        </span>
+      </Link>
     </div>
   );
 } 

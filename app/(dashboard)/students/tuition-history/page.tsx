@@ -372,16 +372,12 @@ export default function TuitionHistoryPage() {
           payment_status,
           period_start_date,
           period_end_date,
-          payssam_bill_id,
-          payssam_request_status,
-          payssam_short_url,
-          payssam_sent_at,
-          payssam_paid_at,
           base_amount,
           total_discount,
           discount_details,
           classes!left(name),
-          students!left(name, status)
+          students!left(name, status),
+          payssam_bills(bill_id, request_status, short_url, sent_at, paid_at)
         `);
       
       // 연월 범위 필터 - 정확한 필터링 로직
@@ -460,6 +456,12 @@ export default function TuitionHistoryPage() {
           rawValue: d.amount,
         }));
 
+        // 활성 청구서 찾기 (payssam_bills JOIN 결과에서)
+        const bills = (item.payssam_bills || []) as any[];
+        const activeBill = bills.find(
+          (b: any) => !['destroyed', 'cancelled', 'failed'].includes(b.request_status)
+        ) || null;
+
         return {
           id: item.id,
           classId: item.class_id,
@@ -476,12 +478,12 @@ export default function TuitionHistoryPage() {
           paymentStatus: item.payment_status,
           periodStartDate: item.period_start_date || undefined,
           periodEndDate: item.period_end_date || undefined,
-          // PaysSam 필드
-          paysSamBillId: item.payssam_bill_id || null,
-          paysSamRequestStatus: item.payssam_request_status || null,
-          paysSamShortUrl: item.payssam_short_url || null,
-          paysSamSentAt: item.payssam_sent_at || null,
-          paysSamPaidAt: item.payssam_paid_at || null,
+          // PaysSam 필드 (payssam_bills 테이블에서)
+          paysSamBillId: activeBill?.bill_id || null,
+          paysSamRequestStatus: activeBill?.request_status || null,
+          paysSamShortUrl: activeBill?.short_url || null,
+          paysSamSentAt: activeBill?.sent_at || null,
+          paysSamPaidAt: activeBill?.paid_at || null,
           // 할인 필드
           appliedDiscounts: appliedDiscounts.length > 0 ? appliedDiscounts : undefined,
           originalAmount: item.base_amount || undefined,

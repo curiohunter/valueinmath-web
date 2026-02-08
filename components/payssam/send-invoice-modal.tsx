@@ -42,14 +42,12 @@ export function SendInvoiceModal({
   const [results, setResults] = useState<SendResult[]>([])
   const [confirmSend, setConfirmSend] = useState(false)
 
-  // 발송 가능한 항목만 필터링 (미납 상태이고, 아직 발송되지 않은 것)
+  // 발송 가능한 항목만 필터링 (미납 상태이고, 활성 청구서가 없는 것)
+  // paysSamBillId와 paysSamRequestStatus는 활성 bill 기준으로 매핑됨
   const eligibleFees = selectedFees.filter(
     (fee) =>
       fee.paymentStatus === "미납" &&
-      (!fee.paysSamRequestStatus ||
-        fee.paysSamRequestStatus === "pending" ||
-        fee.paysSamRequestStatus === "failed" ||
-        fee.paysSamRequestStatus === "destroyed")
+      !fee.paysSamBillId
   )
 
   const ineligibleFees = selectedFees.filter(

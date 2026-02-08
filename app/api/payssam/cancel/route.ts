@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/auth/server'
-import { cancelPayment } from '@/services/payssam-service'
+import { cancelPayment, getActiveBill } from '@/services/payssam-service'
 import { validateConfig } from '@/lib/payssam-client'
 
 export async function POST(request: NextRequest) {
@@ -54,21 +54,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 취소 가능 여부 확인
-    const { data: fee } = await supabase
-      .from('tuition_fees')
-      .select('payssam_bill_id, payssam_request_status')
-      .eq('id', body.tuitionFeeId)
-      .single()
+    // 취소 가능 여부 확인 (payssam_bills 테이블)
+    const activeBill = await getActiveBill(body.tuitionFeeId)
 
-    if (!fee?.payssam_bill_id) {
+    if (!activeBill) {
       return NextResponse.json(
         { success: false, error: '발송된 청구서가 없습니다.' },
         { status: 400 }
       )
     }
 
-    if (fee.payssam_request_status !== 'paid') {
+    if (activeBill.request_status !== 'paid') {
       return NextResponse.json(
         { success: false, error: '결제 완료 건만 취소할 수 있습니다.' },
         { status: 400 }

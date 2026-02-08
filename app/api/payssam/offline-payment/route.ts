@@ -48,26 +48,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 현장결제 처리 대상 조회 (created 또는 sent 상태만)
-    const { data: fees, error: fetchError } = await supabase
-      .from('tuition_fees')
-      .select('id, payssam_bill_id, payssam_request_status, amount, student_name_snapshot')
-      .in('id', tuitionFeeIds)
-      .in('payssam_request_status', ['created', 'sent'])
+    // 현장결제 처리 대상: payssam_bills에서 활성 bill이 sent/created 상태인 것
+    const { data: bills, error: fetchError } = await supabase
+      .from('payssam_bills')
+      .select('id, tuition_fee_id, bill_id, request_status')
+      .in('tuition_fee_id', tuitionFeeIds)
+      .in('request_status', ['created', 'sent'])
 
-    if (fetchError || !fees) {
+    if (fetchError || !bills) {
       return NextResponse.json(
         { success: false, error: '청구서 조회 중 오류가 발생했습니다.' },
         { status: 500 }
       )
     }
 
-    if (fees.length === 0) {
+    if (bills.length === 0) {
       return NextResponse.json(
         { success: false, error: '현장결제 처리할 수 있는 청구서가 없습니다.' },
         { status: 400 }
       )
     }
+
+    // tuition_fees 정보 조회 (금액, 학생명)
+    const { data: fees } = await supabase
+      .from('tuition_fees')
+      .select('id, amount, student_name_snapshot')
+      .in('id', bills.map(b => b.tuition_fee_id))
+
+    const feeMap = new Map((fees || []).map(f => [f.id, f]))
 
     const now = new Date().toISOString()
     let successCount = 0
@@ -79,47 +87,55 @@ export async function POST(request: NextRequest) {
       error?: string
     }> = []
 
-    for (const fee of fees) {
-      // DB 업데이트 (완납 처리)
-      const { error: updateError } = await supabase
-        .from('tuition_fees')
-        .update({
-          payment_status: '완납',
-          payssam_request_status: 'paid',
-          payssam_paid_at: now,
-          payssam_payment_method: 'OFFLINE', // 현장결제 표시
-          payssam_last_sync_at: now,
-        })
-        .eq('id', fee.id)
+    for (const bill of bills) {
+      const fee = feeMap.get(bill.tuition_fee_id)
 
-      if (updateError) {
+      // payssam_bills 업데이트
+      const { error: billUpdateError } = await supabase
+        .from('payssam_bills')
+        .update({
+          request_status: 'paid',
+          paid_at: now,
+          payment_method: 'OFFLINE',
+          last_sync_at: now,
+        })
+        .eq('id', bill.id)
+
+      if (billUpdateError) {
         failedCount++
         results.push({
-          tuitionFeeId: fee.id,
-          studentName: fee.student_name_snapshot || '알 수 없음',
+          tuitionFeeId: bill.tuition_fee_id,
+          studentName: fee?.student_name_snapshot || '알 수 없음',
           success: false,
           error: 'DB 업데이트 실패',
         })
         continue
       }
 
+      // tuition_fees payment_status 업데이트
+      await supabase
+        .from('tuition_fees')
+        .update({ payment_status: '완납' })
+        .eq('id', bill.tuition_fee_id)
+
       // 이벤트 로그 기록
       await supabase.from('payssam_logs').insert({
-        tuition_fee_id: fee.id,
+        tuition_fee_id: bill.tuition_fee_id,
         event_type: 'payment_completed',
         event_data: {
-          bill_id: fee.payssam_bill_id,
-          amount: fee.amount,
+          bill_id: bill.bill_id,
+          amount: fee?.amount,
           payment_method: 'OFFLINE',
           processed_by: employee.id,
           note: '현장결제 완료 (PaysSam 앱에서 결제)',
         },
+        payssam_bill_id: bill.id,
       })
 
       successCount++
       results.push({
-        tuitionFeeId: fee.id,
-        studentName: fee.student_name_snapshot || '알 수 없음',
+        tuitionFeeId: bill.tuition_fee_id,
+        studentName: fee?.student_name_snapshot || '알 수 없음',
         success: true,
       })
     }

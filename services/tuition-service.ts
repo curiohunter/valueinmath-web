@@ -124,15 +124,19 @@ export async function getTuitionFees(
       paymentStatus: row.payment_status || '미납',
       periodStartDate: row.period_start_date,
       periodEndDate: row.period_end_date,
+      sessionsCount: row.sessions_count ?? null,
+      perSessionFee: row.per_session_fee ?? null,
+      carryoverFromPrev: row.carryover_from_prev ?? null,
+      carryoverToNext: row.carryover_to_next ?? null,
     }))
-    
+
     return { success: true, data: tuitionRows }
-    
+
   } catch (error) {
     console.error("getTuitionFees 오류:", error)
-    return { 
-      success: false, 
-      error: "학원비 데이터 조회 중 오류가 발생했습니다." 
+    return {
+      success: false,
+      error: "학원비 데이터 조회 중 오류가 발생했습니다."
     }
   }
 }
@@ -206,10 +210,14 @@ export async function getTuitionFeesByRange(
       paymentStatus: row.payment_status || '미납',
       periodStartDate: row.period_start_date,
       periodEndDate: row.period_end_date,
+      sessionsCount: row.sessions_count ?? null,
+      perSessionFee: row.per_session_fee ?? null,
+      carryoverFromPrev: row.carryover_from_prev ?? null,
+      carryoverToNext: row.carryover_to_next ?? null,
     }))
-    
+
     return { success: true, data: tuitionRows }
-    
+
   } catch (error) {
     console.error("getTuitionFeesByRange 오류:", error)
     return { 
@@ -260,6 +268,10 @@ export async function saveTuitionFee(
         total_discount: data.total_discount || 0,
         discount_details: data.discount_details || [],
         final_amount: data.final_amount || null,
+        // 세션 기반 필드
+        sessions_count: data.sessions_count ?? null,
+        per_session_fee: data.per_session_fee ?? null,
+        carryover_from_prev: data.carryover_from_prev ?? 0,
       }, {
         onConflict: "class_id,student_id,year,month,class_type"
       })
@@ -329,6 +341,10 @@ export async function saveTuitionFees(
       total_discount: data.total_discount || 0,
       discount_details: data.discount_details || [],
       final_amount: data.final_amount || null,
+      // 세션 기반 필드
+      sessions_count: data.sessions_count ?? null,
+      per_session_fee: data.per_session_fee ?? null,
+      carryover_from_prev: data.carryover_from_prev ?? 0,
     }))
     
     // UNIQUE 제약조건이 제거되었으므로 insert 사용
@@ -404,6 +420,8 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
         teacher_id: classRow.teacher_id,
         // @ts-ignore - classRow 타입 복잡성 해결
         monthly_fee: classRow.monthly_fee,
+        // @ts-ignore - classRow 타입 복잡성 해결
+        sessions_per_month: classRow.sessions_per_month ?? null,
         students,
       }
     })

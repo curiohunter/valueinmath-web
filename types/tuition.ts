@@ -63,20 +63,14 @@ export interface TuitionFee {
   period_end_date: string | null
   created_at: string | null
   updated_at: string | null
-  // PaysSam 관련 필드
-  payssam_bill_id: string | null
-  payssam_request_status: PaysSamRequestStatus | null
-  payssam_sent_at: string | null
-  payssam_paid_at: string | null
-  payssam_payment_method: string | null
-  payssam_transaction_id: string | null
-  payssam_last_sync_at: string | null
-  payssam_cancelled_at: string | null
-  payssam_destroyed_at: string | null
-  payssam_short_url: string | null
   // 분할 청구 관련
   parent_tuition_fee_id: string | null
   is_split_child: boolean | null
+  // 세션 기반 필드
+  sessions_count: number | null
+  per_session_fee: number | null
+  carryover_from_prev: number | null
+  carryover_to_next: number | null
 }
 
 // UI에서 사용할 학원비 행 인터페이스 (조인된 데이터 포함)
@@ -95,6 +89,11 @@ export interface TuitionRow {
   paymentStatus: PaymentStatus
   periodStartDate?: string
   periodEndDate?: string
+  // 세션 기반 필드
+  sessionsCount?: number | null
+  perSessionFee?: number | null
+  carryoverFromPrev?: number | null
+  carryoverToNext?: number | null
   // PaysSam 관련 필드 (UI용)
   paysSamBillId?: string | null
   paysSamRequestStatus?: PaysSamRequestStatus | null
@@ -129,6 +128,10 @@ export interface TuitionFeeInput {
   payment_status?: PaymentStatus
   period_start_date?: string
   period_end_date?: string
+  // 세션 기반 필드
+  sessions_count?: number
+  per_session_fee?: number
+  carryover_from_prev?: number
   // 할인 관련 필드
   base_amount?: number
   total_discount?: number
@@ -143,6 +146,7 @@ export interface ClassWithStudents {
   subject: string
   teacher_id?: string | null
   monthly_fee: number | null
+  sessions_per_month?: number | null
   students: StudentInfo[]
 }
 

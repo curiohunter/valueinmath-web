@@ -596,12 +596,13 @@ export default function ClassesPage() {
           </Suspense>
         </CardContent>
       </Card>
-      <ClassFormModal open={modalOpen} onClose={() => {
+      <ClassFormModal key="create" open={modalOpen} onClose={() => {
         setModalOpen(false)
         loadData() // 새 반 추가 후 데이터 새로고침
       }} teachers={teachers} students={students} />
-      {/* 수정 모달: editClass가 있으면 */}
+      {/* 수정 모달: editClass가 있으면 (key로 remount하여 초기값 보장) */}
       <ClassFormModal
+        key={editClass?.id ?? 'edit-closed'}
         open={!!editClass}
         onClose={handleEditClose}
         teachers={teachers}
@@ -613,6 +614,7 @@ export default function ClassesPage() {
           subject: editClass.subject,
           teacher_id: editClass.teacher_id,
           monthly_fee: editClass.monthly_fee,
+          sessions_per_month: editClass.sessions_per_month,
           mathflat_class_id: editClass.mathflat_class_id,
           selectedStudentIds: classStudents.filter(cs => cs.class_id === editClass.id).map(cs => cs.student_id)
         } : undefined}

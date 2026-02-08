@@ -84,6 +84,20 @@ export default function StudentClassTabs() {
       >
         수강 이력
       </Link>
+      <Link
+        href="/students/tuition-sessions"
+        className={clsx(
+          "px-4 py-2 font-semibold flex items-center gap-1.5",
+          pathname.startsWith("/students/tuition-sessions")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        수업료 계산
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700 leading-none">
+          베타
+        </span>
+      </Link>
     </div>
   );
 } 

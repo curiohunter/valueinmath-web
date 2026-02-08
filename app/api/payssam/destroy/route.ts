@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/auth/server'
-import { destroyInvoice } from '@/services/payssam-service'
+import { destroyInvoice, getActiveBill } from '@/services/payssam-service'
 import { validateConfig } from '@/lib/payssam-client'
 
 export async function POST(request: NextRequest) {
@@ -54,28 +54,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 파기 가능 여부 확인
-    const { data: fee } = await supabase
-      .from('tuition_fees')
-      .select('payssam_bill_id, payssam_request_status')
-      .eq('id', body.tuitionFeeId)
-      .single()
+    // 파기 가능 여부 확인 (payssam_bills 테이블)
+    const activeBill = await getActiveBill(body.tuitionFeeId)
 
-    if (!fee?.payssam_bill_id) {
+    if (!activeBill) {
       return NextResponse.json(
         { success: false, error: '발송된 청구서가 없습니다.' },
         { status: 400 }
       )
     }
 
-    if (fee.payssam_request_status === 'paid') {
+    if (activeBill.request_status === 'paid') {
       return NextResponse.json(
         { success: false, error: '결제 완료 건은 파기할 수 없습니다. 취소를 진행해주세요.' },
         { status: 400 }
       )
     }
 
-    if (fee.payssam_request_status === 'destroyed') {
+    if (activeBill.request_status === 'destroyed') {
       return NextResponse.json(
         { success: false, error: '이미 파기된 청구서입니다.' },
         { status: 400 }

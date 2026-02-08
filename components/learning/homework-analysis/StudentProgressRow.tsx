@@ -146,8 +146,8 @@ export default function StudentProgressRow({
                 </div>
                 <div className="space-y-3 pl-6">
                   {Object.entries(workbookByTitle).map(([title, problems]) => {
-                    // 페이지 범위 계산 (해당 교재의 모든 문제 페이지)
-                    const pages = problems.map(p => p.page).filter(Boolean);
+                    // 페이지 범위 (숙제 단위이므로 중복 제거)
+                    const pages = [...new Set(problems.map(p => p.page).filter(Boolean))];
                     const pageRange = pages.length > 0 ? pages.join(', ') : null;
 
                     return (

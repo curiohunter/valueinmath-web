@@ -37,6 +37,21 @@ import { PaymentStatusBadge, PaymentMethodBadge } from "@/components/payssam"
 import { SplitInvoiceModal } from "@/components/payssam/split-invoice-modal"
 import type { PaysSamRequestStatus, PaymentStatus, ClassType } from "@/types/tuition"
 
+// 활성 청구서 인터페이스
+interface ActiveBill {
+  id: string
+  bill_id: string
+  request_status: PaysSamRequestStatus | null
+  short_url: string | null
+  sent_at: string | null
+  paid_at: string | null
+  payment_method: string | null
+  transaction_id: string | null
+  cancelled_at: string | null
+  destroyed_at: string | null
+  last_sync_at: string | null
+}
+
 // 학원비 상세 데이터 인터페이스
 interface TuitionDetail {
   id: string
@@ -51,17 +66,6 @@ interface TuitionDetail {
   period_end_date: string | null
   created_at: string
   updated_at: string
-  // PaysSam 필드
-  payssam_bill_id: string | null
-  payssam_request_status: PaysSamRequestStatus | null
-  payssam_short_url: string | null
-  payssam_sent_at: string | null
-  payssam_paid_at: string | null
-  payssam_payment_method: string | null
-  payssam_transaction_id: string | null
-  payssam_cancelled_at: string | null
-  payssam_destroyed_at: string | null
-  payssam_last_sync_at: string | null
   // 조인된 데이터
   students: {
     id: string
@@ -82,6 +86,8 @@ interface TuitionDetail {
   // 분할 청구 관련
   parent_tuition_fee_id: string | null
   is_split_child: boolean | null
+  // payssam_bills JOIN 결과
+  payssam_bills: any[]
 }
 
 // 이벤트 로그 인터페이스
@@ -152,13 +158,17 @@ export default function TuitionDetailPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // 학원비 상세 조회
+      // 학원비 상세 조회 (payssam_bills JOIN 포함)
       const { data: tuitionData, error: tuitionError } = await supabase
         .from("tuition_fees")
         .select(`
-          *,
+          id, year, month, amount, payment_status, class_type, is_sibling,
+          note, period_start_date, period_end_date, created_at, updated_at,
+          student_name_snapshot, class_name_snapshot,
+          parent_tuition_fee_id, is_split_child,
           students!left(id, name, grade, school, parent_phone, payment_phone, status),
-          classes!left(id, name)
+          classes!left(id, name),
+          payssam_bills(id, bill_id, request_status, short_url, sent_at, paid_at, payment_method, transaction_id, cancelled_at, destroyed_at, last_sync_at)
         `)
         .eq("id", tuitionId)
         .single()
@@ -166,8 +176,9 @@ export default function TuitionDetailPage() {
       if (tuitionError) throw tuitionError
       setData(tuitionData)
 
-      // 이벤트 로그 조회
-      if (tuitionData?.payssam_bill_id) {
+      // 활성 청구서가 있으면 이벤트 로그 조회
+      const bills = (tuitionData?.payssam_bills || []) as any[]
+      if (bills.length > 0) {
         const { data: logsData } = await supabase
           .from("payssam_logs")
           .select("*")
@@ -269,7 +280,7 @@ export default function TuitionDetailPage() {
 
   // 상태 동기화
   const handleSync = async () => {
-    if (!data?.payssam_bill_id) return
+    if (!data) return
 
     setActionLoading("sync")
     try {
@@ -328,7 +339,7 @@ export default function TuitionDetailPage() {
 
   // 결제 취소
   const handleCancel = async () => {
-    if (!data?.payssam_bill_id) return
+    if (!data) return
 
     const confirm = window.confirm(
       "결제를 취소하시겠습니까?\n\n" +
@@ -361,7 +372,7 @@ export default function TuitionDetailPage() {
 
   // 청구서 파기
   const handleDestroy = async () => {
-    if (!data?.payssam_bill_id) return
+    if (!data) return
 
     const confirm = window.confirm(
       "청구서를 파기하시겠습니까?\n\n" +
@@ -394,7 +405,7 @@ export default function TuitionDetailPage() {
 
   // 청구서 재발송
   const handleResend = async () => {
-    if (!data?.payssam_bill_id) return
+    if (!data) return
 
     const confirm = window.confirm(
       "청구서를 재발송하시겠습니까?\n\n" +
@@ -427,8 +438,13 @@ export default function TuitionDetailPage() {
 
   // URL 복사
   const handleCopyUrl = () => {
-    if (data?.payssam_short_url) {
-      navigator.clipboard.writeText(data.payssam_short_url)
+    // activeBill은 렌더링 시점에 계산됨
+    const bills = (data?.payssam_bills || []) as any[]
+    const bill = bills.find(
+      (b: any) => !['destroyed', 'cancelled', 'failed'].includes(b.request_status || '')
+    )
+    if (bill?.short_url) {
+      navigator.clipboard.writeText(bill.short_url)
       toast.success("결제 URL이 복사되었습니다.")
     }
   }
@@ -499,13 +515,19 @@ export default function TuitionDetailPage() {
   const className = data.classes?.name || data.class_name_snapshot || "(반 정보 없음)"
   const phone = data.students?.payment_phone || data.students?.parent_phone || "-"
 
-  // 버튼 활성화 조건
-  const canSend = !data.payssam_bill_id && data.payment_status !== "완납"
-  const canSync = !!data.payssam_bill_id && data.payssam_request_status === "sent"
-  const canResend = data.payssam_request_status === "sent"
-  const canOfflinePayment = data.payssam_request_status === "sent"
-  const canCancel = data.payssam_request_status === "paid"
-  const canDestroy = data.payssam_request_status === "sent"
+  // 활성 청구서 찾기 (payssam_bills JOIN 결과에서)
+  const bills = (data.payssam_bills || []) as ActiveBill[]
+  const activeBill: ActiveBill | null = bills.find(
+    (b) => !['destroyed', 'cancelled', 'failed'].includes(b.request_status || '')
+  ) || null
+
+  // 버튼 활성화 조건 (활성 청구서 기반)
+  const canSend = !activeBill && data.payment_status !== "완납"
+  const canSync = !!activeBill && activeBill.request_status === "sent"
+  const canResend = activeBill?.request_status === "sent"
+  const canOfflinePayment = activeBill?.request_status === "sent"
+  const canCancel = activeBill?.request_status === "paid"
+  const canDestroy = activeBill?.request_status === "sent"
   // 분할 청구: 미납 상태 + 분할 자식이 아닌 경우 + 완납이 아닌 경우
   const canSplit = data.payment_status !== "완납" && !data.is_split_child && data.amount >= 20000
 
@@ -525,7 +547,7 @@ export default function TuitionDetailPage() {
             </p>
           </div>
         </div>
-        <PaymentStatusBadge status={data.payssam_request_status} size="lg" />
+        <PaymentStatusBadge status={activeBill?.request_status || null} size="lg" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -701,88 +723,88 @@ export default function TuitionDetailPage() {
               <div>
                 <div className="text-sm text-muted-foreground">청구서 ID</div>
                 <div className="font-mono text-sm">
-                  {data.payssam_bill_id || "-"}
+                  {activeBill?.bill_id || "-"}
                 </div>
               </div>
 
               <div>
                 <div className="text-sm text-muted-foreground">청구 상태</div>
                 <div className="mt-1">
-                  <PaymentStatusBadge status={data.payssam_request_status} />
+                  <PaymentStatusBadge status={activeBill?.request_status || null} />
                 </div>
               </div>
 
-              {data.payssam_sent_at && (
+              {activeBill?.sent_at && (
                 <div>
                   <div className="text-sm text-muted-foreground flex items-center gap-1">
                     <Send className="w-3 h-3" />
                     발송일시
                   </div>
-                  <div className="text-sm">{formatDateTime(data.payssam_sent_at)}</div>
+                  <div className="text-sm">{formatDateTime(activeBill.sent_at)}</div>
                 </div>
               )}
 
-              {data.payssam_paid_at && (
+              {activeBill?.paid_at && (
                 <div>
                   <div className="text-sm text-muted-foreground flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" />
                     결제일시
                   </div>
-                  <div className="text-sm">{formatDateTime(data.payssam_paid_at)}</div>
+                  <div className="text-sm">{formatDateTime(activeBill.paid_at)}</div>
                 </div>
               )}
 
-              {data.payssam_payment_method && (
+              {activeBill?.payment_method && (
                 <div>
                   <div className="text-sm text-muted-foreground">결제수단</div>
                   <div className="mt-1">
-                    <PaymentMethodBadge method={data.payssam_payment_method} />
+                    <PaymentMethodBadge method={activeBill.payment_method} />
                   </div>
                 </div>
               )}
 
-              {data.payssam_transaction_id && (
+              {activeBill?.transaction_id && (
                 <div>
                   <div className="text-sm text-muted-foreground">승인번호</div>
-                  <div className="font-mono text-sm">{data.payssam_transaction_id}</div>
+                  <div className="font-mono text-sm">{activeBill.transaction_id}</div>
                 </div>
               )}
 
-              {data.payssam_cancelled_at && (
+              {activeBill?.cancelled_at && (
                 <div>
                   <div className="text-sm text-muted-foreground text-orange-600">
                     취소일시
                   </div>
-                  <div className="text-sm">{formatDateTime(data.payssam_cancelled_at)}</div>
+                  <div className="text-sm">{formatDateTime(activeBill.cancelled_at)}</div>
                 </div>
               )}
 
-              {data.payssam_destroyed_at && (
+              {activeBill?.destroyed_at && (
                 <div>
                   <div className="text-sm text-muted-foreground text-gray-600">
                     파기일시
                   </div>
-                  <div className="text-sm">{formatDateTime(data.payssam_destroyed_at)}</div>
+                  <div className="text-sm">{formatDateTime(activeBill.destroyed_at)}</div>
                 </div>
               )}
 
-              {data.payssam_short_url && (
+              {activeBill?.short_url && (
                 <div>
                   <div className="text-sm text-muted-foreground">결제 URL</div>
                   <div className="flex items-center gap-2 mt-1">
                     <a
-                      href={data.payssam_short_url}
+                      href={activeBill.short_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-blue-600 hover:underline truncate max-w-[150px]"
                     >
-                      {data.payssam_short_url}
+                      {activeBill.short_url}
                     </a>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyUrl}>
                       <Copy className="w-3 h-3" />
                     </Button>
                     <a
-                      href={data.payssam_short_url}
+                      href={activeBill.short_url}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -794,10 +816,10 @@ export default function TuitionDetailPage() {
                 </div>
               )}
 
-              {data.payssam_last_sync_at && (
+              {activeBill?.last_sync_at && (
                 <div className="pt-2 border-t">
                   <div className="text-xs text-muted-foreground">
-                    마지막 동기화: {formatDateTime(data.payssam_last_sync_at)}
+                    마지막 동기화: {formatDateTime(activeBill.last_sync_at)}
                   </div>
                 </div>
               )}

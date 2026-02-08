@@ -30,15 +30,13 @@ const STATUS_MAP: Record<PaysSamApprState, {
 }
 
 export async function POST(request: NextRequest) {
-  // 🔍 DEBUG: 웹훅 요청 도착 확인
   console.log('🚨 [PaysSam Webhook] ===== WEBHOOK RECEIVED =====')
   console.log('[PaysSam Webhook] Request headers:', Object.fromEntries(request.headers))
 
   try {
     const body = await request.json() as PaysSamWebhookPayload
 
-    // 로그 기록 (디버깅용)
-    console.log('[PaysSam Webhook] 📥 Payload:', JSON.stringify(body, null, 2))
+    console.log('[PaysSam Webhook] Payload:', JSON.stringify(body, null, 2))
 
     // 필수값 검증
     if (!body.bill_id || !body.appr_state) {
@@ -46,14 +44,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ code: '9999', msg: '필수값 누락' })
     }
 
-    // bill_id로 tuition_fee 조회
-    const { data: fee, error: fetchError } = await supabase
-      .from('tuition_fees')
-      .select('id, amount')
-      .eq('payssam_bill_id', body.bill_id)
+    // bill_id로 payssam_bills 조회
+    const { data: bill, error: fetchError } = await supabase
+      .from('payssam_bills')
+      .select('id, tuition_fee_id')
+      .eq('bill_id', body.bill_id)
       .single()
 
-    if (fetchError || !fee) {
+    if (fetchError || !bill) {
       console.error('[PaysSam Webhook] Bill not found:', body.bill_id)
       return NextResponse.json({ code: '9980', msg: '청구서를 찾을 수 없습니다.' })
     }
@@ -62,34 +60,39 @@ export async function POST(request: NextRequest) {
     const status = STATUS_MAP[body.appr_state] || STATUS_MAP.W
     const now = new Date().toISOString()
 
-    // DB 업데이트 데이터
-    const updateData: Record<string, any> = {
-      payment_status: status.paymentStatus,
-      payssam_request_status: status.requestStatus,
-      payssam_payment_method: body.appr_pay_type || null,
-      payssam_transaction_id: body.appr_num || null,
-      payssam_last_sync_at: now,
-      payssam_raw_response: body,
+    // payssam_bills 업데이트
+    const billUpdate: Record<string, any> = {
+      request_status: status.requestStatus,
+      payment_method: body.appr_pay_type || null,
+      transaction_id: body.appr_num || null,
+      last_sync_at: now,
+      raw_response: body,
     }
 
-    // 상태별 타임스탬프
     if (body.appr_state === 'F') {
-      updateData.payssam_paid_at = body.appr_dt ? parseApprDt(body.appr_dt) : now
+      billUpdate.paid_at = body.appr_dt ? parseApprDt(body.appr_dt) : now
     } else if (body.appr_state === 'C') {
-      updateData.payssam_cancelled_at = now
+      billUpdate.cancelled_at = now
     } else if (body.appr_state === 'D') {
-      updateData.payssam_destroyed_at = now
+      billUpdate.destroyed_at = now
     }
 
-    // DB 업데이트
-    const { error: updateError } = await supabase
-      .from('tuition_fees')
-      .update(updateData)
-      .eq('id', fee.id)
+    const { error: billUpdateError } = await supabase
+      .from('payssam_bills')
+      .update(billUpdate)
+      .eq('id', bill.id)
 
-    if (updateError) {
-      console.error('[PaysSam Webhook] Update error:', updateError)
+    if (billUpdateError) {
+      console.error('[PaysSam Webhook] Bill update error:', billUpdateError)
       return NextResponse.json({ code: '9999', msg: 'DB 업데이트 실패' })
+    }
+
+    // tuition_fees payment_status 업데이트
+    if (body.appr_state === 'F' || body.appr_state === 'C' || body.appr_state === 'D') {
+      await supabase
+        .from('tuition_fees')
+        .update({ payment_status: status.paymentStatus })
+        .eq('id', bill.tuition_fee_id)
     }
 
     // 이벤트 로그 기록
@@ -99,9 +102,10 @@ export async function POST(request: NextRequest) {
       body.appr_state === 'D' ? 'destroyed' : 'status_changed'
 
     await supabase.from('payssam_logs').insert({
-      tuition_fee_id: fee.id,
+      tuition_fee_id: bill.tuition_fee_id,
       event_type: eventType,
       event_data: body,
+      payssam_bill_id: bill.id,
     })
 
     console.log(`[PaysSam Webhook] Success: ${body.bill_id} -> ${body.appr_state}`)

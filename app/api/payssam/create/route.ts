@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/auth/server'
-import { createInvoice, createInvoicesBulk } from '@/services/payssam-service'
+import { createInvoice, createInvoicesBulk, getActiveBill } from '@/services/payssam-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,7 +67,6 @@ export async function POST(request: NextRequest) {
           month,
           student_name_snapshot,
           class_name_snapshot,
-          payssam_bill_id,
           students!inner(
             id,
             name,
@@ -85,7 +84,9 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      if (fee.payssam_bill_id) {
+      // 활성 청구서 존재 여부 확인 (payssam_bills 테이블)
+      const activeBill = await getActiveBill(body.tuitionFeeId)
+      if (activeBill) {
         return NextResponse.json(
           { success: false, error: '이미 청구서가 존재합니다.' },
           { status: 400 }

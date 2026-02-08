@@ -3,6 +3,8 @@
  * API 규격서 v1.2.4 기준
  */
 
+import type { PaysSamRequestStatus } from '@/types/tuition'
+
 // ============================================
 // API 공통 타입
 // ============================================
@@ -172,6 +174,28 @@ export interface PaysSamResendRequest {
   member: string
   merchant: string
   bill_id: string
+}
+
+// ============================================
+// PaysSam 청구서 (payssam_bills 테이블)
+// ============================================
+
+export interface PaysSamBill {
+  id: string
+  tuition_fee_id: string
+  bill_id: string
+  request_status: PaysSamRequestStatus
+  sent_at: string | null
+  paid_at: string | null
+  cancelled_at: string | null
+  destroyed_at: string | null
+  last_sync_at: string | null
+  payment_method: string | null
+  transaction_id: string | null
+  short_url: string | null
+  raw_response: Record<string, any> | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 // ============================================

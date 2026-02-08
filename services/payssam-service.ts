@@ -1,6 +1,8 @@
 /**
  * PaysSam (결제선생) 비즈니스 서비스
  * 청구서 발송, 결제 상태 관리, 동기화 로직
+ *
+ * payssam_bills 테이블 기반 (1:N 관계)
  */
 
 import { createServerClient } from '@/lib/auth/server'
@@ -20,8 +22,30 @@ import type {
   PaysSamWebhookPayload,
   PaysSamApprState,
   PaysSamEventType,
+  PaysSamBill,
 } from '@/types/payssam'
-import type { TuitionFee, PaysSamRequestStatus } from '@/types/tuition'
+import type { PaysSamRequestStatus } from '@/types/tuition'
+
+// ============================================
+// 활성 청구서 헬퍼
+// ============================================
+
+/**
+ * tuition_fee_id에 대한 활성 청구서 조회
+ * 활성 = destroyed, cancelled, failed가 아닌 상태
+ */
+export async function getActiveBill(tuitionFeeId: string): Promise<PaysSamBill | null> {
+  const supabase = await createServerClient()
+  const { data } = await supabase
+    .from('payssam_bills')
+    .select('*')
+    .eq('tuition_fee_id', tuitionFeeId)
+    .not('request_status', 'in', '("destroyed","cancelled","failed")')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data
+}
 
 // ============================================
 // 청구서 생성 (API 호출 - 결제선생에 등록 + 카카오톡 발송)
@@ -36,8 +60,7 @@ interface CreateInvoiceParams {
   message?: string
   expireYear?: number
   expireMonth?: number
-  // 템플릿용 필드
-  classType?: string // '정규' | '특강' | '입학테스트비'
+  classType?: string
   className?: string
   periodStartDate?: string | null
   periodEndDate?: string | null
@@ -45,30 +68,10 @@ interface CreateInvoiceParams {
 }
 
 /**
- * 청구서 생성 (1단계 워크플로우)
- * - PaysSam /if/bill/send API 호출
- * - 결제선생 앱에 청구서 등록 + 카카오톡 발송
- * - 상태: pending → sent
- *
- * 참고: PaysSam에서 "발송"이 곧 "등록"임.
- * 발송 후 결제선생 앱에서 현장결제 가능.
- */
-/**
  * 청구서 메시지 생성 (수업 타입별 템플릿)
- *
- * 정규/특강:
- * ■ 수업: {반이름}
- * ■ 기간: {시작일} ~ {종료일}
- * ■ 금액: {금액}원
- * [안내] {비고}
- *
- * 입학테스트비:
- * ■ 기간: {시작일} ~ {종료일}
- * ■ 금액: {금액}원
- * [안내] {비고}
  */
 function buildInvoiceMessage(params: {
-  classType?: string // '정규' | '특강' | '입학테스트비'
+  classType?: string
   className?: string
   periodStartDate?: string | null
   periodEndDate?: string | null
@@ -79,24 +82,19 @@ function buildInvoiceMessage(params: {
 
   const lines: string[] = []
 
-  // 수업 타입별 레이블 (입학테스트비는 반 정보 없음)
   if (classType === '입학테스트비') {
     // 입학테스트비는 반 정보 표시 안함
   } else if (className) {
-    // 정규, 특강은 반 정보 표시
     lines.push(`■ 수업: ${className}`)
   }
 
-  // 기간 (모든 타입 공통)
   if (periodStartDate && periodEndDate) {
     const formatDate = (d: string) => d.replace(/-/g, '.')
     lines.push(`■ 기간: ${formatDate(periodStartDate)} ~ ${formatDate(periodEndDate)}`)
   }
 
-  // 금액 (모든 타입 공통)
   lines.push(`■ 금액: ${amount.toLocaleString()}원`)
 
-  // 안내/비고 (모든 타입 공통)
   if (note && note.trim()) {
     lines.push('')
     lines.push(`[안내] ${note.trim()}`)
@@ -105,6 +103,11 @@ function buildInvoiceMessage(params: {
   return lines.join('\n')
 }
 
+/**
+ * 청구서 생성
+ * - PaysSam /if/bill/send API 호출
+ * - payssam_bills에 INSERT
+ */
 export async function createInvoice(params: CreateInvoiceParams) {
   const {
     tuitionFeeId,
@@ -122,7 +125,6 @@ export async function createInvoice(params: CreateInvoiceParams) {
     note,
   } = params
 
-  // 메시지 생성: 커스텀 메시지 > 템플릿 생성 > 기본값
   const finalMessage = message || buildInvoiceMessage({
     classType,
     className,
@@ -139,8 +141,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
   const expireDt = getExpireDate(expireYear, expireMonth)
   const callbackURL = `${process.env.NEXT_PUBLIC_SITE_URL}/api/payssam/webhook`
 
-  // 🔍 DEBUG: callbackURL 확인 (웹훅이 안 들어오는 문제 디버깅)
-  console.log('[createInvoice] 📌 callbackURL 확인:', {
+  console.log('[createInvoice] callbackURL:', {
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
     callbackURL,
     billId,
@@ -149,7 +150,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
     expireDt,
   })
 
-  // PaysSam API 호출 (청구서 등록 + 카카오톡 발송)
+  // PaysSam API 호출
   const result = await paysamRequest<PaysSamSendResponse>('/if/bill/send', {
     bill: {
       bill_id: billId,
@@ -164,36 +165,30 @@ export async function createInvoice(params: CreateInvoiceParams) {
     },
   })
 
-  console.log('[createInvoice] PaysSam API 호출 결과:', {
+  console.log('[createInvoice] PaysSam API 결과:', {
     success: result.success,
     error: result.error,
-    code: result.code,
     billId,
     tuitionFeeId,
   })
 
   if (result.success) {
-    // DB 업데이트 (sent 상태로)
     const supabase = await createServerClient()
     const now = new Date().toISOString()
 
-    console.log('[createInvoice] Supabase 업데이트 시작:', {
-      tuitionFeeId,
-      billId,
-      status: 'sent',
-    })
+    // payssam_bills에 INSERT
+    const { data: billData, error: billError } = await supabase.from('payssam_bills').insert({
+      tuition_fee_id: tuitionFeeId,
+      bill_id: billId,
+      request_status: 'sent',
+      sent_at: now,
+      short_url: result.data?.shortURL || null,
+      last_sync_at: now,
+    }).select('id').single()
 
-    const { data: updateData, error: updateError } = await supabase.from('tuition_fees').update({
-      payssam_bill_id: billId,
-      payssam_request_status: 'sent',
-      payssam_sent_at: now,
-      payssam_short_url: result.data?.shortURL || null,
-      payssam_last_sync_at: now,
-    }).eq('id', tuitionFeeId).select('id, payssam_bill_id, payssam_request_status')
-
-    console.log('[createInvoice] Supabase 업데이트 결과:', {
-      updateData,
-      updateError: updateError?.message,
+    console.log('[createInvoice] payssam_bills INSERT:', {
+      billData,
+      billError: billError?.message,
     })
 
     // 이벤트 로그
@@ -204,7 +199,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
       shortURL: result.data?.shortURL,
       expire_dt: expireDt,
       student_name: studentName,
-    })
+    }, billData?.id)
 
     return {
       success: true,
@@ -230,7 +225,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
 }
 
 // ============================================
-// 일괄 청구서 생성 (API 호출 - 결제선생에 등록 + 카카오톡 발송)
+// 일괄 청구서 생성
 // ============================================
 
 interface BulkCreateResult {
@@ -246,20 +241,14 @@ interface BulkCreateResult {
   }>
 }
 
-/**
- * 일괄 청구서 생성 (1단계 워크플로우)
- * - PaysSam /if/bill/send API 호출
- * - 결제선생 앱에 청구서 등록 + 카카오톡 발송
- * - 상태: pending → sent
- */
 export async function createInvoicesBulk(
   tuitionFeeIds: string[]
 ): Promise<BulkCreateResult> {
-  console.log('[createInvoicesBulk] 시작:', { tuitionFeeIds, count: tuitionFeeIds.length })
+  console.log('[createInvoicesBulk] 시작:', { count: tuitionFeeIds.length })
 
   const supabase = await createServerClient()
 
-  // 청구 대상 조회 (학생 정보 포함)
+  // 청구 대상 조회
   const { data: fees, error } = await supabase
     .from('tuition_fees')
     .select(`
@@ -270,7 +259,6 @@ export async function createInvoicesBulk(
       class_type,
       student_name_snapshot,
       class_name_snapshot,
-      payssam_bill_id,
       period_start_date,
       period_end_date,
       note,
@@ -283,22 +271,19 @@ export async function createInvoicesBulk(
     `)
     .in('id', tuitionFeeIds)
 
-  console.log('[createInvoicesBulk] 조회 결과:', {
-    feesCount: fees?.length || 0,
-    error: error?.message,
-    fees: fees?.map(f => ({
-      id: f.id,
-      billId: f.payssam_bill_id,
-      amount: f.amount,
-      studentName: f.student_name_snapshot,
-      phone: (f.students as any)?.payment_phone || (f.students as any)?.parent_phone,
-    })),
-  })
-
   if (error || !fees) {
     console.error('[createInvoicesBulk] 조회 실패:', error)
     return { success: 0, failed: tuitionFeeIds.length, results: [] }
   }
+
+  // 활성 청구서 일괄 조회
+  const { data: activeBills } = await supabase
+    .from('payssam_bills')
+    .select('tuition_fee_id')
+    .in('tuition_fee_id', tuitionFeeIds)
+    .not('request_status', 'in', '("destroyed","cancelled","failed")')
+
+  const activeBillFeeIds = new Set((activeBills || []).map(b => b.tuition_fee_id))
 
   const results: BulkCreateResult['results'] = []
   let successCount = 0
@@ -308,8 +293,8 @@ export async function createInvoicesBulk(
     const student = fee.students as any
     const studentName = fee.student_name_snapshot || student?.name || '학생'
 
-    // 이미 청구서가 있는 경우 스킵
-    if (fee.payssam_bill_id) {
+    // 활성 청구서가 있는 경우 스킵
+    if (activeBillFeeIds.has(fee.id)) {
       results.push({
         tuitionFeeId: fee.id,
         studentName,
@@ -320,7 +305,6 @@ export async function createInvoicesBulk(
       continue
     }
 
-    // payment_phone 우선, 없으면 parent_phone 사용
     const parentPhone = student?.payment_phone || student?.parent_phone
 
     if (!parentPhone) {
@@ -334,7 +318,6 @@ export async function createInvoicesBulk(
       continue
     }
 
-    // 제목: 밸류인수학 {연도}년 {월}월 학원비
     const productName = `밸류인수학 ${fee.year}년 ${fee.month}월 학원비`
 
     const result = await createInvoice({
@@ -345,7 +328,6 @@ export async function createInvoicesBulk(
       productName,
       expireYear: fee.year,
       expireMonth: fee.month,
-      // 템플릿용 필드
       classType: fee.class_type || undefined,
       className: fee.class_name_snapshot || undefined,
       periodStartDate: fee.period_start_date,
@@ -372,7 +354,7 @@ export async function createInvoicesBulk(
       })
     }
 
-    // Rate limiting: 100ms 간격 (API 과부하 방지)
+    // Rate limiting
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 
@@ -392,8 +374,7 @@ interface SendInvoiceParams {
   message?: string
   expireYear?: number
   expireMonth?: number
-  // 템플릿용 필드
-  classType?: string // '정규' | '특강' | '입학테스트비'
+  classType?: string
   className?: string
   periodStartDate?: string | null
   periodEndDate?: string | null
@@ -402,10 +383,7 @@ interface SendInvoiceParams {
 
 /**
  * 청구서 발송 (레거시 함수)
- * @deprecated createInvoice()를 사용하세요. 동일한 기능입니다.
- *
- * PaysSam에서는 "발송"이 곧 "등록"입니다.
- * 별도의 등록 API가 없으므로 createInvoice와 sendInvoice는 동일한 동작을 합니다.
+ * @deprecated createInvoice()를 사용하세요.
  */
 export async function sendInvoice(params: SendInvoiceParams & { existingBillId?: string }) {
   const {
@@ -425,7 +403,6 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     note,
   } = params
 
-  // 메시지 생성: 커스텀 메시지 > 템플릿 생성 > 기본값
   const finalMessage = message || buildInvoiceMessage({
     classType,
     className,
@@ -435,7 +412,6 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     note,
   }) || '밸류인수학 학원비 청구서입니다.'
 
-  // 이미 생성된 청구서가 있으면 사용, 없으면 새로 생성
   const billId = existingBillId || generateBillId()
   const phone = normalizePhone(parentPhone)
   const price = formatPrice(amount)
@@ -457,46 +433,27 @@ export async function sendInvoice(params: SendInvoiceParams & { existingBillId?:
     },
   })
 
-  console.log('[sendInvoice] PaysSam API 호출 결과:', {
-    success: result.success,
-    error: result.error,
-    code: result.code,
-    billId,
-    tuitionFeeId,
-  })
-
   if (result.success) {
-    // DB 업데이트
     const supabase = await createServerClient()
     const now = new Date().toISOString()
 
-    console.log('[sendInvoice] Supabase 업데이트 시작:', {
-      tuitionFeeId,
-      billId,
-      status: 'sent',
-    })
+    // payssam_bills에 INSERT
+    const { data: billData } = await supabase.from('payssam_bills').insert({
+      tuition_fee_id: tuitionFeeId,
+      bill_id: billId,
+      request_status: 'sent',
+      sent_at: now,
+      short_url: result.data?.shortURL || null,
+      last_sync_at: now,
+    }).select('id').single()
 
-    const { data: updateData, error: updateError } = await supabase.from('tuition_fees').update({
-      payssam_bill_id: billId,
-      payssam_request_status: 'sent',
-      payssam_sent_at: now,
-      payssam_short_url: result.data?.shortURL || null,
-      payssam_last_sync_at: now,
-    }).eq('id', tuitionFeeId).select('id, payssam_bill_id, payssam_request_status')
-
-    console.log('[sendInvoice] Supabase 업데이트 결과:', {
-      updateData,
-      updateError: updateError?.message,
-    })
-
-    // 이벤트 로그
     await logPaysamEvent(tuitionFeeId, 'invoice_sent', {
       bill_id: billId,
       amount,
       phone,
       shortURL: result.data?.shortURL,
       expire_dt: expireDt,
-    })
+    }, billData?.id)
   }
 
   return {
@@ -521,20 +478,12 @@ interface BulkSendResult {
   }>
 }
 
-/**
- * 일괄 청구서 발송 (2단계)
- * - pending 또는 created 상태의 청구서 발송
- * - PaysSam API 호출
- * - 상태: pending/created → sent
- */
 export async function sendInvoicesBulk(
   tuitionFeeIds: string[]
 ): Promise<BulkSendResult> {
   const supabase = await createServerClient()
 
-  console.log('[sendInvoicesBulk] 시작:', { tuitionFeeIds })
-
-  // 청구 대상 조회 (학생 정보 포함) - pending 또는 created 상태만
+  // 청구 대상 조회 (pending/created/null 상태만)
   const { data: fees, error } = await supabase
     .from('tuition_fees')
     .select(`
@@ -545,8 +494,6 @@ export async function sendInvoicesBulk(
       class_type,
       student_name_snapshot,
       class_name_snapshot,
-      payssam_bill_id,
-      payssam_request_status,
       period_start_date,
       period_end_date,
       note,
@@ -558,25 +505,27 @@ export async function sendInvoicesBulk(
       )
     `)
     .in('id', tuitionFeeIds)
-    .in('payssam_request_status', ['pending', 'created', null])
-
-  console.log('[sendInvoicesBulk] 조회 결과:', {
-    feesCount: fees?.length || 0,
-    error: error?.message,
-    fees: fees?.map(f => ({
-      id: f.id,
-      status: f.payssam_request_status,
-      billId: f.payssam_bill_id,
-    })),
-  })
 
   if (error || !fees) {
-    console.error('[sendInvoicesBulk] 조회 실패:', error)
     return { success: 0, failed: tuitionFeeIds.length, results: [] }
   }
 
-  if (fees.length === 0) {
-    console.warn('[sendInvoicesBulk] 발송 가능한 항목 없음 (payssam_request_status가 pending/created/null이 아님)')
+  // 활성 청구서 없는 건만 필터 (기존 created/pending 체크 대체)
+  const { data: activeBills } = await supabase
+    .from('payssam_bills')
+    .select('tuition_fee_id, bill_id, request_status')
+    .in('tuition_fee_id', tuitionFeeIds)
+    .not('request_status', 'in', '("destroyed","cancelled","failed")')
+
+  const activeBillMap = new Map((activeBills || []).map(b => [b.tuition_fee_id, b]))
+
+  const filteredFees = fees.filter(fee => {
+    const activeBill = activeBillMap.get(fee.id)
+    // 활성 bill이 없거나, created 상태인 경우만 발송 가능
+    return !activeBill || activeBill.request_status === 'created'
+  })
+
+  if (filteredFees.length === 0) {
     return { success: 0, failed: tuitionFeeIds.length, results: [] }
   }
 
@@ -584,10 +533,9 @@ export async function sendInvoicesBulk(
   let successCount = 0
   let failedCount = 0
 
-  for (const fee of fees) {
+  for (const fee of filteredFees) {
     const student = fee.students as any
     const studentName = fee.student_name_snapshot || student?.name || '학생'
-    // payment_phone 우선, 없으면 parent_phone 사용
     const parentPhone = student?.payment_phone || student?.parent_phone
 
     if (!parentPhone) {
@@ -601,8 +549,8 @@ export async function sendInvoicesBulk(
       continue
     }
 
-    // 제목: 밸류인수학 {연도}년 {월}월 학원비
     const productName = `밸류인수학 ${fee.year}년 ${fee.month}월 학원비`
+    const activeBill = activeBillMap.get(fee.id)
 
     const result = await sendInvoice({
       tuitionFeeId: fee.id,
@@ -612,9 +560,7 @@ export async function sendInvoicesBulk(
       productName,
       expireYear: fee.year,
       expireMonth: fee.month,
-      // created 상태면 기존 bill_id 사용
-      existingBillId: fee.payssam_request_status === 'created' ? fee.payssam_bill_id : undefined,
-      // 템플릿용 필드
+      existingBillId: activeBill?.request_status === 'created' ? activeBill.bill_id : undefined,
       classType: fee.class_type || undefined,
       className: fee.class_name_snapshot || undefined,
       periodStartDate: fee.period_start_date,
@@ -640,7 +586,6 @@ export async function sendInvoicesBulk(
       })
     }
 
-    // Rate limiting: 100ms 간격
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 
@@ -661,25 +606,19 @@ export async function getPaymentStatus(billId: string) {
  * 특정 청구서의 결제 상태 동기화
  */
 export async function syncPaymentStatus(tuitionFeeId: string) {
-  const supabase = await createServerClient()
+  const activeBill = await getActiveBill(tuitionFeeId)
 
-  const { data: fee, error } = await supabase
-    .from('tuition_fees')
-    .select('payssam_bill_id')
-    .eq('id', tuitionFeeId)
-    .single()
-
-  if (error || !fee?.payssam_bill_id) {
+  if (!activeBill) {
     return { success: false, error: '청구서 정보 없음' }
   }
 
-  const result = await getPaymentStatus(fee.payssam_bill_id)
+  const result = await getPaymentStatus(activeBill.bill_id)
 
   if (result.success && result.data) {
     const response = result.data as PaysSamReadResponse
     await processWebhookPayload({
       apikey: '',
-      bill_id: fee.payssam_bill_id,
+      bill_id: activeBill.bill_id,
       appr_state: response.appr_state || 'W',
       appr_dt: response.appr_dt || '',
       appr_price: response.appr_price || '',
@@ -698,23 +637,30 @@ export async function syncPaymentStatus(tuitionFeeId: string) {
 // ============================================
 
 export async function cancelPayment(tuitionFeeId: string) {
-  const supabase = await createServerClient()
+  const activeBill = await getActiveBill(tuitionFeeId)
 
-  const { data: fee, error } = await supabase
-    .from('tuition_fees')
-    .select('payssam_bill_id, amount')
-    .eq('id', tuitionFeeId)
-    .single()
-
-  if (error || !fee?.payssam_bill_id) {
+  if (!activeBill) {
     return { success: false, error: '청구서 정보 없음' }
   }
 
+  const supabase = await createServerClient()
+
+  // 금액 조회
+  const { data: fee } = await supabase
+    .from('tuition_fees')
+    .select('amount')
+    .eq('id', tuitionFeeId)
+    .single()
+
+  if (!fee) {
+    return { success: false, error: '학원비 정보 없음' }
+  }
+
   const price = formatPrice(fee.amount)
-  const hash = generateHash(fee.payssam_bill_id, price)
+  const hash = generateHash(activeBill.bill_id, price)
 
   const result = await paysamRequest('/if/bill/cancel', {
-    bill_id: fee.payssam_bill_id,
+    bill_id: activeBill.bill_id,
     price,
     hash,
   })
@@ -722,17 +668,22 @@ export async function cancelPayment(tuitionFeeId: string) {
   if (result.success) {
     const now = new Date().toISOString()
 
+    // payssam_bills 업데이트
+    await supabase.from('payssam_bills').update({
+      request_status: 'cancelled',
+      cancelled_at: now,
+      last_sync_at: now,
+    }).eq('id', activeBill.id)
+
+    // tuition_fees payment_status 업데이트
     await supabase.from('tuition_fees').update({
       payment_status: '미납',
-      payssam_request_status: 'cancelled',
-      payssam_cancelled_at: now,
-      payssam_last_sync_at: now,
     }).eq('id', tuitionFeeId)
 
     await logPaysamEvent(tuitionFeeId, 'cancelled', {
-      bill_id: fee.payssam_bill_id,
+      bill_id: activeBill.bill_id,
       amount: fee.amount,
-    })
+    }, activeBill.id)
   }
 
   return result
@@ -743,40 +694,52 @@ export async function cancelPayment(tuitionFeeId: string) {
 // ============================================
 
 export async function destroyInvoice(tuitionFeeId: string) {
-  const supabase = await createServerClient()
+  const activeBill = await getActiveBill(tuitionFeeId)
 
-  const { data: fee, error } = await supabase
-    .from('tuition_fees')
-    .select('payssam_bill_id, amount')
-    .eq('id', tuitionFeeId)
-    .single()
-
-  if (error || !fee?.payssam_bill_id) {
+  if (!activeBill) {
     return { success: false, error: '청구서 정보 없음' }
   }
 
+  const supabase = await createServerClient()
+
+  // 금액 조회
+  const { data: fee } = await supabase
+    .from('tuition_fees')
+    .select('amount')
+    .eq('id', tuitionFeeId)
+    .single()
+
+  if (!fee) {
+    return { success: false, error: '학원비 정보 없음' }
+  }
+
   const price = formatPrice(fee.amount)
-  const hash = generateHash(fee.payssam_bill_id, price)
+  const hash = generateHash(activeBill.bill_id, price)
 
   const result = await paysamRequest('/if/bill/destroy', {
-    bill_id: fee.payssam_bill_id,
+    bill_id: activeBill.bill_id,
     price,
     hash,
   })
 
-  if (result.success) {
+  // PaysSam에서 성공했거나, 이미 존재하지 않는 청구서(9980)인 경우 DB도 파기 처리
+  if (result.success || result.code === '9980') {
     const now = new Date().toISOString()
 
-    await supabase.from('tuition_fees').update({
-      payssam_request_status: 'destroyed',
-      payssam_destroyed_at: now,
-      payssam_last_sync_at: now,
-    }).eq('id', tuitionFeeId)
+    // payssam_bills 업데이트
+    await supabase.from('payssam_bills').update({
+      request_status: 'destroyed',
+      destroyed_at: now,
+      last_sync_at: now,
+    }).eq('id', activeBill.id)
 
     await logPaysamEvent(tuitionFeeId, 'destroyed', {
-      bill_id: fee.payssam_bill_id,
+      bill_id: activeBill.bill_id,
       amount: fee.amount,
-    })
+      note: result.code === '9980' ? 'PaysSam에 청구서 없음 (자동 파기)' : undefined,
+    }, activeBill.id)
+
+    return { success: true }
   }
 
   return result
@@ -787,26 +750,20 @@ export async function destroyInvoice(tuitionFeeId: string) {
 // ============================================
 
 export async function resendInvoice(tuitionFeeId: string) {
-  const supabase = await createServerClient()
+  const activeBill = await getActiveBill(tuitionFeeId)
 
-  const { data: fee, error } = await supabase
-    .from('tuition_fees')
-    .select('payssam_bill_id')
-    .eq('id', tuitionFeeId)
-    .single()
-
-  if (error || !fee?.payssam_bill_id) {
+  if (!activeBill) {
     return { success: false, error: '청구서 정보 없음' }
   }
 
   const result = await paysamRequest('/if/bill/resend', {
-    bill_id: fee.payssam_bill_id,
+    bill_id: activeBill.bill_id,
   })
 
   if (result.success) {
     await logPaysamEvent(tuitionFeeId, 'resent', {
-      bill_id: fee.payssam_bill_id,
-    })
+      bill_id: activeBill.bill_id,
+    }, activeBill.id)
   }
 
   return result
@@ -824,9 +781,6 @@ export async function getPointBalance() {
 // Webhook 처리
 // ============================================
 
-/**
- * appr_state → 내부 상태 매핑
- */
 const STATUS_MAP: Record<PaysSamApprState, {
   paymentStatus: string
   requestStatus: PaysSamRequestStatus
@@ -840,51 +794,52 @@ const STATUS_MAP: Record<PaysSamApprState, {
 export async function processWebhookPayload(payload: PaysSamWebhookPayload) {
   const supabase = await createServerClient()
 
-  // bill_id로 tuition_fee 조회
-  const { data: fee, error } = await supabase
-    .from('tuition_fees')
-    .select('id')
-    .eq('payssam_bill_id', payload.bill_id)
+  // bill_id로 payssam_bills 조회
+  const { data: bill, error } = await supabase
+    .from('payssam_bills')
+    .select('id, tuition_fee_id')
+    .eq('bill_id', payload.bill_id)
     .single()
 
-  if (error || !fee) {
+  if (error || !bill) {
     return { success: false, error: '청구서를 찾을 수 없습니다.', code: '9980' }
   }
 
   const status = STATUS_MAP[payload.appr_state] || STATUS_MAP.W
   const now = new Date().toISOString()
 
-  // DB 업데이트
-  // ⚠️ 중요: payment_status는 PaysSam에서 'paid'(F)일 때만 업데이트
-  // 다른 상태(W, C, D)에서는 payment_status를 건드리지 않음
-  // 이유: 현장결제 후 관리자가 직접 "완납" 표시한 경우 보호
-  const updateData: Record<string, any> = {
-    payssam_request_status: status.requestStatus,
-    payssam_payment_method: payload.appr_pay_type,
-    payssam_transaction_id: payload.appr_num,
-    payssam_last_sync_at: now,
-    payssam_raw_response: payload,
+  // payssam_bills 업데이트
+  const billUpdate: Record<string, any> = {
+    request_status: status.requestStatus,
+    payment_method: payload.appr_pay_type,
+    transaction_id: payload.appr_num,
+    last_sync_at: now,
+    raw_response: payload,
   }
 
-  // 상태별 타임스탬프 및 payment_status 업데이트
   if (payload.appr_state === 'F') {
-    // 결제완료(F) 상태일 때 payment_status를 '완납'으로 변경
-    updateData.payment_status = '완납'
-    updateData.payssam_paid_at = payload.appr_dt
-      ? parseApprDt(payload.appr_dt)
-      : now
+    billUpdate.paid_at = payload.appr_dt ? parseApprDt(payload.appr_dt) : now
   } else if (payload.appr_state === 'C') {
-    // 취소(C) - 결제가 취소되었으므로 '미납'으로 변경
-    updateData.payment_status = '미납'
-    updateData.payssam_cancelled_at = now
+    billUpdate.cancelled_at = now
   } else if (payload.appr_state === 'D') {
-    // 파기(D) - 청구서가 파기되었으므로 '미납'으로 변경
-    updateData.payment_status = '미납'
-    updateData.payssam_destroyed_at = now
+    billUpdate.destroyed_at = now
   }
-  // W(미결제) 상태에서는 payment_status 변경하지 않음 (수동 완납 보호)
 
-  await supabase.from('tuition_fees').update(updateData).eq('id', fee.id)
+  await supabase.from('payssam_bills').update(billUpdate).eq('id', bill.id)
+
+  // tuition_fees payment_status 업데이트
+  const feeUpdate: Record<string, any> = {}
+  if (payload.appr_state === 'F') {
+    feeUpdate.payment_status = '완납'
+  } else if (payload.appr_state === 'C') {
+    feeUpdate.payment_status = '미납'
+  } else if (payload.appr_state === 'D') {
+    feeUpdate.payment_status = '미납'
+  }
+
+  if (Object.keys(feeUpdate).length > 0) {
+    await supabase.from('tuition_fees').update(feeUpdate).eq('id', bill.tuition_fee_id)
+  }
 
   // 이벤트 로그
   const eventType: PaysSamEventType =
@@ -896,9 +851,9 @@ export async function processWebhookPayload(payload: PaysSamWebhookPayload) {
           ? 'destroyed'
           : 'status_changed'
 
-  await logPaysamEvent(fee.id, eventType, payload)
+  await logPaysamEvent(bill.tuition_fee_id, eventType, payload, bill.id)
 
-  return { success: true, tuitionFeeId: fee.id }
+  return { success: true, tuitionFeeId: bill.tuition_fee_id }
 }
 
 // ============================================
@@ -908,7 +863,8 @@ export async function processWebhookPayload(payload: PaysSamWebhookPayload) {
 export async function logPaysamEvent(
   tuitionFeeId: string,
   eventType: PaysSamEventType,
-  eventData: Record<string, any>
+  eventData: Record<string, any>,
+  paysSamBillId?: string
 ) {
   const supabase = await createServerClient()
 
@@ -916,6 +872,7 @@ export async function logPaysamEvent(
     tuition_fee_id: tuitionFeeId,
     event_type: eventType,
     event_data: eventData,
+    payssam_bill_id: paysSamBillId || null,
   })
 }
 
@@ -926,11 +883,11 @@ export async function logPaysamEvent(
 /**
  * 청구 가능 여부 확인
  */
-export function canSendInvoice(fee: Partial<TuitionFee>): {
+export function canSendInvoice(fee: { payment_status?: string; amount?: number }, activeBill: PaysSamBill | null): {
   canSend: boolean
   reason?: string
 } {
-  if (fee.payssam_bill_id) {
+  if (activeBill) {
     return { canSend: false, reason: '이미 청구서가 발송되었습니다.' }
   }
   if (fee.payment_status === '완납') {
@@ -945,14 +902,14 @@ export function canSendInvoice(fee: Partial<TuitionFee>): {
 /**
  * 취소 가능 여부 확인
  */
-export function canCancelPayment(fee: Partial<TuitionFee>): {
+export function canCancelPayment(activeBill: PaysSamBill | null): {
   canCancel: boolean
   reason?: string
 } {
-  if (!fee.payssam_bill_id) {
+  if (!activeBill) {
     return { canCancel: false, reason: '발송된 청구서가 없습니다.' }
   }
-  if (fee.payssam_request_status !== 'paid') {
+  if (activeBill.request_status !== 'paid') {
     return { canCancel: false, reason: '결제 완료 건만 취소할 수 있습니다.' }
   }
   return { canCancel: true }
@@ -961,17 +918,17 @@ export function canCancelPayment(fee: Partial<TuitionFee>): {
 /**
  * 파기 가능 여부 확인
  */
-export function canDestroyInvoice(fee: Partial<TuitionFee>): {
+export function canDestroyInvoice(activeBill: PaysSamBill | null): {
   canDestroy: boolean
   reason?: string
 } {
-  if (!fee.payssam_bill_id) {
+  if (!activeBill) {
     return { canDestroy: false, reason: '발송된 청구서가 없습니다.' }
   }
-  if (fee.payssam_request_status === 'paid') {
+  if (activeBill.request_status === 'paid') {
     return { canDestroy: false, reason: '결제 완료 건은 파기할 수 없습니다.' }
   }
-  if (fee.payssam_request_status === 'destroyed') {
+  if (activeBill.request_status === 'destroyed') {
     return { canDestroy: false, reason: '이미 파기된 청구서입니다.' }
   }
   return { canDestroy: true }

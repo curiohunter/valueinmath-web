@@ -39,6 +39,7 @@ interface ClassFormModalProps {
     subject: string
     teacher_id: string
     monthly_fee?: number
+    sessions_per_month?: number | null
     mathflat_class_id?: string | null
     selectedStudentIds: string[]
   }
@@ -60,68 +61,54 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
   const safeTeachers = teachers ?? [];
   const enrolledStudents = useMemo(() => (students ?? []).filter(s => s.status && s.status.trim().includes('재원')), [students])
 
-  // 상태
-  const [name, setName] = useState("")
-  const [subject, setSubject] = useState("수학")
-  const [monthlyFee, setMonthlyFee] = useState("")
-  const [mathflatClassId, setMathflatClassId] = useState("")
+  // 상태 - edit 모드일 때 initialData에서 직접 초기값 설정 (key로 remount 보장)
+  const isEdit = mode === "edit" && !!initialData
+  const [name, setName] = useState(isEdit ? initialData.name : "")
+  const [subject, setSubject] = useState(isEdit ? initialData.subject : "수학")
+  const [monthlyFee, setMonthlyFee] = useState(isEdit ? (initialData.monthly_fee?.toString() || "") : "")
+  const [sessionsPerMonth, setSessionsPerMonth] = useState(isEdit ? (initialData.sessions_per_month?.toString() || "") : "")
+  const [mathflatClassId, setMathflatClassId] = useState(isEdit ? (initialData.mathflat_class_id || "") : "")
   const [teacherSearch, setTeacherSearch] = useState("")
   const [studentSearch, setStudentSearch] = useState("")
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
-  const [selectedStudents, setSelectedStudents] = useState<Student[]>([])
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(
+    isEdit ? (teachers.find(t => t.id === initialData.teacher_id) || null) : null
+  )
+  const [selectedStudents, setSelectedStudents] = useState<Student[]>(
+    isEdit ? enrolledStudents.filter(s => initialData.selectedStudentIds.includes(s.id)) : []
+  )
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(false)
 
   // 시간표 Collapsible 상태
-  const [isTimetableOpen, setIsTimetableOpen] = useState(true)
+  const [isTimetableOpen, setIsTimetableOpen] = useState(!isEdit)
 
-  // edit 모드일 때 초기값 세팅
+  // edit 모드: 시간표 비동기 fetch만 담당 (나머지 필드는 useState 초기값으로 처리)
   useEffect(() => {
-    if (open && mode === "edit" && initialData) {
-      setName(initialData.name)
-      setSubject(initialData.subject)
-      setMonthlyFee(initialData.monthly_fee?.toString() || "")
-      setMathflatClassId(initialData.mathflat_class_id || "")
-      const teacher = teachers.find(t => t.id === initialData.teacher_id) || null
-      setSelectedTeacher(teacher)
-      setSelectedStudents(
-        enrolledStudents.filter(s => initialData.selectedStudentIds.includes(s.id))
-      )
+    if (!open || mode !== "edit" || !initialData?.id) return
 
-      // Fetch existing schedules for this class
-      const fetchSchedules = async () => {
-        const supabase = createClient<Database>()
-        const { data, error } = await supabase
-          .from("class_schedules")
-          .select("day_of_week, start_time, end_time")
-          .eq("class_id", initialData.id!)
-          .order("day_of_week")
+    const fetchSchedules = async () => {
+      const supabase = createClient<Database>()
+      const { data, error } = await supabase
+        .from("class_schedules")
+        .select("day_of_week, start_time, end_time")
+        .eq("class_id", initialData.id!)
+        .order("day_of_week")
 
-        if (!error && data) {
-          const formattedSchedules: Schedule[] = data.map(s => ({
-            day_of_week: s.day_of_week as Schedule['day_of_week'],
-            start_time: s.start_time.substring(0, 5),
-            end_time: s.end_time.substring(0, 5),
-          }))
-          setSchedules(formattedSchedules)
-          // 기존 시간표가 있으면 접힌 상태로 시작
-          if (formattedSchedules.length > 0) {
-            setIsTimetableOpen(false)
-          }
+      if (!error && data) {
+        const formattedSchedules: Schedule[] = data.map(s => ({
+          day_of_week: s.day_of_week as Schedule['day_of_week'],
+          start_time: s.start_time.substring(0, 5),
+          end_time: s.end_time.substring(0, 5),
+        }))
+        setSchedules(formattedSchedules)
+        if (formattedSchedules.length > 0) {
+          setIsTimetableOpen(false)
         }
       }
-      fetchSchedules()
-    } else if (open && mode === "create") {
-      setName("")
-      setSubject("수학")
-      setMonthlyFee("")
-      setMathflatClassId("")
-      setSelectedTeacher(null)
-      setSelectedStudents([])
-      setSchedules([])
-      setIsTimetableOpen(true) // 새 반 생성시 펼쳐진 상태로 시작
     }
-  }, [open, mode, initialData, teachers, enrolledStudents])
+    fetchSchedules()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData?.id])
 
   // 시간표 요약 텍스트 생성
   const timetableSummary = useMemo(() => {
@@ -223,6 +210,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
     setLoading(true)
     const supabase = createClient<Database>()
     const parsedFee = parseInt(monthlyFee.replace(/[^0-9]/g, '')) || 0
+    const parsedSessions = parseInt(sessionsPerMonth) || null
 
     if (mode === "create") {
       const { data: newClass, error } = await supabase.from("classes").insert({
@@ -230,6 +218,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         subject,
         teacher_id: selectedTeacher.id,
         monthly_fee: parsedFee,
+        sessions_per_month: parsedSessions,
         mathflat_class_id: mathflatClassId.trim() || null,
       }).select().single()
       if (error) {
@@ -256,6 +245,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         subject,
         teacher_id: selectedTeacher.id,
         monthly_fee: parsedFee,
+        sessions_per_month: parsedSessions,
         mathflat_class_id: mathflatClassId.trim() || null,
       }).eq("id", initialData.id)
       if (error) {
@@ -344,7 +334,7 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-4">
             {/* 1. 기본 정보 섹션 */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   반 이름 <span className="text-red-500">*</span>
@@ -386,6 +376,25 @@ export function ClassFormModal({ open, onClose, teachers, students, mode = "crea
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
                     원
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  월 수업횟수
+                </label>
+                <div className="relative">
+                  <Input
+                    className="w-full h-10 pr-8"
+                    placeholder="미입력시 고정액"
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={sessionsPerMonth}
+                    onChange={e => setSessionsPerMonth(e.target.value)}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+                    회
                   </span>
                 </div>
               </div>

@@ -1,6 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import LearningTabs from "@/components/learning/LearningTabs";
 import { MakeupSidebar } from "@/components/learning/makeup-classes/makeup-sidebar";
 import { MakeupTable } from "@/components/learning/makeup-classes/makeup-table";
@@ -9,6 +19,11 @@ import { MakeupModal } from "@/components/learning/makeup-classes/makeup-modal";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 import { toast } from "sonner";
+import {
+  findLinkedAbsence,
+  deleteMakeupClass,
+  deleteAttendance,
+} from "@/services/makeup-service";
 
 type MakeupClass = Database["public"]["Tables"]["makeup_classes"]["Row"];
 type Student = Database["public"]["Tables"]["students"]["Row"];
@@ -22,16 +37,28 @@ const getKoreanDate = () => {
   return koreanTime.toISOString().slice(0, 10);
 };
 
+const VALID_TABS = ["pending", "scheduled", "completed", "cancelled"] as const;
+type TabType = typeof VALID_TABS[number];
+
 export default function MakeupClassesPage() {
   const supabase = createClient();
-  
+  const searchParams = useSearchParams();
+
   // 상태 관리
   const [makeupClasses, setMakeupClasses] = useState<MakeupClass[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<"pending" | "scheduled" | "completed" | "cancelled">("pending");
+  const [selectedTab, setSelectedTab] = useState<TabType>("pending");
+
+  // ?tab= 쿼리파라미터로 탭 동기화
+  useEffect(() => {
+    const param = searchParams.get("tab")
+    if (param && VALID_TABS.includes(param as TabType)) {
+      setSelectedTab(param as TabType)
+    }
+  }, [searchParams]);
   
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,6 +69,13 @@ export default function MakeupClassesPage() {
     className: string;
   } | null>(null);
   const [editingMakeup, setEditingMakeup] = useState<MakeupClass | null>(null);
+
+  // 연결된 결석 삭제 확인 다이얼로그
+  const [linkedAbsenceConfirm, setLinkedAbsenceConfirm] = useState<{
+    makeupId: string
+    absenceId: string
+    studentName: string
+  } | null>(null);
 
   // 데이터 로딩
   const fetchData = async () => {
@@ -120,13 +154,16 @@ export default function MakeupClassesPage() {
     const student = students.find(s => s.id === makeup.student_id);
     const classInfo = classes.find(c => c.id === makeup.class_id);
 
-    // 반이 삭제되었어도 스냅샷이 있으면 수정 가능
-    if (student && (classInfo || makeup.class_name_snapshot)) {
+    // 학생이 퇴원했어도 스냅샷이 있으면 수정 가능
+    const studentName = student?.name || makeup.student_name_snapshot || '알 수 없음';
+    const classNameResolved = classInfo?.name || makeup.class_name_snapshot || '알 수 없음';
+
+    if (studentName !== '알 수 없음') {
       setSelectedStudent({
         studentId: makeup.student_id,
-        classId: makeup.class_id || '', // null이면 빈 문자열
-        studentName: student.name,
-        className: classInfo?.name || makeup.class_name_snapshot || '알 수 없음'
+        classId: makeup.class_id || '',
+        studentName,
+        className: classNameResolved,
       });
       setEditingMakeup(makeup);
       setIsModalOpen(true);
@@ -135,16 +172,29 @@ export default function MakeupClassesPage() {
 
   // 보강 삭제 핸들러
   const handleDeleteMakeup = async (id: string) => {
+    const makeup = makeupClasses.find(m => m.id === id);
+    if (!makeup) return;
+
+    // 결석 보강이면 연결된 결석 attendance가 있는지 확인
+    if (makeup.makeup_type === "absence" && makeup.absence_date) {
+      const linked = await findLinkedAbsence(makeup.student_id, makeup.absence_date);
+      if (linked) {
+        const studentName = makeup.student_name_snapshot
+          || students.find(s => s.id === makeup.student_id)?.name
+          || "알 수 없음";
+        setLinkedAbsenceConfirm({
+          makeupId: id,
+          absenceId: linked.id,
+          studentName,
+        });
+        return;
+      }
+    }
+
     if (!confirm("정말 삭제하시겠습니까?")) return;
-    
+
     try {
-      const { error } = await supabase
-        .from("makeup_classes")
-        .delete()
-        .eq("id", id);
-      
-      if (error) throw error;
-      
+      await deleteMakeupClass(id);
       toast.success("보강이 삭제되었습니다.");
       await fetchData();
     } catch (error) {
@@ -152,6 +202,37 @@ export default function MakeupClassesPage() {
       toast.error("삭제 중 오류가 발생했습니다.");
     }
   };
+
+  // 보강 삭제 + 결석도 함께 삭제
+  const handleDeleteBothFromMakeup = useCallback(async () => {
+    if (!linkedAbsenceConfirm) return;
+    try {
+      await deleteMakeupClass(linkedAbsenceConfirm.makeupId);
+      await deleteAttendance(linkedAbsenceConfirm.absenceId);
+      toast.success("보강 + 결석이 함께 삭제되었습니다.");
+      await fetchData();
+    } catch (error) {
+      console.error("삭제 오류:", error);
+      toast.error("삭제 중 오류가 발생했습니다.");
+    } finally {
+      setLinkedAbsenceConfirm(null);
+    }
+  }, [linkedAbsenceConfirm]);
+
+  // 보강만 삭제 (결석 유지)
+  const handleDeleteMakeupOnly = useCallback(async () => {
+    if (!linkedAbsenceConfirm) return;
+    try {
+      await deleteMakeupClass(linkedAbsenceConfirm.makeupId);
+      toast.success("보강만 삭제되었습니다 (결석 기록은 유지)");
+      await fetchData();
+    } catch (error) {
+      console.error("삭제 오류:", error);
+      toast.error("삭제 중 오류가 발생했습니다.");
+    } finally {
+      setLinkedAbsenceConfirm(null);
+    }
+  }, [linkedAbsenceConfirm]);
 
   // 모달 닫기 후 리프레시
   const handleModalClose = () => {
@@ -322,6 +403,32 @@ export default function MakeupClassesPage() {
           editingMakeup={editingMakeup}
         />
       )}
+
+      {/* 연결된 결석 삭제 확인 다이얼로그 */}
+      <Dialog
+        open={!!linkedAbsenceConfirm}
+        onOpenChange={() => setLinkedAbsenceConfirm(null)}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>연결된 결석 기록이 있습니다</DialogTitle>
+            <DialogDescription>
+              <strong className="text-slate-700">{linkedAbsenceConfirm?.studentName}</strong> 학생에게 연결된 결석 출석 기록이 있습니다. 결석 기록도 함께 삭제하시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setLinkedAbsenceConfirm(null)}>
+              취소
+            </Button>
+            <Button variant="secondary" onClick={handleDeleteMakeupOnly}>
+              보강만 삭제
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteBothFromMakeup}>
+              결석도 함께 삭제
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

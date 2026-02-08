@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/auth/server'
-import { destroyInvoice } from '@/services/payssam-service'
+import { destroyInvoice, getActiveBill } from '@/services/payssam-service'
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,8 +113,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 'sent' 상태면 먼저 파기
-    if (originalFee.payssam_request_status === 'sent' && originalFee.payssam_bill_id) {
+    // 활성 청구서가 있으면 먼저 파기
+    const activeBill = await getActiveBill(tuitionFeeId)
+    if (activeBill && activeBill.request_status === 'sent') {
       const destroyResult = await destroyInvoice(tuitionFeeId)
       if (!destroyResult.success) {
         return NextResponse.json(
@@ -154,7 +155,6 @@ export async function POST(request: NextRequest) {
       note: `분할 ${index + 1}/${amounts.length} (원본: ${originalFee.amount.toLocaleString()}원)`,
       parent_tuition_fee_id: tuitionFeeId,
       is_split_child: true,
-      payssam_request_status: 'pending',
       created_at: now,
       updated_at: now,
     }))
