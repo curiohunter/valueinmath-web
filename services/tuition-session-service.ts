@@ -6,7 +6,11 @@ import type {
   SessionGenerationResult,
   GeneratedSession,
   SessionCreateInput,
+  ClassSessionSegment,
+  StudentMonthlyPlan,
+  TransferInfo,
 } from '@/types/tuition-session'
+import { CLASS_COLORS } from '@/types/tuition-session'
 import type { AcademyClosure } from '@/types/closure'
 import { getClosuresForClass } from '@/services/closure-service'
 
@@ -588,6 +592,373 @@ export async function saveTuitionFeesWithSessions(
     } catch (err) {
       console.error(`학생 ${studentId} 세션 생성 실패:`, err)
       // 수강료는 생성됐지만 세션 생성 실패 → 수강료도 삭제
+      await supabase.from('tuition_fees').delete().eq('id', fee.id)
+      skipped++
+    }
+  }
+
+  return { created, skipped }
+}
+
+// --- 캘린더 기반 세션 플래너 함수 ---
+
+/**
+ * 해당 반의 이전 수강료 만료일 조회
+ * billingYear/billingMonth 이전의 가장 최근 period_end_date 반환
+ */
+export async function getLatestPeriodEndForClass(
+  classId: string,
+  billingYear: number,
+  billingMonth: number
+): Promise<string | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('tuition_fees')
+    .select('period_end_date, year, month')
+    .eq('class_id', classId)
+    .not('period_end_date', 'is', null)
+    .order('period_end_date', { ascending: false })
+    .limit(10)
+
+  if (error || !data) return null
+
+  for (const record of data) {
+    if (!record.period_end_date) continue
+    const rYear = record.year as number
+    const rMonth = record.month as number
+    if (rYear < billingYear || (rYear === billingYear && rMonth < billingMonth)) {
+      return record.period_end_date
+    }
+  }
+
+  return null
+}
+
+/**
+ * 특정 날짜 다음의 첫 수업일 계산
+ */
+function getNextClassDayAfter(afterDate: string, scheduleDays: string[]): string {
+  const daySet = new Set(scheduleDays)
+  let current = addDays(parseDate(afterDate), 1)
+
+  for (let i = 0; i < 14; i++) {
+    const dayKr = DAY_OF_WEEK_KR[current.getDay()]
+    if (daySet.has(dayKr)) {
+      return formatDate(current)
+    }
+    current = addDays(current, 1)
+  }
+
+  return formatDate(addDays(parseDate(afterDate), 1))
+}
+
+/**
+ * 자동 시작일 계산
+ * - 이전 수강료가 있으면: 만료일 다음 수업일
+ * - 없으면: 청구월 1일
+ */
+export async function computeAutoStartDate(
+  classId: string,
+  billingYear: number,
+  billingMonth: number
+): Promise<{ startDate: string; previousEndDate: string | null }> {
+  const previousEndDate = await getLatestPeriodEndForClass(classId, billingYear, billingMonth)
+
+  if (!previousEndDate) {
+    const defaultStart = `${billingYear}-${String(billingMonth).padStart(2, '0')}-01`
+    return { startDate: defaultStart, previousEndDate: null }
+  }
+
+  const schedules = await getClassSchedules(classId)
+  const scheduleDays = schedules.map(s => s.day_of_week)
+
+  if (scheduleDays.length === 0) {
+    return {
+      startDate: formatDate(addDays(parseDate(previousEndDate), 1)),
+      previousEndDate,
+    }
+  }
+
+  const nextDay = getNextClassDayAfter(previousEndDate, scheduleDays)
+  return { startDate: nextDay, previousEndDate }
+}
+
+/**
+ * 해당 월 내 반 전환 이력 감지
+ */
+export async function detectTransferForStudent(
+  studentId: string,
+  year: number,
+  month: number
+): Promise<TransferInfo | null> {
+  const supabase = createClient()
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
+
+  const { data, error } = await supabase
+    .from('class_enrollments_history')
+    .select(`
+      action_date,
+      from_class_id,
+      to_class_id,
+      from_class_name_snapshot,
+      to_class_name_snapshot
+    `)
+    .eq('student_id', studentId)
+    .eq('action_type', 'transferred')
+    .gte('action_date', startDate + 'T00:00:00+09:00')
+    .lte('action_date', endDate + 'T23:59:59+09:00')
+    .order('action_date', { ascending: true })
+    .limit(1)
+
+  if (error || !data || data.length === 0) return null
+
+  const record = data[0]
+  if (!record.from_class_id || !record.to_class_id) return null
+
+  const transferDate = formatDate(new Date(record.action_date))
+
+  return {
+    fromClassId: record.from_class_id,
+    fromClassName: record.from_class_name_snapshot ?? '이전 반',
+    toClassId: record.to_class_id,
+    toClassName: record.to_class_name_snapshot ?? '현재 반',
+    transferDate,
+  }
+}
+
+/**
+ * 범위 기반 세션 생성 (startDate ~ endDate 사이 수업일)
+ *
+ * 종료일이 지정된 경우 사용. 회차 무관하게 기간 내 모든 수업일을 세션으로 생성.
+ */
+export async function generateSessionDatesForRange(
+  classId: string,
+  startDate: string,
+  endDate: string
+): Promise<SessionGenerationResult> {
+  const schedules = await getClassSchedules(classId)
+  if (schedules.length === 0) {
+    throw new Error('수업 스케줄이 설정되지 않았습니다.')
+  }
+
+  const daySet = new Set(schedules.map(s => s.day_of_week))
+  const closureMap = await getClosureMapForClass(classId, startDate, endDate)
+
+  let currentDate = parseDate(startDate)
+  const rangeEnd = parseDate(endDate)
+  let billableCount = 0
+  let closureDays = 0
+  const sessions: GeneratedSession[] = []
+
+  while (currentDate <= rangeEnd) {
+    const dayKr = DAY_OF_WEEK_KR[currentDate.getDay()]
+
+    if (daySet.has(dayKr)) {
+      const dateStr = formatDate(currentDate)
+      const closure = closureMap.get(dateStr)
+
+      if (closure) {
+        sessions.push({
+          date: dateStr,
+          dayOfWeek: dayKr,
+          status: 'closure',
+          closureId: closure.id,
+          closureReason: closure.reason ?? undefined,
+        })
+        closureDays++
+      } else {
+        sessions.push({
+          date: dateStr,
+          dayOfWeek: dayKr,
+          status: 'scheduled',
+        })
+        billableCount++
+      }
+    }
+
+    currentDate = addDays(currentDate, 1)
+  }
+
+  const periodEndDate = sessions.length > 0 ? sessions[sessions.length - 1].date : endDate
+
+  const supabase = createClient()
+  const { data: classData } = await supabase
+    .from('classes')
+    .select('monthly_fee, sessions_per_month')
+    .eq('id', classId)
+    .single()
+
+  const monthlyFee = classData?.monthly_fee ?? 0
+  const sessionsPerMonth = classData?.sessions_per_month ?? 8
+  const perSessionFee = sessionsPerMonth > 0
+    ? Math.round(monthlyFee / sessionsPerMonth)
+    : 0
+  const calculatedAmount = billableCount * perSessionFee
+
+  return {
+    sessions,
+    periodEndDate,
+    closureDays,
+    billableCount,
+    perSessionFee,
+    calculatedAmount,
+  }
+}
+
+/**
+ * 학생 1명의 월간 세션 플랜 생성
+ *
+ * endDate가 없으면: sessions_per_month 회차 기반 (기존 동작)
+ * endDate가 있으면: startDate~endDate 범위 기반
+ */
+export async function generateStudentMonthlyPlan(
+  studentId: string,
+  classId: string,
+  className: string,
+  billingYear: number,
+  billingMonth: number,
+  startDate: string,
+  colorIndex: number,
+  endDate?: string
+): Promise<StudentMonthlyPlan> {
+  const supabase = createClient()
+
+  // 학생 이름
+  const { data: studentData } = await supabase
+    .from('students')
+    .select('name')
+    .eq('id', studentId)
+    .single()
+  const studentName = studentData?.name ?? '알 수 없음'
+
+  // 세션 생성 (종료일 유무에 따라 분기)
+  let result: SessionGenerationResult
+
+  if (endDate) {
+    result = await generateSessionDatesForRange(classId, startDate, endDate)
+  } else {
+    const { data: classData } = await supabase
+      .from('classes')
+      .select('sessions_per_month')
+      .eq('id', classId)
+      .single()
+    const sessionsPerMonth = classData?.sessions_per_month ?? 8
+
+    result = await generateSessionDates({
+      classId,
+      periodStartDate: startDate,
+      targetSessionCount: sessionsPerMonth,
+    })
+  }
+
+  // 전환 감지
+  const transferInfo = await detectTransferForStudent(studentId, billingYear, billingMonth)
+
+  const schedules = await getClassSchedules(classId)
+
+  const segment: ClassSessionSegment = {
+    classId,
+    className,
+    color: CLASS_COLORS[colorIndex % CLASS_COLORS.length],
+    scheduleDays: schedules.map(s => s.day_of_week),
+    startDate,
+    endDate: result.periodEndDate,
+    sessions: result.sessions,
+    billableCount: result.billableCount,
+    closureDays: result.closureDays,
+    perSessionFee: result.perSessionFee,
+    calculatedAmount: result.calculatedAmount,
+  }
+
+  return {
+    studentId,
+    studentName,
+    year: billingYear,
+    month: billingMonth,
+    segments: [segment],
+    totalBillableCount: result.billableCount,
+    totalAmount: result.calculatedAmount,
+    transferInfo,
+  }
+}
+
+/**
+ * 학생 세션 플랜 저장 (tuition_fees + tuition_sessions)
+ * 수동으로 조정된 세션 목록을 반영
+ */
+export async function saveStudentMonthlyPlan(
+  plan: StudentMonthlyPlan
+): Promise<{ created: number; skipped: number }> {
+  const supabase = createClient()
+
+  let created = 0
+  let skipped = 0
+
+  for (const segment of plan.segments) {
+    // 중복 체크
+    const { data: existing } = await supabase
+      .from('tuition_fees')
+      .select('id')
+      .eq('class_id', segment.classId)
+      .eq('student_id', plan.studentId)
+      .eq('year', plan.year)
+      .eq('month', plan.month)
+      .limit(1)
+
+    if (existing && existing.length > 0) {
+      skipped++
+      continue
+    }
+
+    // 청구 가능 세션만 카운트 (excluded 제외)
+    const scheduledSessions = segment.sessions.filter(s => s.status === 'scheduled')
+    const billableCount = scheduledSessions.length
+    const calculatedAmount = billableCount * segment.perSessionFee
+
+    // 비고: [연,월], [반이름], [회차]
+    const note = `${plan.year}년 ${plan.month}월, ${segment.className}, ${billableCount}회`
+
+    // tuition_fee 생성
+    const { data: fee, error: feeError } = await supabase
+      .from('tuition_fees')
+      .insert({
+        class_id: segment.classId,
+        student_id: plan.studentId,
+        year: plan.year,
+        month: plan.month,
+        class_type: '정규',
+        amount: calculatedAmount,
+        base_amount: calculatedAmount,
+        final_amount: calculatedAmount,
+        sessions_count: billableCount,
+        per_session_fee: segment.perSessionFee,
+        period_start_date: segment.startDate,
+        period_end_date: segment.endDate,
+        payment_status: '미납',
+        student_name_snapshot: plan.studentName,
+        class_name_snapshot: segment.className,
+        note,
+      } as any)
+      .select('id')
+      .single()
+
+    if (feeError) {
+      console.error(`수강료 생성 실패 (${plan.studentName}):`, feeError)
+      skipped++
+      continue
+    }
+
+    // 세션 생성 (closure + scheduled만, excluded는 제외)
+    const sessionsToCreate = segment.sessions.filter(s => s.status !== 'excluded')
+    try {
+      await createSessionsForTuition(fee.id, sessionsToCreate)
+      created++
+    } catch (err) {
+      console.error(`세션 생성 실패 (${plan.studentName}):`, err)
       await supabase.from('tuition_fees').delete().eq('id', fee.id)
       skipped++
     }

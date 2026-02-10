@@ -36,8 +36,12 @@ import { ko } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { calendarService } from "@/services/calendar";
+import { markAbsent } from "@/services/attendance-service";
+import { findLinkedAbsence, deleteAttendance } from "@/services/makeup-service";
+import { ABSENCE_REASON_LABELS, type AbsenceReason as AbsenceReasonType } from "@/types/attendance";
 
 type MakeupClass = Database["public"]["Tables"]["makeup_classes"]["Row"];
 type MakeupType = Database["public"]["Enums"]["makeup_type_enum"];
@@ -70,6 +74,94 @@ const formatDateToKST = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+// ================================================================
+// study_logs 연동 — 2026-03 제거 예정
+// 제거 시: 이 두 함수와 호출부(syncAbsenceStudyLog, syncMakeupStudyLog)를 삭제하면 됨
+// ================================================================
+async function syncAbsenceStudyLog(params: {
+  supabase: SupabaseClient<Database>
+  studentId: string
+  classId: string
+  absenceDate: string
+  absenceReason: string | null
+  employeeId: string | null
+  studentName: string
+  className: string
+}): Promise<void> {
+  const { supabase, studentId, classId, absenceDate, absenceReason, employeeId, studentName, className } = params
+
+  const { data: existingLog } = await supabase
+    .from("study_logs")
+    .select("id")
+    .eq("student_id", studentId)
+    .eq("class_id", classId)
+    .eq("date", absenceDate)
+    .maybeSingle()
+
+  if (!existingLog) {
+    const { error } = await supabase
+      .from("study_logs")
+      .insert({
+        student_id: studentId,
+        class_id: classId,
+        date: absenceDate,
+        attendance_status: 1,
+        homework: 1,
+        focus: 1,
+        note: absenceReason ? `결석 사유: ${absenceReason}` : '결석',
+        created_by: employeeId,
+        student_name_snapshot: studentName,
+        class_name_snapshot: className,
+      })
+    if (error) {
+      console.error("결석 study_log 생성 실패:", error)
+    }
+  }
+}
+
+async function syncMakeupStudyLog(params: {
+  supabase: SupabaseClient<Database>
+  studentId: string
+  classId: string
+  makeupDate: string
+  absenceDate: string
+  employeeId: string | null
+  studentName: string
+  className: string
+}): Promise<{ created: boolean; error: boolean }> {
+  const { supabase, studentId, classId, makeupDate, absenceDate, employeeId, studentName, className } = params
+
+  try {
+    const { error: insertError } = await supabase
+      .from("study_logs")
+      .insert({
+        student_id: studentId,
+        class_id: classId,
+        date: makeupDate,
+        attendance_status: 2,
+        homework: 5,
+        focus: 5,
+        note: `${absenceDate} 결석 보강`,
+        created_by: employeeId,
+        student_name_snapshot: studentName,
+        class_name_snapshot: className,
+      })
+
+    if (!insertError) {
+      return { created: true, error: false }
+    } else if (insertError.code === '23505') {
+      return { created: true, error: false }
+    } else {
+      console.error("보강 study_log 생성 실패:", insertError)
+      return { created: false, error: true }
+    }
+  } catch (err) {
+    console.error("study_logs 동기화 중 오류:", err)
+    return { created: false, error: true }
+  }
+}
+// ================================================================
 
 export function MakeupModal({
   isOpen,
@@ -114,6 +206,12 @@ export function MakeupModal({
   const [loadingPrevRecords, setLoadingPrevRecords] = useState(false);
   const [showAllRecords, setShowAllRecords] = useState(false);
   const MAX_VISIBLE_RECORDS = 4;
+
+  // 기존 결석일 출석 기록 정리 다이얼로그
+  const [oldAbsenceCleanup, setOldAbsenceCleanup] = useState<{
+    attendanceId: string
+    oldDate: string
+  } | null>(null);
 
   // 이전 보강 기록 조회 (모달 열릴 때)
   useEffect(() => {
@@ -334,44 +432,53 @@ export function MakeupModal({
 
         if (error) throw error;
 
-        // 학습일지 생성 성공 여부 추적
+        // study_logs 연동 (2026-03 제거 예정)
         let studyLogCreated = false;
         let studyLogError = false;
-        
-        // 상태가 완료로 변경되고 보강일이 있는 경우, study_logs에 보강 기록 생성
         if (status === "completed" && makeupDate && makeupType === "absence" && absenceDates.length > 0) {
-          const makeupDateStr = formatDateToKST(makeupDate);
-          const absenceDate = formatDateToKST(absenceDates[0]);
+          const result = await syncMakeupStudyLog({
+            supabase,
+            studentId: studentInfo.studentId,
+            classId: studentInfo.classId,
+            makeupDate: formatDateToKST(makeupDate),
+            absenceDate: formatDateToKST(absenceDates[0]),
+            employeeId: employee?.id || null,
+            studentName: studentInfo.studentName,
+            className: studentInfo.className,
+          });
+          studyLogCreated = result.created;
+          studyLogError = result.error;
+        }
 
+        // 출석부 연동: 결석일에 attendance 생성/갱신
+        if (makeupType === "absence" && absenceDates.length > 0) {
+          const newAbsenceDate = formatDateToKST(absenceDates[0]);
+          const oldAbsenceDate = editingMakeup.absence_date;
+
+          // 새 결석일에 attendance 생성
           try {
-            // 보강일에 새로운 study_log 생성
-            const { error: insertError } = await supabase
-              .from("study_logs")
-              .insert({
-                student_id: studentInfo.studentId,
-                class_id: studentInfo.classId,
-                date: makeupDateStr,
-                attendance_status: 2, // 보강
-                homework: 5, // 정상
-                focus: 5, // 정상
-                note: `${absenceDate} 결석 보강`,
-                created_by: employee?.id || null,
-                student_name_snapshot: studentInfo.studentName,
-                class_name_snapshot: studentInfo.className
-              });
+            await markAbsent(
+              studentInfo.studentId,
+              studentInfo.classId,
+              newAbsenceDate,
+              absenceReason
+                ? `결석 사유: ${ABSENCE_REASON_LABELS[absenceReason as keyof typeof ABSENCE_REASON_LABELS] ?? absenceReason}`
+                : undefined,
+              (absenceReason as AbsenceReasonType) || undefined
+            );
+          } catch (err) {
+            console.error("출석부 결석 기록 생성 실패:", err);
+          }
 
-            if (!insertError) {
-              studyLogCreated = true;
-            } else if (insertError.code === '23505') {
-              // UNIQUE 제약 조건 위반 - 이미 존재함 (Supabase 내부 중복 방지)
-              studyLogCreated = true;
-            } else {
-              console.error("보강 study_log 생성 실패:", insertError);
-              studyLogError = true;
+          // 결석일이 변경된 경우, 기존 결석일 attendance 정리 다이얼로그
+          if (oldAbsenceDate && oldAbsenceDate !== newAbsenceDate) {
+            const oldAttendance = await findLinkedAbsence(studentInfo.studentId, oldAbsenceDate);
+            if (oldAttendance) {
+              setOldAbsenceCleanup({
+                attendanceId: oldAttendance.id,
+                oldDate: oldAbsenceDate,
+              });
             }
-          } catch (error) {
-            console.error("study_logs 동기화 중 오류:", error);
-            studyLogError = true;
           }
         }
 
@@ -516,74 +623,50 @@ export function MakeupModal({
 
           if (makeupError) throw makeupError;
 
-          // 결석 보강인 경우, 결석일에 study_log 생성 (없는 경우만)
+          // 출석부 연동: 결석 보강 생성 시 attendances에 결석 기록 생성
           if (makeupType === "absence" && newMakeup) {
             const absenceDateStr = formatDateToKST(date);
-            
-            // 해당 날짜에 이미 study_log가 있는지 확인
-            const { data: existingLog } = await supabase
-              .from("study_logs")
-              .select("id")
-              .eq("student_id", studentInfo.studentId)
-              .eq("class_id", studentInfo.classId)
-              .eq("date", absenceDateStr)
-              .maybeSingle();
-            
-            if (!existingLog) {
-              // 결석일에 study_log 생성
-              const { error: logError } = await supabase
-                .from("study_logs")
-                .insert({
-                  student_id: studentInfo.studentId,
-                  class_id: studentInfo.classId,
-                  date: absenceDateStr,
-                  attendance_status: 1, // 결석
-                  homework: 1, // 결석
-                  focus: 1, // 결석
-                  note: absenceReason ? `결석 사유: ${absenceReason}` : '결석',
-                  created_by: employee?.id || null,
-                  student_name_snapshot: studentInfo.studentName,
-                  class_name_snapshot: studentInfo.className
-                });
-
-              if (logError) {
-                console.error("결석 study_log 생성 실패:", logError);
-              }
+            try {
+              await markAbsent(
+                studentInfo.studentId,
+                studentInfo.classId,
+                absenceDateStr,
+                absenceReason
+                  ? `결석 사유: ${ABSENCE_REASON_LABELS[absenceReason as keyof typeof ABSENCE_REASON_LABELS] ?? absenceReason}`
+                  : undefined,
+                (absenceReason as AbsenceReasonType) || undefined
+              );
+            } catch (err) {
+              console.error("출석부 결석 기록 생성 실패:", err);
             }
           }
 
-          // 새로 추가하면서 상태가 완료이고 보강일이 있는 경우 study_logs에 보강 기록 생성
+          // study_logs 연동 (2026-03 제거 예정)
+          if (makeupType === "absence" && newMakeup) {
+            await syncAbsenceStudyLog({
+              supabase,
+              studentId: studentInfo.studentId,
+              classId: studentInfo.classId,
+              absenceDate: formatDateToKST(date),
+              absenceReason: absenceReason || null,
+              employeeId: employee?.id || null,
+              studentName: studentInfo.studentName,
+              className: studentInfo.className,
+            });
+          }
           if (status === "completed" && makeupDate && makeupType === "absence" && newMakeup) {
-            const makeupDateStr = formatDateToKST(makeupDate);
-            const absenceDateStr = formatDateToKST(date);
-
-            try {
-              // 보강일에 새로운 study_log 생성
-              const { error: insertError } = await supabase
-                .from("study_logs")
-                .insert({
-                  student_id: studentInfo.studentId,
-                  class_id: studentInfo.classId,
-                  date: makeupDateStr,
-                  attendance_status: 2, // 보강
-                  homework: 5, // 정상
-                  focus: 5, // 정상
-                  note: `${absenceDateStr} 결석 보강`,
-                  created_by: employee?.id || null,
-                  student_name_snapshot: studentInfo.studentName,
-                  class_name_snapshot: studentInfo.className
-                });
-
-              if (!insertError) {
-                studyLogCreated = true;
-              } else {
-                console.error("보강 study_log 생성 실패:", insertError);
-                studyLogError = true;
-              }
-            } catch (error) {
-              console.error("study_logs 동기화 중 오류:", error);
-              studyLogError = true;
-            }
+            const result = await syncMakeupStudyLog({
+              supabase,
+              studentId: studentInfo.studentId,
+              classId: studentInfo.classId,
+              makeupDate: formatDateToKST(makeupDate),
+              absenceDate: formatDateToKST(date),
+              employeeId: employee?.id || null,
+              studentName: studentInfo.studentName,
+              className: studentInfo.className,
+            });
+            studyLogCreated = result.created;
+            studyLogError = result.error;
           }
 
           // 캘린더 이벤트 자동 생성
@@ -668,6 +751,7 @@ export function MakeupModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -1020,5 +1104,43 @@ export function MakeupModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* 기존 결석일 출석 기록 정리 확인 다이얼로그 */}
+    <Dialog open={!!oldAbsenceCleanup} onOpenChange={() => setOldAbsenceCleanup(null)}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>기존 결석 기록 처리</DialogTitle>
+          <DialogDescription>
+            기존 결석일({oldAbsenceCleanup?.oldDate?.slice(5)})의 출석 기록을 삭제할까요?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setOldAbsenceCleanup(null)}
+          >
+            유지
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={async () => {
+              if (oldAbsenceCleanup) {
+                try {
+                  await deleteAttendance(oldAbsenceCleanup.attendanceId);
+                  toast.success("기존 결석 기록이 삭제되었습니다.");
+                } catch (err) {
+                  console.error("기존 결석 기록 삭제 실패:", err);
+                  toast.error("기존 결석 기록 삭제에 실패했습니다.");
+                }
+              }
+              setOldAbsenceCleanup(null);
+            }}
+          >
+            삭제
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { LogIn, Calendar, Clock, Search, Loader2 } from "lucide-react"
+import { LogIn, Calendar, Clock, Search, Loader2, Check, X } from "lucide-react"
 import clsx from "clsx"
 import { toast } from "sonner"
 import { ABSENCE_REASON_LABELS } from "@/types/attendance"
@@ -30,6 +30,19 @@ import {
   additionalMakeupCheckIn,
 } from "@/services/makeup-service"
 import type { MakeupClassWithStudent } from "@/services/makeup-service"
+
+function getCurrentKSTTime(): string {
+  return new Date().toLocaleTimeString("en-US", {
+    timeZone: "Asia/Seoul",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function buildISOFromTimeAndDate(time: string, dateStr: string): string {
+  return `${dateStr}T${time}:00+09:00`
+}
 
 interface MakeupCheckInDialogProps {
   open: boolean
@@ -57,6 +70,13 @@ export function MakeupCheckInDialog({
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null)
   const [studentClasses, setStudentClasses] = useState<{ id: string; name: string }[]>([])
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null)
+
+  // 시간 입력 상태
+  const [timeConfirmTarget, setTimeConfirmTarget] = useState<{
+    type: "scheduled" | "additional"
+    makeupId?: string
+  } | null>(null)
+  const [checkInTime, setCheckInTime] = useState("")
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -92,6 +112,8 @@ export function MakeupCheckInDialog({
       setSelectedStudent(null)
       setStudentClasses([])
       setSelectedClassId(null)
+      setTimeConfirmTarget(null)
+      setCheckInTime("")
     }
   }, [open, fetchData])
 
@@ -156,12 +178,13 @@ export function MakeupCheckInDialog({
     return () => { cancelled = true }
   }, [open, searchQuery])
 
-  const handleScheduledCheckIn = async (makeup: MakeupClassWithStudent) => {
+  const handleScheduledCheckIn = async (makeup: MakeupClassWithStudent, isoTime: string) => {
     setActionLoading(makeup.id)
     try {
       await makeupCheckIn({
         makeupClassId: makeup.id,
         date,
+        checkInAt: isoTime,
       })
       toast.success(`${getStudentName(makeup)} 보강 등원 완료`)
       onSuccess()
@@ -170,10 +193,12 @@ export function MakeupCheckInDialog({
       toast.error((error as Error).message || "보강 등원 실패")
     } finally {
       setActionLoading(null)
+      setTimeConfirmTarget(null)
+      setCheckInTime("")
     }
   }
 
-  const handleAdditionalCheckIn = async () => {
+  const handleAdditionalCheckIn = async (isoTime: string) => {
     if (!selectedStudent || !selectedClassId) return
     const selectedClass = studentClasses.find((c) => c.id === selectedClassId)
     if (!selectedClass) return
@@ -185,6 +210,7 @@ export function MakeupCheckInDialog({
         date,
         studentName: selectedStudent.name,
         className: selectedClass.name,
+        checkInAt: isoTime,
       })
       toast.success(`${selectedStudent.name} 추가 보강 등원 완료`)
       onSuccess()
@@ -193,6 +219,8 @@ export function MakeupCheckInDialog({
       toast.error((error as Error).message || "추가 보강 등원 실패")
     } finally {
       setActionLoading(null)
+      setTimeConfirmTarget(null)
+      setCheckInTime("")
     }
   }
 
@@ -245,7 +273,15 @@ export function MakeupCheckInDialog({
                       key={m.id}
                       makeup={m}
                       loading={actionLoading === m.id}
-                      onCheckIn={() => handleScheduledCheckIn(m)}
+                      onCheckIn={() => {
+                        setTimeConfirmTarget({ type: "scheduled", makeupId: m.id })
+                        setCheckInTime(getCurrentKSTTime())
+                      }}
+                      onTimeConfirm={(time) => handleScheduledCheckIn(m, buildISOFromTimeAndDate(time, date))}
+                      onTimeCancel={() => { setTimeConfirmTarget(null); setCheckInTime("") }}
+                      showTimeInput={timeConfirmTarget?.type === "scheduled" && timeConfirmTarget.makeupId === m.id}
+                      timeValue={checkInTime}
+                      onTimeChange={setCheckInTime}
                       badge={
                         m.start_time
                           ? <span className="text-xs text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" />{m.start_time.substring(0, 5)}</span>
@@ -268,7 +304,15 @@ export function MakeupCheckInDialog({
                       key={m.id}
                       makeup={m}
                       loading={actionLoading === m.id}
-                      onCheckIn={() => handleScheduledCheckIn(m)}
+                      onCheckIn={() => {
+                        setTimeConfirmTarget({ type: "scheduled", makeupId: m.id })
+                        setCheckInTime(getCurrentKSTTime())
+                      }}
+                      onTimeConfirm={(time) => handleScheduledCheckIn(m, buildISOFromTimeAndDate(time, date))}
+                      onTimeCancel={() => { setTimeConfirmTarget(null); setCheckInTime("") }}
+                      showTimeInput={timeConfirmTarget?.type === "scheduled" && timeConfirmTarget.makeupId === m.id}
+                      timeValue={checkInTime}
+                      onTimeChange={setCheckInTime}
                       badge={
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           {m.absence_date && (
@@ -356,19 +400,54 @@ export function MakeupCheckInDialog({
                 </div>
               )}
 
-              <div className="flex justify-end pt-1">
-                <Button
-                  className="bg-purple-600 hover:bg-purple-700"
-                  onClick={handleAdditionalCheckIn}
-                  disabled={!selectedStudent || !selectedClassId || actionLoading === "additional"}
-                >
-                  {actionLoading === "additional" && (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  )}
-                  <LogIn className="w-3 h-3 mr-1" />
-                  보강 등원
-                </Button>
-              </div>
+              {timeConfirmTarget?.type === "additional" ? (
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="time"
+                    className="flex-1 text-sm px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    value={checkInTime}
+                    onChange={(e) => setCheckInTime(e.target.value)}
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 h-9"
+                    onClick={() => handleAdditionalCheckIn(buildISOFromTimeAndDate(checkInTime, date))}
+                    disabled={!checkInTime || actionLoading === "additional"}
+                  >
+                    {actionLoading === "additional" ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-9"
+                    onClick={() => { setTimeConfirmTarget(null); setCheckInTime("") }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700"
+                    onClick={() => {
+                      setTimeConfirmTarget({ type: "additional" })
+                      setCheckInTime(getCurrentKSTTime())
+                    }}
+                    disabled={!selectedStudent || !selectedClassId || actionLoading === "additional"}
+                  >
+                    {actionLoading === "additional" && (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    )}
+                    <LogIn className="w-3 h-3 mr-1" />
+                    보강 등원
+                  </Button>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         )}
@@ -389,11 +468,21 @@ function MakeupRow({
   makeup,
   loading,
   onCheckIn,
+  onTimeConfirm,
+  onTimeCancel,
+  showTimeInput,
+  timeValue,
+  onTimeChange,
   badge,
 }: {
   makeup: MakeupClassWithStudent
   loading: boolean
   onCheckIn: () => void
+  onTimeConfirm: (time: string) => void
+  onTimeCancel: () => void
+  showTimeInput: boolean
+  timeValue: string
+  onTimeChange: (v: string) => void
   badge: React.ReactNode
 }) {
   const studentName = getStudentName(makeup)
@@ -415,21 +504,53 @@ function MakeupRow({
         </div>
         {badge}
       </div>
-      <Button
-        size="sm"
-        onClick={onCheckIn}
-        disabled={loading}
-        className="h-7 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium flex-shrink-0 ml-2"
-      >
-        {loading ? (
-          <Loader2 className="w-3 h-3 animate-spin" />
-        ) : (
-          <>
-            <LogIn className="w-3 h-3 mr-1" />
-            등원
-          </>
-        )}
-      </Button>
+      {showTimeInput ? (
+        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+          <input
+            type="time"
+            className="text-sm px-2 py-1 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 w-[100px]"
+            value={timeValue}
+            onChange={(e) => onTimeChange(e.target.value)}
+            autoFocus
+          />
+          <Button
+            size="sm"
+            onClick={() => onTimeConfirm(timeValue)}
+            disabled={loading || !timeValue}
+            className="h-7 w-7 p-0 bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            {loading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Check className="w-3.5 h-3.5" />
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onTimeCancel}
+            className="h-7 w-7 p-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          onClick={onCheckIn}
+          disabled={loading}
+          className="h-7 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium flex-shrink-0 ml-2"
+        >
+          {loading ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <>
+              <LogIn className="w-3 h-3 mr-1" />
+              등원
+            </>
+          )}
+        </Button>
+      )}
     </div>
   )
 }

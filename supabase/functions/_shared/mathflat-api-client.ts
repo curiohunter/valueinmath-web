@@ -280,7 +280,8 @@ export class MathFlatApiClient {
   async collectClassHomework(
     mathflatClassId: string,
     targetDate: string,
-    collectProblems: boolean = true
+    collectProblems: boolean = true,
+    dbStudentNameToId?: Map<string, string>
   ): Promise<{
     students: Array<{
       studentId: string;
@@ -304,12 +305,16 @@ export class MathFlatApiClient {
       errors: string[];
     } = { students: [], errors: [] };
 
-    let studentNameToId = new Map<string, string>();
+    // DB 매핑이 있으면 우선 사용, 없으면 외부 API 폴백
+    let apiStudentNameToId = new Map<string, string>();
     try {
-      studentNameToId = await this.getAllStudents();
-      console.log(`[MathFlatAPI] 학생 ${studentNameToId.size}명 매핑 로드됨`);
+      apiStudentNameToId = await this.getAllStudents();
+      console.log(`[MathFlatAPI] 학생 ${apiStudentNameToId.size}명 API 매핑 로드됨`);
     } catch (error) {
       results.errors.push(`학생 목록 조회 실패: ${error}`);
+    }
+    if (dbStudentNameToId && dbStudentNameToId.size > 0) {
+      console.log(`[MathFlatAPI] DB 학생 매핑 ${dbStudentNameToId.size}명 우선 적용`);
     }
 
     let homeworks: MathFlatHomeworkItem[];
@@ -331,7 +336,10 @@ export class MathFlatApiClient {
 
     for (const homework of homeworks) {
       const studentName = homework.studentName || '알 수 없음';
-      const studentId = homework.studentId || studentNameToId.get(studentName) || '';
+      const studentId = dbStudentNameToId?.get(studentName)
+        || homework.studentId
+        || apiStudentNameToId.get(studentName)
+        || '';
       const studentKey = studentName;
 
       if (!studentMap.has(studentKey)) {

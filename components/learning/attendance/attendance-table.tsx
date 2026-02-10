@@ -117,6 +117,15 @@ function buildISOFromTimeAndDate(time: string, dateStr: string): string {
   return `${dateStr}T${time}:00+09:00`
 }
 
+function getCurrentKSTTime(): string {
+  return new Date().toLocaleTimeString("en-US", {
+    timeZone: "Asia/Seoul",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 function StatusBadge({ status, absenceReason }: { status: AttendanceStatus; absenceReason?: AbsenceReason | null }) {
   return (
     <div className="flex flex-col items-center gap-0.5">
@@ -210,55 +219,21 @@ export function AttendanceTable({
   // 보강 등원 다이얼로그
   const [makeupDialogOpen, setMakeupDialogOpen] = useState(false)
 
+  // 등원/하원 시간 확인 다이얼로그
+  const [checkTimeDialog, setCheckTimeDialog] = useState<{
+    type: "checkin" | "checkout"
+    studentId?: string
+    attendanceId?: string
+    studentName: string
+    isMakeup?: boolean
+    makeupClassId?: string
+  } | null>(null)
+  const [checkTimeValue, setCheckTimeValue] = useState("")
+
   const getAttendance = (studentId: string): Attendance | undefined =>
     attendances.find(
       (a) => a.student_id === studentId && !a.is_makeup
     )
-
-  const handleCheckIn = useCallback(
-    async (studentId: string) => {
-      setLoadingStudentId(studentId)
-      try {
-        await checkIn({
-          student_id: studentId,
-          class_id: classId,
-          attendance_date: date,
-        })
-        toast.success("등원 처리되었습니다")
-        onRefresh()
-      } catch (error: unknown) {
-        const err = error as Error
-        toast.error(err.message || "등원 처리 실패")
-      } finally {
-        setLoadingStudentId(null)
-      }
-    },
-    [classId, date, onRefresh]
-  )
-
-  const handleCheckOut = useCallback(
-    async (attendanceId: string) => {
-      setLoadingStudentId(attendanceId)
-      try {
-        const att = attendances.find((a) => a.id === attendanceId)
-          ?? makeupAttendances.find((a) => a.id === attendanceId)
-        if (att?.is_makeup && att?.makeup_class_id) {
-          await makeupCheckOut({ attendanceId })
-          toast.success("보강 하원 처리되었습니다")
-        } else {
-          await checkOut({ attendance_id: attendanceId })
-          toast.success("하원 처리되었습니다")
-        }
-        onRefresh()
-      } catch (error: unknown) {
-        const err = error as Error
-        toast.error(err.message || "하원 처리 실패")
-      } finally {
-        setLoadingStudentId(null)
-      }
-    },
-    [attendances, makeupAttendances, onRefresh]
-  )
 
   const handleMarkAbsent = useCallback(async () => {
     if (!absentConfirm) return
@@ -510,22 +485,62 @@ export function AttendanceTable({
   )
   const hasMakeupSection = pendingScheduledMakeups.length > 0 || makeupAttendances.length > 0
 
-  // 보강 예정 등원 핸들러
-  const handleMakeupScheduledCheckIn = useCallback(
-    async (makeup: MakeupClassWithStudent) => {
-      setLoadingStudentId(makeup.id)
-      try {
-        await makeupCheckIn({ makeupClassId: makeup.id, date })
-        toast.success(`${makeup.student_name_snapshot ?? "학생"} 보강 등원 완료`)
-        onRefresh()
-      } catch (error: unknown) {
-        toast.error((error as Error).message || "보강 등원 실패")
-      } finally {
-        setLoadingStudentId(null)
+  const openCheckTimeDialog = (opts: {
+    type: "checkin" | "checkout"
+    studentId?: string
+    attendanceId?: string
+    studentName: string
+    isMakeup?: boolean
+    makeupClassId?: string
+  }) => {
+    setCheckTimeDialog(opts)
+    setCheckTimeValue(getCurrentKSTTime())
+  }
+
+  const handleCheckTimeConfirm = useCallback(async () => {
+    if (!checkTimeDialog || !checkTimeValue) return
+    const isoTime = buildISOFromTimeAndDate(checkTimeValue, date)
+    setLoadingStudentId(
+      checkTimeDialog.studentId ?? checkTimeDialog.attendanceId ?? checkTimeDialog.makeupClassId ?? null
+    )
+
+    try {
+      if (checkTimeDialog.type === "checkin") {
+        if (checkTimeDialog.makeupClassId) {
+          await makeupCheckIn({ makeupClassId: checkTimeDialog.makeupClassId, date, checkInAt: isoTime })
+          toast.success("보강 등원 처리되었습니다")
+        } else if (checkTimeDialog.studentId) {
+          await checkIn({
+            student_id: checkTimeDialog.studentId,
+            class_id: classId,
+            attendance_date: date,
+            check_in_at: isoTime,
+          })
+          toast.success("등원 처리되었습니다")
+        }
+      } else {
+        if (checkTimeDialog.attendanceId) {
+          const att = attendances.find((a) => a.id === checkTimeDialog.attendanceId)
+            ?? makeupAttendances.find((a) => a.id === checkTimeDialog.attendanceId)
+          if (att?.is_makeup && att?.makeup_class_id) {
+            await makeupCheckOut({ attendanceId: checkTimeDialog.attendanceId, checkOutAt: isoTime })
+            toast.success("보강 하원 처리되었습니다")
+          } else {
+            await checkOut({ attendance_id: checkTimeDialog.attendanceId, check_out_at: isoTime })
+            toast.success("하원 처리되었습니다")
+          }
+        }
       }
-    },
-    [date, onRefresh]
-  )
+      onRefresh()
+    } catch (error: unknown) {
+      const err = error as Error
+      toast.error(err.message || "처리 실패")
+    } finally {
+      setCheckTimeDialog(null)
+      setCheckTimeValue("")
+      setLoadingStudentId(null)
+    }
+  }, [checkTimeDialog, checkTimeValue, date, classId, attendances, makeupAttendances, onRefresh])
 
   return (
     <Card className="bg-white rounded-xl shadow border overflow-hidden">
@@ -695,7 +710,12 @@ export function AttendanceTable({
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
                             size="sm"
-                            onClick={() => handleMakeupScheduledCheckIn(m)}
+                            onClick={() => openCheckTimeDialog({
+                              type: "checkin",
+                              makeupClassId: m.id,
+                              studentName: studentName,
+                              isMakeup: true,
+                            })}
                             disabled={isItemLoading}
                             className="h-7 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium"
                           >
@@ -776,7 +796,12 @@ export function AttendanceTable({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleCheckOut(ma.id)}
+                            onClick={() => openCheckTimeDialog({
+                              type: "checkout",
+                              attendanceId: ma.id,
+                              studentName: ma.student_name_snapshot ?? "알 수 없음",
+                              isMakeup: true,
+                            })}
                             className="h-7 px-3 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium"
                           >
                             <LogOut className="w-3 h-3 mr-1" />
@@ -947,7 +972,11 @@ export function AttendanceTable({
                       {!hasCheckedIn && !isAbsent && (
                         <Button
                           size="sm"
-                          onClick={() => handleCheckIn(student.id)}
+                          onClick={() => openCheckTimeDialog({
+                            type: "checkin",
+                            studentId: student.id,
+                            studentName: student.name,
+                          })}
                           disabled={isLoading}
                           className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white text-xs font-medium"
                         >
@@ -957,11 +986,15 @@ export function AttendanceTable({
                       )}
 
                       {/* 등원 완료 + 하원 미완: 하원 버튼 */}
-                      {hasCheckedIn && !hasCheckedOut && !isAbsent && (
+                      {hasCheckedIn && !hasCheckedOut && !isAbsent && attendance && (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => attendance && handleCheckOut(attendance.id)}
+                          onClick={() => openCheckTimeDialog({
+                            type: "checkout",
+                            attendanceId: attendance.id,
+                            studentName: student.name,
+                          })}
                           disabled={isLoading}
                           className="h-7 px-3 border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium"
                         >
@@ -986,7 +1019,11 @@ export function AttendanceTable({
                           {!attendance && (
                             <>
                               <DropdownMenuItem
-                                onClick={() => handleCheckIn(student.id)}
+                                onClick={() => openCheckTimeDialog({
+                                  type: "checkin",
+                                  studentId: student.id,
+                                  studentName: student.name,
+                                })}
                               >
                                 <LogIn className="w-3.5 h-3.5 mr-2" />
                                 등원 처리
@@ -1396,6 +1433,47 @@ export function AttendanceTable({
         date={date}
         onSuccess={onRefresh}
       />
+
+      {/* 등원/하원 시간 확인 다이얼로그 */}
+      <Dialog
+        open={!!checkTimeDialog}
+        onOpenChange={() => { setCheckTimeDialog(null); setCheckTimeValue("") }}
+      >
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>
+              {checkTimeDialog?.type === "checkin" ? "등원" : "하원"} 시간 확인
+            </DialogTitle>
+            <DialogDescription>
+              <strong className="text-slate-700">{checkTimeDialog?.studentName}</strong> 학생의 {checkTimeDialog?.type === "checkin" ? "등원" : "하원"} 시간을 확인해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium text-slate-700 block mb-2">
+              {checkTimeDialog?.type === "checkin" ? "등원" : "하원"} 시간
+            </label>
+            <input
+              type="time"
+              className="w-full text-sm px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              value={checkTimeValue}
+              onChange={(e) => setCheckTimeValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCheckTimeDialog(null); setCheckTimeValue("") }}>
+              취소
+            </Button>
+            <Button
+              onClick={handleCheckTimeConfirm}
+              disabled={!checkTimeValue}
+              className={checkTimeDialog?.type === "checkin" ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 대기로 되돌리기 확인 다이얼로그 */}
       <Dialog

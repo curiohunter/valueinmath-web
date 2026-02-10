@@ -27,6 +27,7 @@ export interface MaterialPerformance {
   correctCount: number;
   correctRate: number;
   isHomework: boolean;
+  latestWorkDate: string;
 }
 
 export interface SelfStudyAnalysis {
@@ -228,7 +229,7 @@ export function useStudentAnalysis({
 
       // 교재/학습지 성적 (CHALLENGE, CHALLENGE_WRONG 제외 → 자율학습 카드에서 표시)
       const customWork = dailyWorkData.filter((dw) => dw.category === "CUSTOM");
-      const titleMap = new Map<string, { workType: string; category: string; total: number; correct: number; isHomework: boolean; pages: Set<string> }>();
+      const titleMap = new Map<string, { workType: string; category: string; total: number; correct: number; isHomework: boolean; pages: Set<string>; latestWorkDate: string }>();
       customWork.forEach((dw) => {
         const key = dw.title || "(제목 없음)";
         const existing = titleMap.get(key) || {
@@ -238,14 +239,30 @@ export function useStudentAnalysis({
           correct: 0,
           isHomework: false,
           pages: new Set<string>(),
+          latestWorkDate: "",
         };
-        existing.total += dw.assigned_count || 0;
-        existing.correct += dw.correct_count || 0;
+
+        if (dw.work_type === "WORKSHEET") {
+          // WORKSHEET: 누적 데이터 → MAX(assigned_count) 사용
+          const assigned = dw.assigned_count || 0;
+          if (assigned > existing.total) {
+            existing.total = assigned;
+            existing.correct = dw.correct_count || 0;
+          }
+        } else {
+          // WORKBOOK: 페이지별 데이터 → SUM
+          existing.total += dw.assigned_count || 0;
+          existing.correct += dw.correct_count || 0;
+        }
+
         if (homeworkLinkedIds.has(dw.id)) {
           existing.isHomework = true;
         }
         if (dw.page) {
           existing.pages.add(dw.page);
+        }
+        if (dw.work_date > existing.latestWorkDate) {
+          existing.latestWorkDate = dw.work_date;
         }
         titleMap.set(key, existing);
       });
@@ -260,8 +277,8 @@ export function useStudentAnalysis({
           correctCount: stats.correct,
           correctRate: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
           isHomework: stats.isHomework,
-        }))
-        .sort((a, b) => b.totalProblems - a.totalProblems);
+          latestWorkDate: stats.latestWorkDate,
+        }));
       setMaterialPerformance(materialList);
 
       // 자율학습 분석

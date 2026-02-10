@@ -218,25 +218,36 @@ export async function deleteMakeupClass(makeupClassId: string): Promise<void> {
     .delete()
     .eq('makeup_class_id', makeupClassId)
 
-  // 2. 캘린더 이벤트 정리
+  // 2. 캘린더 이벤트 정리 (양방향: makeup_classes → calendar_events + calendar_events → makeup_class_id)
   const { data: makeup } = await supabase
     .from('makeup_classes')
     .select('absence_calendar_event_id, makeup_calendar_event_id')
     .eq('id', makeupClassId)
     .single()
 
-  if (makeup) {
-    const eventIds = [
-      makeup.absence_calendar_event_id,
-      makeup.makeup_calendar_event_id,
-    ].filter(Boolean) as string[]
+  const eventIdsToDelete = new Set<string>()
 
-    for (const eventId of eventIds) {
-      try {
-        await calendarService.deleteEvent(eventId)
-      } catch {
-        // 이벤트가 이미 삭제되었을 수 있음
-      }
+  // 2-a. makeup_classes에 저장된 이벤트 ID
+  if (makeup) {
+    if (makeup.absence_calendar_event_id) eventIdsToDelete.add(makeup.absence_calendar_event_id)
+    if (makeup.makeup_calendar_event_id) eventIdsToDelete.add(makeup.makeup_calendar_event_id)
+  }
+
+  // 2-b. calendar_events에서 makeup_class_id로 연결된 이벤트
+  const { data: linkedEvents } = await supabase
+    .from('calendar_events')
+    .select('id')
+    .eq('makeup_class_id', makeupClassId)
+
+  for (const event of linkedEvents || []) {
+    eventIdsToDelete.add(event.id)
+  }
+
+  for (const eventId of eventIdsToDelete) {
+    try {
+      await calendarService.deleteEvent(eventId)
+    } catch {
+      // 이벤트가 이미 삭제되었을 수 있음
     }
   }
 
@@ -272,6 +283,7 @@ export async function deleteAttendance(attendanceId: string): Promise<void> {
 export async function makeupCheckIn(input: {
   makeupClassId: string
   date: string
+  checkInAt?: string
 }): Promise<{ attendance: Attendance; makeupClass: MakeupClassWithStudent }> {
   const supabase = createClient()
 
@@ -306,14 +318,16 @@ export async function makeupCheckIn(input: {
     attendance_date: input.date,
     is_makeup: true,
     makeup_class_id: input.makeupClassId,
+    check_in_at: input.checkInAt,
   })
 
   // 4. makeup_classes 업데이트: start_time, makeup_date (null이면)
-  const now = new Date()
-  const kstTime = extractKSTTime(now)
+  const kstTime = input.checkInAt
+    ? extractKSTTime(new Date(input.checkInAt))
+    : extractKSTTime(new Date())
   const updatePayload: Record<string, unknown> = {
     start_time: kstTime,
-    updated_at: now.toISOString(),
+    updated_at: new Date().toISOString(),
   }
   if (!makeupClass.makeup_date) {
     updatePayload.makeup_date = input.date
@@ -350,11 +364,13 @@ export async function additionalMakeupCheckIn(input: {
   date: string
   studentName: string
   className: string
+  checkInAt?: string
 }): Promise<{ attendance: Attendance; makeupClass: MakeupClassWithStudent }> {
   const supabase = createClient()
 
-  const now = new Date()
-  const kstTime = extractKSTTime(now)
+  const kstTime = input.checkInAt
+    ? extractKSTTime(new Date(input.checkInAt))
+    : extractKSTTime(new Date())
 
   // 1. makeup_classes INSERT
   const { data: newMakeup, error: insertError } = await supabase
@@ -387,6 +403,7 @@ export async function additionalMakeupCheckIn(input: {
     attendance_date: input.date,
     is_makeup: true,
     makeup_class_id: newMakeup.id,
+    check_in_at: input.checkInAt,
   })
 
   return {
@@ -402,11 +419,12 @@ export async function additionalMakeupCheckIn(input: {
  */
 export async function makeupCheckOut(input: {
   attendanceId: string
+  checkOutAt?: string
 }): Promise<{ attendance: Attendance; makeupClass: MakeupClassWithStudent | null }> {
   const supabase = createClient()
 
   // 1. 하원 처리
-  const attendance = await checkOut({ attendance_id: input.attendanceId })
+  const attendance = await checkOut({ attendance_id: input.attendanceId, check_out_at: input.checkOutAt })
 
   // 2. makeup_class_id가 없으면 일반 하원으로 처리
   if (!attendance.makeup_class_id) {
@@ -430,15 +448,16 @@ export async function makeupCheckOut(input: {
   }
 
   // 4. makeup_classes 업데이트: end_time, status = 'completed'
-  const now = new Date()
-  const kstTime = extractKSTTime(now)
+  const kstTime = input.checkOutAt
+    ? extractKSTTime(new Date(input.checkOutAt))
+    : extractKSTTime(new Date())
 
   const { error: updateError } = await supabase
     .from('makeup_classes')
     .update({
       end_time: kstTime,
       status: 'completed',
-      updated_at: now.toISOString(),
+      updated_at: new Date().toISOString(),
     })
     .eq('id', attendance.makeup_class_id)
 

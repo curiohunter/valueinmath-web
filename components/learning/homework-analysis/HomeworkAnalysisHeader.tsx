@@ -13,9 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
-  Clock,
 } from "lucide-react";
-import { TeacherInfo, ClassInfo, DateInfo, formatDate } from "./types";
+import { TeacherInfo, ClassInfo, formatDate } from "./types";
 import ManualHomeworkCollector from "./ManualHomeworkCollector";
 
 interface HomeworkAnalysisHeaderProps {
@@ -35,7 +34,7 @@ export default function HomeworkAnalysisHeader({
   onTeacherChange,
   todayClasses,
 }: HomeworkAnalysisHeaderProps) {
-  const dateInfo: DateInfo = formatDate(selectedDate);
+  const dateInfo = formatDate(selectedDate);
   const isToday = selectedDate === new Date().toISOString().split("T")[0];
 
   const moveDate = (days: number) => {
@@ -49,50 +48,26 @@ export default function HomeworkAnalysisHeader({
   };
 
   return (
-    <div className="rounded-2xl bg-gradient-to-r from-slate-800 to-slate-700 p-5 shadow-xl">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        {/* 날짜 + 설명 */}
-        <div className="flex items-center gap-5">
-          <div className="text-white">
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-black tracking-tight">
-                {dateInfo.month}/{dateInfo.day}
-              </span>
-              <span className="text-xl font-medium text-slate-300">
-                {dateInfo.dayOfWeek}요일
-              </span>
-              {isToday && (
-                <Badge className="ml-2 bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                  오늘
-                </Badge>
-              )}
-            </div>
-            <div className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              학습 기준일
-            </div>
-          </div>
-
-          {/* 구분선 */}
-          <div className="w-px h-14 bg-slate-600"></div>
-
-          {/* 수업 반 */}
-          <div className="text-slate-300">
-            <div className="text-xs font-medium opacity-70 mb-1">오늘 수업 반</div>
-            <div className="text-base font-semibold text-white">
-              {todayClasses.length > 0
-                ? todayClasses.map((c) => c.name).join(", ")
-                : "해당 요일 수업 없음"}
-            </div>
-          </div>
+    <div className="rounded-2xl bg-gradient-to-r from-slate-800 to-slate-700 p-5 shadow-xl space-y-3">
+      {/* 1줄: 날짜(좌) + 컨트롤(우) 고정 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-baseline gap-2">
+          <span className="text-4xl font-black tracking-tight text-white">
+            {dateInfo.month}/{dateInfo.day}
+          </span>
+          <span className="text-xl font-medium text-slate-300">
+            {dateInfo.dayOfWeek}요일
+          </span>
+          {isToday && (
+            <Badge className="ml-1 bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+              오늘
+            </Badge>
+          )}
         </div>
 
-        {/* 필터 + 날짜 네비게이션 */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* 수동 수집 버튼 */}
+        <div className="flex items-center gap-2.5">
           <ManualHomeworkCollector />
 
-          {/* 선생님 필터 */}
           <Select value={selectedTeacherId} onValueChange={onTeacherChange}>
             <SelectTrigger className="w-[140px] bg-white/10 border-white/20 text-white text-sm">
               <SelectValue placeholder="선생님 선택" />
@@ -107,7 +82,6 @@ export default function HomeworkAnalysisHeader({
             </SelectContent>
           </Select>
 
-          {/* 날짜 네비게이션 */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => moveDate(-1)}
@@ -136,6 +110,26 @@ export default function HomeworkAnalysisHeader({
             />
           </div>
         </div>
+      </div>
+
+      {/* 2줄: 수업 반 뱃지 */}
+      <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+        <span className="text-xs text-slate-400 shrink-0">수업 반</span>
+        {todayClasses.length > 0 ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {todayClasses.map((c) => (
+              <Badge
+                key={c.id}
+                variant="outline"
+                className="bg-white/10 text-white border-white/20 text-xs font-medium"
+              >
+                {c.name}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-slate-500">해당 요일 수업 없음</span>
+        )}
       </div>
     </div>
   );

@@ -75,12 +75,7 @@ export default function HomeworkTab() {
         .order("name");
 
       if (!error && data) {
-        const teacherData = data as TeacherInfo[];
-        setTeachers(teacherData);
-        const defaultTeacher = teacherData.find((t) => t.name === "박석돈");
-        if (defaultTeacher) {
-          setSelectedTeacherId(defaultTeacher.id);
-        }
+        setTeachers(data as TeacherInfo[]);
       }
     }
     loadTeachers();

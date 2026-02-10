@@ -178,6 +178,33 @@ async function upsertHomework(
   return { id: data.id, isNew: true };
 }
 
+async function getDbStudentNameToId(classId: string): Promise<Map<string, string>> {
+  const supabase = getSupabaseAdmin();
+  const nameToId = new Map<string, string>();
+
+  const { data, error } = await supabase
+    .from("class_students")
+    .select("students!inner(name, mathflat_student_id)")
+    .eq("class_id", classId);
+
+  if (error) {
+    console.error(`[숙제수집] DB 학생 매핑 조회 실패: ${error.message}`);
+    return nameToId;
+  }
+
+  for (const row of data || []) {
+    const student = row.students as unknown as {
+      name: string;
+      mathflat_student_id: string | null;
+    };
+    if (student.name && student.mathflat_student_id) {
+      nameToId.set(student.name, student.mathflat_student_id);
+    }
+  }
+
+  return nameToId;
+}
+
 async function collectHomeworkData(
   targetClasses: TargetClassInfo[],
   targetDateStr: string,
@@ -200,10 +227,13 @@ async function collectHomeworkData(
         `[숙제수집] ${classInfo.name} (${classInfo.mathflatClassId}) 시작`
       );
 
+      const dbStudentNameToId = await getDbStudentNameToId(classInfo.id);
+
       const apiResult = await apiClient.collectClassHomework(
         classInfo.mathflatClassId,
         targetDateStr,
-        false
+        false,
+        dbStudentNameToId
       );
 
       classResult.studentCount = apiResult.students.length;

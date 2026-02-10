@@ -16,7 +16,7 @@ function getRateColor(rate: number): string {
   return "text-red-600";
 }
 
-/** 교재 행: 문제수 강조, 정답률 보조 */
+/** 교재 행: 문제수 + 정답률 라벨 표시 */
 function WorkbookRow({ item }: { item: MaterialPerformance }) {
   return (
     <div className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
@@ -33,19 +33,25 @@ function WorkbookRow({ item }: { item: MaterialPerformance }) {
           </span>
         )}
       </div>
-      <div className="flex items-baseline gap-2 ml-3 flex-shrink-0">
-        <span className="text-sm font-bold text-slate-800 tabular-nums">
-          {item.totalProblems}문제
-        </span>
-        <span className={cn("text-xs tabular-nums", getRateColor(item.correctRate))}>
-          {item.correctRate}%
-        </span>
+      <div className="flex items-center gap-3 ml-3 flex-shrink-0">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-slate-400">문제</span>
+          <span className="text-sm font-bold text-slate-800 tabular-nums">
+            {item.totalProblems}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-slate-400">정답률</span>
+          <span className={cn("text-sm font-bold tabular-nums", getRateColor(item.correctRate))}>
+            {item.correctRate}%
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
-/** 학습지 행: 정답률 강조, 문제수 보조 */
+/** 학습지 행: 문제수 + 정답률 라벨 표시 */
 function WorksheetRow({ item }: { item: MaterialPerformance }) {
   return (
     <div className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
@@ -57,13 +63,19 @@ function WorksheetRow({ item }: { item: MaterialPerformance }) {
           </span>
         )}
       </div>
-      <div className="flex items-baseline gap-2 ml-3 flex-shrink-0">
-        <span className="text-xs text-slate-500 tabular-nums">
-          {item.totalProblems}문제
-        </span>
-        <span className={cn("text-sm font-bold tabular-nums w-10 text-right", getRateColor(item.correctRate))}>
-          {item.correctRate}%
-        </span>
+      <div className="flex items-center gap-3 ml-3 flex-shrink-0">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-slate-400">문제</span>
+          <span className="text-sm font-bold text-slate-800 tabular-nums">
+            {item.totalProblems}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-slate-400">정답률</span>
+          <span className={cn("text-sm font-bold tabular-nums w-10 text-right", getRateColor(item.correctRate))}>
+            {item.correctRate}%
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -84,8 +96,13 @@ export default function MaterialPerformanceCard({ data }: MaterialPerformanceCar
     );
   }
 
-  const workbooks = data.filter((d) => d.workType === "WORKBOOK");
-  const worksheets = data.filter((d) => d.workType === "WORKSHEET");
+  // 교재: 문제수 내림차순, 학습지: 최근 학습일 내림차순
+  const workbooks = data
+    .filter((d) => d.workType === "WORKBOOK")
+    .sort((a, b) => b.totalProblems - a.totalProblems);
+  const worksheets = data
+    .filter((d) => d.workType === "WORKSHEET")
+    .sort((a, b) => (b.latestWorkDate || "").localeCompare(a.latestWorkDate || ""));
 
   return (
     <div className="space-y-4">
@@ -112,7 +129,7 @@ export default function MaterialPerformanceCard({ data }: MaterialPerformanceCar
         </div>
       )}
 
-      {/* 학습지 섹션 - 정답률 중심 */}
+      {/* 학습지 섹션 - 최근 학습일 순 */}
       {worksheets.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
