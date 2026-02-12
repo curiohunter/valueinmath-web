@@ -72,3 +72,22 @@ export function isAttended(attendance: Attendance): boolean {
 export function requiresMakeup(attendance: Attendance): boolean {
   return attendance.status === 'absent' && !attendance.is_makeup
 }
+
+// --- 일괄 등원/하원 타입 ---
+
+export interface BulkCheckInInput {
+  student_ids: string[]
+  class_id: string
+  attendance_date: string
+  check_in_at: string // ISO, 전원 동일 시간
+}
+
+export interface BulkCheckOutInput {
+  attendance_ids: string[]
+  check_out_at: string // ISO, 전원 동일 시간
+}
+
+export interface BulkResult {
+  succeeded: number
+  failed: { studentName: string; error: string }[]
+}

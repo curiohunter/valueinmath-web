@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -60,6 +60,8 @@ import {
   updateAttendance,
   updateAttendanceWithAutoStatus,
   revertAbsent,
+  bulkCheckIn,
+  bulkCheckOut,
 } from "@/services/attendance-service"
 import {
   makeupCheckIn,
@@ -71,6 +73,8 @@ import {
 } from "@/services/makeup-service"
 import type { MakeupClassWithStudent } from "@/services/makeup-service"
 import { MakeupCheckInDialog } from "./makeup-checkin-dialog"
+import { BulkActionBar } from "./bulk-action-bar"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface StudentInfo {
   id: string
@@ -219,6 +223,12 @@ export function AttendanceTable({
   // 보강 등원 다이얼로그
   const [makeupDialogOpen, setMakeupDialogOpen] = useState(false)
 
+  // 일괄 선택
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkTimeDialog, setBulkTimeDialog] = useState<{ type: "checkin" | "checkout" } | null>(null)
+  const [bulkTimeValue, setBulkTimeValue] = useState("")
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+
   // 등원/하원 시간 확인 다이얼로그
   const [checkTimeDialog, setCheckTimeDialog] = useState<{
     type: "checkin" | "checkout"
@@ -234,6 +244,138 @@ export function AttendanceTable({
     attendances.find(
       (a) => a.student_id === studentId && !a.is_makeup
     )
+
+  // 일괄 선택용 computed 값
+  const pendingStudentIds = useMemo(
+    () => students.filter((s) => !getAttendance(s.id)).map((s) => s.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [students, attendances]
+  )
+
+  const checkedInNotOutStudentIds = useMemo(
+    () =>
+      students
+        .filter((s) => {
+          const att = getAttendance(s.id)
+          return att?.check_in_at && !att?.check_out_at && att?.status !== "absent"
+        })
+        .map((s) => s.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [students, attendances]
+  )
+
+  const selectedPendingCount = useMemo(
+    () => [...selectedIds].filter((id) => pendingStudentIds.includes(id)).length,
+    [selectedIds, pendingStudentIds]
+  )
+
+  const selectedCheckedInCount = useMemo(
+    () => [...selectedIds].filter((id) => checkedInNotOutStudentIds.includes(id)).length,
+    [selectedIds, checkedInNotOutStudentIds]
+  )
+
+  const toggleSelect = (studentId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(studentId)) {
+        next.delete(studentId)
+      } else {
+        next.add(studentId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === students.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(students.map((s) => s.id)))
+    }
+  }
+
+  const handleBulkCheckInConfirm = useCallback(async () => {
+    if (!bulkTimeValue) return
+    const targetIds = [...selectedIds].filter((id) => pendingStudentIds.includes(id))
+    if (targetIds.length === 0) return
+
+    setIsBulkProcessing(true)
+    try {
+      const isoTime = buildISOFromTimeAndDate(bulkTimeValue, date)
+      const result = await bulkCheckIn({
+        student_ids: targetIds,
+        class_id: classId,
+        attendance_date: date,
+        check_in_at: isoTime,
+      })
+
+      if (result.failed.length === 0) {
+        toast.success(`${result.succeeded}명 등원 처리 완료`)
+        setSelectedIds(new Set())
+      } else if (result.succeeded > 0) {
+        toast.warning(`${result.succeeded}명 성공, ${result.failed.length}명 실패`)
+        // 실패 학생만 선택 유지
+        const failedNames = new Set(result.failed.map((f) => f.studentName))
+        setSelectedIds(new Set(
+          students
+            .filter((s) => failedNames.has(s.name))
+            .map((s) => s.id)
+        ))
+      } else {
+        toast.error("등원 처리 실패")
+      }
+      onRefresh()
+    } catch (error: unknown) {
+      const err = error as Error
+      toast.error(err.message || "일괄 등원 실패")
+    } finally {
+      setIsBulkProcessing(false)
+      setBulkTimeDialog(null)
+      setBulkTimeValue("")
+    }
+  }, [bulkTimeValue, selectedIds, pendingStudentIds, date, classId, students, onRefresh])
+
+  const handleBulkCheckOutConfirm = useCallback(async () => {
+    if (!bulkTimeValue) return
+    const targetIds = [...selectedIds].filter((id) => checkedInNotOutStudentIds.includes(id))
+    const attendanceIds = targetIds
+      .map((id) => getAttendance(id)?.id)
+      .filter((id): id is string => !!id)
+    if (attendanceIds.length === 0) return
+
+    setIsBulkProcessing(true)
+    try {
+      const isoTime = buildISOFromTimeAndDate(bulkTimeValue, date)
+      const result = await bulkCheckOut({
+        attendance_ids: attendanceIds,
+        check_out_at: isoTime,
+      })
+
+      if (result.failed.length === 0) {
+        toast.success(`${result.succeeded}명 하원 처리 완료`)
+        setSelectedIds(new Set())
+      } else if (result.succeeded > 0) {
+        toast.warning(`${result.succeeded}명 성공, ${result.failed.length}명 실패`)
+        const failedNames = new Set(result.failed.map((f) => f.studentName))
+        setSelectedIds(new Set(
+          students
+            .filter((s) => failedNames.has(s.name))
+            .map((s) => s.id)
+        ))
+      } else {
+        toast.error("하원 처리 실패")
+      }
+      onRefresh()
+    } catch (error: unknown) {
+      const err = error as Error
+      toast.error(err.message || "일괄 하원 실패")
+    } finally {
+      setIsBulkProcessing(false)
+      setBulkTimeDialog(null)
+      setBulkTimeValue("")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkTimeValue, selectedIds, checkedInNotOutStudentIds, date, students, onRefresh, attendances])
 
   const handleMarkAbsent = useCallback(async () => {
     if (!absentConfirm) return
@@ -620,8 +762,12 @@ export function AttendanceTable({
           </colgroup>
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                #
+              <th className="px-3 py-3 text-center text-xs font-semibold text-slate-600">
+                <Checkbox
+                  checked={students.length > 0 && selectedIds.size === students.length}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="전체 선택"
+                />
               </th>
               <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                 학생
@@ -917,8 +1063,12 @@ export function AttendanceTable({
                         : "hover:bg-slate-50/50"
                   )}
                 >
-                  <td className="px-3 py-3 text-sm text-slate-400 tabular-nums">
-                    {idx + 1}
+                  <td className="px-3 py-3 text-center">
+                    <Checkbox
+                      checked={selectedIds.has(student.id)}
+                      onCheckedChange={() => toggleSelect(student.id)}
+                      aria-label={`${student.name} 선택`}
+                    />
                   </td>
                   <td className="px-3 py-3">
                     <span className="text-sm font-medium text-slate-800 truncate block">
@@ -1188,6 +1338,26 @@ export function AttendanceTable({
           </tbody>
         </table>
       </div>
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        pendingCount={selectedPendingCount}
+        checkedInCount={selectedCheckedInCount}
+        totalPendingCount={pendingStudentIds.length}
+        totalCheckedInCount={checkedInNotOutStudentIds.length}
+        onSelectPending={() => setSelectedIds(new Set(pendingStudentIds))}
+        onSelectCheckedIn={() => setSelectedIds(new Set(checkedInNotOutStudentIds))}
+        onClearSelection={() => setSelectedIds(new Set())}
+        onBulkCheckIn={() => {
+          setBulkTimeDialog({ type: "checkin" })
+          setBulkTimeValue(getCurrentKSTTime())
+        }}
+        onBulkCheckOut={() => {
+          setBulkTimeDialog({ type: "checkout" })
+          setBulkTimeValue(getCurrentKSTTime())
+        }}
+      />
 
       {/* Footer Summary */}
       <div className="p-3 border-t bg-slate-50/50">
@@ -1470,6 +1640,47 @@ export function AttendanceTable({
               className={checkTimeDialog?.type === "checkin" ? "bg-green-600 hover:bg-green-700" : ""}
             >
               확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 일괄 등원/하원 시간 다이얼로그 */}
+      <Dialog
+        open={!!bulkTimeDialog}
+        onOpenChange={() => { setBulkTimeDialog(null); setBulkTimeValue("") }}
+      >
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>
+              일괄 {bulkTimeDialog?.type === "checkin" ? "등원" : "하원"} 시간 확인
+            </DialogTitle>
+            <DialogDescription>
+              선택한 {bulkTimeDialog?.type === "checkin" ? selectedPendingCount : selectedCheckedInCount}명에게 동일한 {bulkTimeDialog?.type === "checkin" ? "등원" : "하원"} 시간이 적용됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium text-slate-700 block mb-2">
+              {bulkTimeDialog?.type === "checkin" ? "등원" : "하원"} 시간
+            </label>
+            <input
+              type="time"
+              className="w-full text-sm px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              value={bulkTimeValue}
+              onChange={(e) => setBulkTimeValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkTimeDialog(null); setBulkTimeValue("") }}>
+              취소
+            </Button>
+            <Button
+              onClick={bulkTimeDialog?.type === "checkin" ? handleBulkCheckInConfirm : handleBulkCheckOutConfirm}
+              disabled={!bulkTimeValue || isBulkProcessing}
+              className={bulkTimeDialog?.type === "checkin" ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              {isBulkProcessing ? "처리 중..." : "확인"}
             </Button>
           </DialogFooter>
         </DialogContent>
