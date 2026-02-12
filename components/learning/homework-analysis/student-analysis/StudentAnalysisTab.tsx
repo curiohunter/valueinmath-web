@@ -12,7 +12,7 @@ import SelfStudyAnalysisCard from "./SelfStudyAnalysisCard";
 import DifficultyBreakdownChart from "./DifficultyBreakdownChart";
 import ChapterAnalysisChart from "./ChapterAnalysisChart";
 import WeakConceptList from "./WeakConceptList";
-import GrowthTrendChart from "./GrowthTrendChart";
+import HomeworkProgressCard from "./HomeworkProgressCard";
 import SavedRangesSelector from "./SavedRangesSelector";
 import { useStudentAnalysis } from "./useStudentAnalysis";
 import {
@@ -219,7 +219,7 @@ export default function StudentAnalysisTab() {
     activitySummary,
     materialPerformance,
     selfStudyAnalysis,
-    growthTrend,
+    homeworkProgress,
     difficultyBreakdown,
     weakConcepts,
     chapterAnalysis,
@@ -386,6 +386,9 @@ export default function StudentAnalysisTab() {
               <MaterialPerformanceCard data={materialPerformance} />
               <SelfStudyAnalysisCard data={selfStudyAnalysis} />
 
+              {/* 숙제 진행률 (날짜별) */}
+              <HomeworkProgressCard data={homeworkProgress} />
+
               {/* 하단: 심화 분석 (단원 선택시만) */}
               {hasChapterAnalysis && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -398,8 +401,6 @@ export default function StudentAnalysisTab() {
                 <ChapterAnalysisChart data={chapterAnalysis} />
               )}
 
-              {/* 최하단: 성장 추이 (전체 폭) */}
-              <GrowthTrendChart data={growthTrend} />
             </>
           )}
         </div>

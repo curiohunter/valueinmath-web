@@ -19,18 +19,20 @@ export default function WeakConceptList({ data }: WeakConceptListProps) {
         </div>
         <div className="text-center py-8">
           <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-100 flex items-center justify-center">
-            <span className="text-2xl">🎉</span>
+            <span className="text-2xl">&#x1F389;</span>
           </div>
-          <p className="text-emerald-600 font-medium">취약 개념이 없습니다!</p>
-          <p className="text-slate-400 text-sm mt-1">모든 개념에서 50% 이상 정답률을 달성했습니다</p>
+          <p className="text-emerald-600 font-medium">오답 데이터가 없습니다!</p>
+          <p className="text-slate-400 text-sm mt-1">선택한 단원에서 틀린 문제가 없습니다</p>
         </div>
       </div>
     );
   }
 
-  const getRateColor = (rate: number) => {
-    if (rate < 30) return "text-red-600 bg-red-50";
-    if (rate < 40) return "text-orange-600 bg-orange-50";
+  const maxWrong = Math.max(...data.map((d) => d.wrongCount), 1);
+
+  const getWrongColor = (count: number) => {
+    if (count >= 5) return "text-red-600 bg-red-50";
+    if (count >= 3) return "text-orange-600 bg-orange-50";
     return "text-amber-600 bg-amber-50";
   };
 
@@ -40,7 +42,7 @@ export default function WeakConceptList({ data }: WeakConceptListProps) {
       <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
         <AlertTriangle className="w-5 h-5 text-orange-500" />
         <h3 className="font-bold text-slate-800">취약 개념</h3>
-        <span className="text-xs text-slate-500">(정답률 50% 미만)</span>
+        <span className="text-xs text-slate-500">(오답 많은 순)</span>
       </div>
 
       {/* 목록 */}
@@ -68,18 +70,21 @@ export default function WeakConceptList({ data }: WeakConceptListProps) {
                 </div>
               </div>
 
-              {/* 통계 */}
+              {/* 오답 수 */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-slate-500">
-                  {item.correctCount}/{item.totalProblems}
-                </span>
+                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-red-400 rounded-full transition-all duration-300"
+                    style={{ width: `${(item.wrongCount / maxWrong) * 100}%` }}
+                  />
+                </div>
                 <span
                   className={cn(
                     "px-2 py-0.5 rounded-full text-xs font-bold tabular-nums",
-                    getRateColor(item.correctRate)
+                    getWrongColor(item.wrongCount)
                   )}
                 >
-                  {item.correctRate}%
+                  {item.wrongCount}문제
                 </span>
               </div>
             </div>
@@ -90,7 +95,7 @@ export default function WeakConceptList({ data }: WeakConceptListProps) {
       {/* 하단 인사이트 */}
       <div className="px-5 py-3 bg-amber-50 border-t border-amber-100">
         <p className="text-sm text-amber-700">
-          정답률이 낮은 개념부터 순차적으로 복습하세요
+          오답이 많은 개념부터 순차적으로 복습하세요
         </p>
       </div>
     </div>

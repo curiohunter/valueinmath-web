@@ -5,7 +5,7 @@ import type React from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 export function StudentsFilters({ onNewStudent }: { onNewStudent: () => void }) {
   const router = useRouter()
@@ -42,12 +42,19 @@ export function StudentsFilters({ onNewStudent }: { onNewStudent: () => void }) 
     [searchParams],
   )
 
-  // Handle filter changes - 즉시 검색 (학원비 이력과 동일)
+  // 검색 디바운스 (300ms)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setSearchValue(value)
-    router.push(`${pathname}?${createQueryString("search", value)}`)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      router.push(`${pathname}?${createQueryString("search", value)}`)
+    }, 300)
   }
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [])
 
   const handleDepartmentChange = (value: string) => {
     router.push(`${pathname}?${createQueryString("department", value)}`)

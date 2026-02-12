@@ -47,6 +47,26 @@ export interface GrowthDataPoint {
   correctRate: number;
 }
 
+// 숙제 진행률 (날짜별)
+export interface HomeworkProgressItem {
+  date: string;
+  homeworks: Array<{
+    title: string;
+    bookType: "WORKBOOK" | "WORKSHEET";
+    page: string | null;
+    total: number;
+    solved: number;
+    correct: number;
+    wrong: number;
+  }>;
+  totalProblems: number;
+  solvedProblems: number;
+  totalCorrect: number;
+  totalWrong: number;
+  completionRate: number;
+  correctRate: number;
+}
+
 // ==========================================
 // 심화 분석 (problem_results 기반, 단원 선택시)
 // ==========================================
@@ -54,28 +74,23 @@ export interface GrowthDataPoint {
 export interface DifficultyBreakdown {
   level: number;
   label: string;
-  total: number;
-  correct: number;
-  correctRate: number;
+  wrongCount: number;
+  percentage: number; // 전체 오답 중 이 난이도 비율
 }
 
 export interface WeakConceptData {
   conceptId: string;
   conceptName: string;
   littleChapter: string;
-  totalProblems: number;
-  correctCount: number;
-  correctRate: number;
+  wrongCount: number;
 }
 
 export interface ChapterAnalysisData {
   littleChapter: string;
   middleChapter: string;
   bigChapter: string;
-  totalProblems: number;
-  correctCount: number;
-  correctRate: number;
-  status: "good" | "warning" | "critical";
+  wrongCount: number;
+  percentage: number; // 전체 오답 중 이 단원 비율
 }
 
 // ==========================================
@@ -88,6 +103,7 @@ export interface StudentAnalysisResult {
   materialPerformance: MaterialPerformance[];
   selfStudyAnalysis: SelfStudyAnalysis;
   growthTrend: GrowthDataPoint[];
+  homeworkProgress: HomeworkProgressItem[];
 
   // 심화 분석 (단원 선택시)
   difficultyBreakdown: DifficultyBreakdown[];
@@ -154,6 +170,7 @@ export function useStudentAnalysis({
     totalSelfStudy: 0,
   });
   const [growthTrend, setGrowthTrend] = useState<GrowthDataPoint[]>([]);
+  const [homeworkProgress, setHomeworkProgress] = useState<HomeworkProgressItem[]>([]);
   const [difficultyBreakdown, setDifficultyBreakdown] = useState<DifficultyBreakdown[]>([]);
   const [weakConcepts, setWeakConcepts] = useState<WeakConceptData[]>([]);
   const [chapterAnalysis, setChapterAnalysis] = useState<ChapterAnalysisData[]>([]);
@@ -341,6 +358,99 @@ export function useStudentAnalysis({
         };
       });
       setGrowthTrend(growthData);
+
+      // 숙제 진행률 (날짜별)
+      const { data: homeworkData } = await supabase
+        .from("mathflat_homework")
+        .select("id, homework_date, book_type, title, page, total_problems, progress_id_list")
+        .eq("mathflat_student_id", mathflatStudentId)
+        .gte("homework_date", startDate)
+        .lte("homework_date", endDate)
+        .order("homework_date", { ascending: false });
+
+      if (homeworkData && homeworkData.length > 0) {
+        const hwIds = homeworkData.map((hw) => hw.id);
+        let allHwMappings: Array<{
+          daily_work_id: string;
+          homework_id: string;
+          matched_progress_ids: number[] | null;
+        }> = [];
+
+        const hwBatchSize = 200;
+        for (let i = 0; i < hwIds.length; i += hwBatchSize) {
+          const batch = hwIds.slice(i, i + hwBatchSize);
+          const { data: mappings } = await supabase
+            .from("mathflat_daily_work_homework")
+            .select("daily_work_id, homework_id, matched_progress_ids")
+            .in("homework_id", batch);
+          if (mappings) allHwMappings = [...allHwMappings, ...mappings];
+        }
+
+        const dwMap = new Map(dailyWorkData.map((dw) => [dw.id, dw]));
+
+        const dateMap = new Map<
+          string,
+          HomeworkProgressItem["homeworks"]
+        >();
+
+        homeworkData.forEach((hw) => {
+          const date = hw.homework_date;
+          const hwMappings = allHwMappings.filter((m) => m.homework_id === hw.id);
+          const mappedDwIds = hwMappings.map((m) => m.daily_work_id);
+          const mappedDws = mappedDwIds.map((id) => dwMap.get(id)).filter(Boolean);
+
+          const correct = mappedDws.reduce((sum, dw) => sum + (dw!.correct_count || 0), 0);
+          const wrong = mappedDws.reduce((sum, dw) => sum + (dw!.wrong_count || 0), 0);
+
+          let total: number;
+          let solved: number;
+
+          if (hw.book_type === "WORKSHEET") {
+            total = hw.total_problems || 0;
+            solved = correct + wrong;
+          } else {
+            total = hw.progress_id_list?.length || 0;
+            const allMatchedIds = hwMappings.flatMap((m) => m.matched_progress_ids || []);
+            solved = [...new Set(allMatchedIds)].length;
+          }
+
+          const items = dateMap.get(date) || [];
+          items.push({
+            title: hw.title || "(제목 없음)",
+            bookType: hw.book_type as "WORKBOOK" | "WORKSHEET",
+            page: hw.page || null,
+            total,
+            solved,
+            correct,
+            wrong,
+          });
+          dateMap.set(date, items);
+        });
+
+        const progressList: HomeworkProgressItem[] = Array.from(dateMap.entries())
+          .map(([date, homeworks]) => {
+            const totalProblems = homeworks.reduce((sum, h) => sum + h.total, 0);
+            const solvedProblems = homeworks.reduce((sum, h) => sum + h.solved, 0);
+            const totalCorrect = homeworks.reduce((sum, h) => sum + h.correct, 0);
+            const totalWrong = homeworks.reduce((sum, h) => sum + h.wrong, 0);
+            const totalAnswered = totalCorrect + totalWrong;
+            return {
+              date,
+              homeworks,
+              totalProblems,
+              solvedProblems,
+              totalCorrect,
+              totalWrong,
+              completionRate: totalProblems > 0 ? Math.round((solvedProblems / totalProblems) * 100) : 0,
+              correctRate: totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0,
+            };
+          })
+          .sort((a, b) => b.date.localeCompare(a.date));
+
+        setHomeworkProgress(progressList);
+      } else {
+        setHomeworkProgress([]);
+      }
     } catch (err) {
       console.error("기본 분석 데이터 로드 실패:", err);
       setError("분석 데이터를 불러오는 데 실패했습니다.");
@@ -433,93 +543,85 @@ export function useStudentAnalysis({
         if (resultsData) allResults = [...allResults, ...resultsData];
       }
 
-      // 4. 난이도별 정답률
-      const levelStats: Record<number, { total: number; correct: number }> = {};
+      // 4. 난이도별 오답 분포
+      const levelWrongCounts: Record<number, number> = {};
       for (let lv = 1; lv <= 5; lv++) {
-        levelStats[lv] = { total: 0, correct: 0 };
+        levelWrongCounts[lv] = 0;
       }
 
       allResults.forEach((r) => {
         const level = r.level || 3;
         if (level >= 1 && level <= 5) {
-          levelStats[level].total++;
-          if (r.result === "CORRECT") levelStats[level].correct++;
+          levelWrongCounts[level]++;
         }
       });
+
+      const totalWrong = Object.values(levelWrongCounts).reduce((a, b) => a + b, 0);
 
       const diffBreakdown: DifficultyBreakdown[] = [1, 2, 3, 4, 5].map((level) => ({
         level,
         label: LEVEL_LABELS[level],
-        total: levelStats[level].total,
-        correct: levelStats[level].correct,
-        correctRate: levelStats[level].total > 0
-          ? Math.round((levelStats[level].correct / levelStats[level].total) * 100)
+        wrongCount: levelWrongCounts[level],
+        percentage: totalWrong > 0
+          ? Math.round((levelWrongCounts[level] / totalWrong) * 100)
           : 0,
       }));
       setDifficultyBreakdown(diffBreakdown);
 
-      // 5. 개념별 통계 → 취약 개념
-      const conceptStats = new Map<string, { total: number; correct: number; info: { name: string; bigChapter: string | null; middleChapter: string | null; littleChapter: string | null } }>();
+      // 5. 개념별 오답 수 → 취약 개념 (가장 많이 틀리는 개념)
+      const conceptWrongCounts = new Map<string, { count: number; info: { name: string; bigChapter: string | null; middleChapter: string | null; littleChapter: string | null } }>();
       allResults.forEach((r) => {
         const info = conceptMap.get(r.concept_id);
         if (!info) return;
-        const stats = conceptStats.get(r.concept_id) || { total: 0, correct: 0, info };
-        stats.total++;
-        if (r.result === "CORRECT") stats.correct++;
-        conceptStats.set(r.concept_id, stats);
+        const stats = conceptWrongCounts.get(r.concept_id) || { count: 0, info };
+        stats.count++;
+        conceptWrongCounts.set(r.concept_id, stats);
       });
 
       const weakList: WeakConceptData[] = [];
-      conceptStats.forEach((stats, conceptId) => {
-        const rate = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
-        if (rate < 50 && stats.total >= 2) {
+      conceptWrongCounts.forEach((stats, conceptId) => {
+        if (stats.count >= 1) {
           weakList.push({
             conceptId,
             conceptName: stats.info.name,
             littleChapter: stats.info.littleChapter || "",
-            totalProblems: stats.total,
-            correctCount: stats.correct,
-            correctRate: rate,
+            wrongCount: stats.count,
           });
         }
       });
-      weakList.sort((a, b) => a.correctRate - b.correctRate);
+      weakList.sort((a, b) => b.wrongCount - a.wrongCount);
       setWeakConcepts(weakList.slice(0, 10));
 
-      // 6. 소단원별 통계
-      const chapterStats = new Map<string, { total: number; correct: number; middleChapter: string; bigChapter: string }>();
+      // 6. 소단원별 오답 분포
+      const chapterWrongCounts = new Map<string, { count: number; middleChapter: string; bigChapter: string }>();
       allResults.forEach((r) => {
         const info = conceptMap.get(r.concept_id);
         if (!info || !info.littleChapter) return;
         const key = info.littleChapter;
-        const stats = chapterStats.get(key) || {
-          total: 0,
-          correct: 0,
+        const stats = chapterWrongCounts.get(key) || {
+          count: 0,
           middleChapter: info.middleChapter || "",
           bigChapter: info.bigChapter || "",
         };
-        stats.total++;
-        if (r.result === "CORRECT") stats.correct++;
-        chapterStats.set(key, stats);
+        stats.count++;
+        chapterWrongCounts.set(key, stats);
       });
 
+      const totalChapterWrong = Array.from(chapterWrongCounts.values()).reduce((a, b) => a + b.count, 0);
+
       const chapterList: ChapterAnalysisData[] = [];
-      chapterStats.forEach((stats, littleChapter) => {
-        const rate = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
-        let status: "good" | "warning" | "critical" = "good";
-        if (rate < 50) status = "critical";
-        else if (rate < 70) status = "warning";
+      chapterWrongCounts.forEach((stats, littleChapter) => {
         chapterList.push({
           littleChapter,
           middleChapter: stats.middleChapter,
           bigChapter: stats.bigChapter,
-          totalProblems: stats.total,
-          correctCount: stats.correct,
-          correctRate: rate,
-          status,
+          wrongCount: stats.count,
+          percentage: totalChapterWrong > 0
+            ? Math.round((stats.count / totalChapterWrong) * 100)
+            : 0,
         });
       });
-      chapterList.sort((a, b) => a.correctRate - b.correctRate);
+      chapterList.sort((a, b) => b.wrongCount - a.wrongCount);
       setChapterAnalysis(chapterList);
     } catch (err) {
       console.error("심화 분석 데이터 로드 실패:", err);
@@ -546,6 +648,7 @@ export function useStudentAnalysis({
       totalSelfStudy: 0,
     });
     setGrowthTrend([]);
+    setHomeworkProgress([]);
     setDifficultyBreakdown([]);
     setWeakConcepts([]);
     setChapterAnalysis([]);
@@ -564,6 +667,7 @@ export function useStudentAnalysis({
     materialPerformance,
     selfStudyAnalysis,
     growthTrend,
+    homeworkProgress,
     difficultyBreakdown,
     weakConcepts,
     chapterAnalysis,
