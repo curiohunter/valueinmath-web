@@ -96,6 +96,17 @@ export default function LearningTabs() {
         숙제 분석
       </Link>
       <Link
+        href="/learning/comments"
+        className={clsx(
+          "px-4 py-2 font-semibold",
+          pathname.startsWith("/learning/comments")
+            ? "border-b-2 border-primary text-primary"
+            : "text-muted-foreground"
+        )}
+      >
+        학습 코멘트
+      </Link>
+      <Link
         href="/learning/attendance"
         className={clsx(
           "px-4 py-2 font-semibold flex items-center gap-1.5 ml-auto",

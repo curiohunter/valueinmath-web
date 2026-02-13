@@ -46,8 +46,8 @@ const ClassFormModal = dynamic(
   () => import("@/components/students/classes/class-form-modal").then(m => ({ default: m.ClassFormModal })),
   { ssr: false }
 )
-const StudentManagementTab = dynamic(
-  () => import("@/components/dashboard/student-management-tab").then(m => ({ default: m.StudentManagementTab })),
+const StudentHubTab = dynamic(
+  () => import("@/components/student-hub/student-hub-tab").then(m => ({ default: m.StudentHubTab })),
   { ssr: false }
 )
 const AttendanceOverviewTab = dynamic(
@@ -296,7 +296,7 @@ export default function DashboardPage() {
           </TabsTrigger>
           <TabsTrigger value="students" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            학생관리
+            학생 허브
           </TabsTrigger>
         </TabsList>
 
@@ -509,7 +509,7 @@ export default function DashboardPage() {
         </TabsContent>
 
         <TabsContent value="students" className="mt-6">
-          <StudentManagementTab employeeId={employeeId} />
+          <StudentHubTab />
         </TabsContent>
       </Tabs>
     </div>
