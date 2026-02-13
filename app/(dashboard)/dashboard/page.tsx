@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Plus, Users, BarChart3 } from "lucide-react"
+import { Plus, Users, BarChart3, ClipboardCheck } from "lucide-react"
 import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
 import { EntranceTestTable } from "@/components/dashboard/EntranceTestTable"
@@ -48,6 +48,10 @@ const ClassFormModal = dynamic(
 )
 const StudentManagementTab = dynamic(
   () => import("@/components/dashboard/student-management-tab").then(m => ({ default: m.StudentManagementTab })),
+  { ssr: false }
+)
+const AttendanceOverviewTab = dynamic(
+  () => import("@/components/dashboard/attendance-overview-tab").then(m => ({ default: m.AttendanceOverviewTab })),
   { ssr: false }
 )
 
@@ -281,10 +285,14 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             운영현황
+          </TabsTrigger>
+          <TabsTrigger value="attendance" className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            전체출석
           </TabsTrigger>
           <TabsTrigger value="students" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -494,6 +502,10 @@ export default function DashboardPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </TabsContent>
+
+        <TabsContent value="attendance" className="mt-6">
+          <AttendanceOverviewTab />
         </TabsContent>
 
         <TabsContent value="students" className="mt-6">
