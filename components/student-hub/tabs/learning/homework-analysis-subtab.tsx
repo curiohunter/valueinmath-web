@@ -305,7 +305,11 @@ export function HomeworkAnalysisSubTab({ studentId }: { studentId: string }) {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                    <span>풀이: {hw.solved}/{hw.total}문항</span>
+                    {hw.book_type === "WORKSHEET" ? (
+                      <span>풀이: {hw.solved}/{hw.total}문항</span>
+                    ) : (
+                      <span>진도: {hw.solved}/{hw.total}</span>
+                    )}
                     {(hw.correct + hw.wrong) > 0 && (
                       <>
                         <span className="text-green-600">정답 {hw.correct}</span>
