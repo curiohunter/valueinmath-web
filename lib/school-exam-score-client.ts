@@ -35,9 +35,9 @@ export async function getSchoolExamScores(
       .select(
         `
         *,
-        student:students!inner(name, grade, status),
-        school:schools(id, name, school_type),
-        school_exam:school_exams(pdf_file_path)
+        student:students!inner(name, status),
+        school:schools!school_exam_scores_school_id_fkey(id, name, school_type),
+        school_exam:school_exams!school_exam_scores_school_exam_id_fkey(pdf_file_path)
       `,
         { count: "exact" }
       )
@@ -124,9 +124,9 @@ export async function getSchoolExamScore(id: string): Promise<SchoolExamScore | 
       .select(
         `
         *,
-        student:students(name, grade, status),
-        school:schools(id, name, school_type),
-        school_exam:school_exams(pdf_file_path)
+        student:students(name, status),
+        school:schools!school_exam_scores_school_id_fkey(id, name, school_type),
+        school_exam:school_exams!school_exam_scores_school_exam_id_fkey(pdf_file_path)
       `
       )
       .eq("id", id)
@@ -346,7 +346,7 @@ export async function getSubjects(): Promise<string[]> {
 
 // 재원/퇴원 학생 목록 조회 (등록 모달용)
 export async function getActiveStudents(): Promise<
-  Array<{ id: string; name: string; grade: number; status: string; school_id: string | null; school_name: string | null; school_grade: number | null }>
+  Array<{ id: string; name: string; status: string; school_id: string | null; school_name: string | null; school_grade: number | null }>
 > {
   try {
     const supabase = getSupabaseBrowserClient()
@@ -354,7 +354,7 @@ export async function getActiveStudents(): Promise<
     // 학생 기본 정보
     const { data: students, error } = await supabase
       .from("students")
-      .select("id, name, grade, status")
+      .select("id, name, status")
       .in("status", ["재원", "퇴원"])
       .order("status", { ascending: true })
       .order("name", { ascending: true })

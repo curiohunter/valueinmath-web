@@ -42,8 +42,8 @@ function mapStudentRowToInfo(row: StudentRow): StudentInfo {
   return {
     id: row.id,
     name: row.name,
-    grade: row.grade,
-    school: row.school,
+    grade: (row as any).grade ?? null,
+    school: (row as any).school ?? null,
     status: row.status,
   }
 }
@@ -88,7 +88,7 @@ export async function getTuitionFees(
       .select(`
         *,
         class:classes(id, name, subject),
-        student:students(id, name, grade, school)
+        student:students(id, name, status)
       `)
       .eq("year", year)
       .eq("month", month)
@@ -158,7 +158,7 @@ export async function getTuitionFeesByRange(
       .select(`
         *,
         class:classes(id, name, subject),
-        student:students(id, name, grade, school)
+        student:students(id, name, status)
       `)
       .order("year", { ascending: true })
       .order("month", { ascending: true })
@@ -395,7 +395,7 @@ export async function getClassesWithStudents(): Promise<TuitionApiResponse<Class
       .from("class_students")
       .select(`
         class_id,
-        student:students(id, name, grade, school, status, is_active)
+        student:students(id, name, status, is_active)
       `)
 
     if (classStudentsError) {

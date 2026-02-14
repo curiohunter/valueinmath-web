@@ -88,7 +88,7 @@ export default function StudentDetailModal({
     try {
       // 1. 학생 기본 정보 로드
       const { data: studentData, error: studentError } = await supabase
-        .from("students")
+        .from("student_with_school_info")
         .select("*")
         .eq("id", student.id)
         .single();

@@ -12,10 +12,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatSchoolGrade } from "@/lib/schools/format"
-import { createSchoolExamScores, updateSchoolExamScore, getActiveStudents, getSchools } from "@/lib/school-exam-score-client"
+import { createSchoolExamScores, updateSchoolExamScore, getActiveStudents } from "@/lib/school-exam-score-client"
 import { getSchoolExams } from "@/lib/school-exam-client"
-import type { SchoolExamScoreFormData, SchoolExamScore, School } from "@/types/school-exam-score"
+import { SchoolSelector, type SchoolData } from "@/components/students/SchoolSelector"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import type { SchoolExamScoreFormData, SchoolExamScore } from "@/types/school-exam-score"
 import type { SchoolExam } from "@/types/school-exam"
 
 interface SchoolExamScoreModalProps {
@@ -32,13 +33,11 @@ interface ScoreItem {
 
 export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore }: SchoolExamScoreModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [students, setStudents] = useState<Array<{ id: string; name: string; grade: number; status: string; school_id: string | null; school_name: string | null; school_grade: number | null }>>([])
-  const [schools, setSchools] = useState<School[]>([])
+  const [students, setStudents] = useState<Array<{ id: string; name: string; status: string; school_id: string | null; school_name: string | null; school_grade: number | null }>>([])
   const [availableExams, setAvailableExams] = useState<SchoolExam[]>([])
   const [studentSearchOpen, setStudentSearchOpen] = useState(false)
   const [studentSearchValue, setStudentSearchValue] = useState("")
-  const [schoolSearchOpen, setSchoolSearchOpen] = useState(false)
-  const [schoolSearchValue, setSchoolSearchValue] = useState("")
+  const [initialSchool, setInitialSchool] = useState<SchoolData | null>(null)
 
   // Form state
   const [studentId, setStudentId] = useState("")
@@ -51,50 +50,74 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
   const [scores, setScores] = useState<ScoreItem[]>([{ subject: "", score: "" }])
   const [notes, setNotes] = useState("")
 
-  // Load students and schools on mount
+  // Load students on mount
   useEffect(() => {
-    async function loadData() {
+    async function loadStudents() {
       try {
-        const [studentsData, schoolsData] = await Promise.all([
-          getActiveStudents(),
-          getSchools(),
-        ])
+        const studentsData = await getActiveStudents()
         setStudents(studentsData)
-        setSchools(schoolsData)
       } catch {
-        // silently fail - will show empty lists
+        // silently fail - will show empty list
       }
     }
     if (isOpen) {
-      loadData()
+      loadStudents()
     }
   }, [isOpen])
+
+  // 수정 모드: school_id로 학교 정보 조회
+  useEffect(() => {
+    async function loadSchool() {
+      if (!editingScore?.school_id) {
+        setInitialSchool(null)
+        return
+      }
+      const supabase = getSupabaseBrowserClient()
+      const { data } = await supabase
+        .from("schools")
+        .select("id, name, school_type, province, district")
+        .eq("id", editingScore.school_id)
+        .single()
+      if (data) {
+        setInitialSchool(data as SchoolData)
+      }
+    }
+    if (isOpen && editingScore?.school_id) {
+      loadSchool()
+    } else if (isOpen && !editingScore) {
+      setInitialSchool(null)
+    }
+  }, [editingScore?.school_id, isOpen])
 
   // Load matching school exams when exam info changes
   useEffect(() => {
     async function loadMatchingExams() {
-      const selectedSchool = schools.find(s => s.id === schoolId)
-      if (!selectedSchool || !examYear) {
+      if (!schoolId || !examYear) {
         setAvailableExams([])
         return
       }
 
       try {
+        // initialSchool이 현재 schoolId와 일치하면 이름 사용, 아니면 빈 검색
+        const schoolName = initialSchool?.id === schoolId ? initialSchool.name : ""
         const { data } = await getSchoolExams(1, 100, {
-          school_name: selectedSchool.name,
-          exam_year: examYear,
-          semester: semester,
-          exam_type: examType,
-          school_type: selectedSchool.school_type as "all" | "중학교" | "고등학교",
-          grade: grade,
+          search: schoolName,
         })
-        setAvailableExams(data)
+        // 클라이언트 필터로 정확한 매칭
+        const filtered = data.filter(exam =>
+          exam.school_id === schoolId &&
+          exam.exam_year === parseInt(examYear) &&
+          exam.semester === parseInt(semester) &&
+          exam.exam_type === examType &&
+          exam.grade === parseInt(grade)
+        )
+        setAvailableExams(filtered)
       } catch {
         setAvailableExams([])
       }
     }
     loadMatchingExams()
-  }, [schoolId, schools, examYear, semester, examType, grade])
+  }, [schoolId, initialSchool, examYear, semester, examType, grade])
 
   // Initialize form when editingScore changes
   useEffect(() => {
@@ -197,7 +220,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
     setStudentId("")
     setStudentSearchValue("")
     setSchoolId("")
-    setSchoolSearchValue("")
+    setInitialSchool(null)
     setGrade("1")
     setSemester("1")
     setExamYear(new Date().getFullYear().toString())
@@ -209,7 +232,7 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
   }
 
   // 학생 선택 시 학교/학년 자동 설정
-  const handleStudentSelect = (student: typeof students[0]) => {
+  const handleStudentSelect = async (student: typeof students[0]) => {
     setStudentId(student.id)
     setStudentSearchOpen(false)
     setStudentSearchValue("")
@@ -217,14 +240,34 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
     // 학생의 현재 학교 정보가 있으면 자동 설정
     if (student.school_id) {
       setSchoolId(student.school_id)
+      // SchoolSelector에 전달할 initialSchool 로드
+      const supabase = getSupabaseBrowserClient()
+      const { data } = await supabase
+        .from("schools")
+        .select("id, name, school_type, province, district")
+        .eq("id", student.school_id)
+        .single()
+      if (data) {
+        setInitialSchool(data as SchoolData)
+      }
     }
     if (student.school_grade) {
       setGrade(student.school_grade.toString() as "1" | "2" | "3")
     }
   }
 
+  // SchoolSelector 콜백
+  const handleSchoolSelect = (school: SchoolData | null) => {
+    if (school) {
+      setSchoolId(school.id)
+      setInitialSchool(school)
+    } else {
+      setSchoolId("")
+      setInitialSchool(null)
+    }
+  }
+
   const selectedStudent = students.find((s) => s.id === studentId)
-  const selectedSchool = schools.find((s) => s.id === schoolId)
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -247,40 +290,36 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
                   disabled={!!editingScore}
                 >
                   {selectedStudent
-                    ? `${selectedStudent.name} (${selectedStudent.school_name || "학교 미등록"} ${selectedStudent.school_grade || selectedStudent.grade}학년)`
+                    ? `${selectedStudent.name} (${selectedStudent.school_name || "학교 미등록"} ${selectedStudent.school_grade || "?"}학년)`
                     : "학생 선택..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
+              <PopoverContent className="w-[400px] p-0 pointer-events-auto" align="start">
                 <Command shouldFilter={false}>
                   <CommandInput
                     placeholder="학생 이름 검색..."
                     value={studentSearchValue}
                     onValueChange={setStudentSearchValue}
                   />
-                  <CommandList
-                    className="max-h-[300px] overflow-y-auto scroll-smooth"
-                    onWheel={(e) => {
-                      e.stopPropagation()
-                    }}
-                  >
+                  <CommandList>
                     <CommandEmpty>검색 결과가 없습니다</CommandEmpty>
                     <CommandGroup>
                       {students
-                        .filter((student) => {
-                          return student.name.toLowerCase().includes(studentSearchValue.toLowerCase())
-                        })
+                        .filter((student) =>
+                          student.name.toLowerCase().includes(studentSearchValue.toLowerCase())
+                        )
                         .map((student) => (
                           <CommandItem
                             key={student.id}
-                            value={student.name}
+                            value={student.id}
                             onSelect={() => handleStudentSelect(student)}
+                            className="cursor-pointer"
                           >
                             <Check
                               className={cn("mr-2 h-4 w-4", studentId === student.id ? "opacity-100" : "opacity-0")}
                             />
-                            {student.name} ({student.school_name || "학교 미등록"} {student.school_grade || student.grade}학년) - {student.status}
+                            {student.name} ({student.school_name || "학교 미등록"} {student.school_grade || "?"}학년) - {student.status}
                           </CommandItem>
                         ))}
                     </CommandGroup>
@@ -293,63 +332,10 @@ export function SchoolExamScoreModal({ isOpen, onClose, onSuccess, editingScore 
           {/* 학교 선택 */}
           <div className="space-y-2">
             <Label>학교 *</Label>
-            <Popover open={schoolSearchOpen} onOpenChange={setSchoolSearchOpen} modal={true}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={schoolSearchOpen}
-                  className="w-full justify-between"
-                >
-                  {selectedSchool
-                    ? `${selectedSchool.name} (${selectedSchool.school_type})`
-                    : "학교 선택..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="학교 이름 검색..."
-                    value={schoolSearchValue}
-                    onValueChange={setSchoolSearchValue}
-                  />
-                  <CommandList
-                    className="max-h-[300px] overflow-y-auto scroll-smooth"
-                    onWheel={(e) => {
-                      e.stopPropagation()
-                    }}
-                  >
-                    <CommandEmpty>검색 결과가 없습니다</CommandEmpty>
-                    <CommandGroup>
-                      {schools
-                        .filter((school) => {
-                          const search = schoolSearchValue.toLowerCase()
-                          return school.name.toLowerCase().includes(search) ||
-                            (school.short_name && school.short_name.toLowerCase().includes(search))
-                        })
-                        .slice(0, 50)
-                        .map((school) => (
-                          <CommandItem
-                            key={school.id}
-                            value={school.name}
-                            onSelect={() => {
-                              setSchoolId(school.id)
-                              setSchoolSearchOpen(false)
-                              setSchoolSearchValue("")
-                            }}
-                          >
-                            <Check
-                              className={cn("mr-2 h-4 w-4", schoolId === school.id ? "opacity-100" : "opacity-0")}
-                            />
-                            {school.name} ({school.school_type})
-                          </CommandItem>
-                        ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <SchoolSelector
+              initialSchool={initialSchool}
+              onSelect={handleSchoolSelect}
+            />
           </div>
 
           {/* 시험 정보 */}

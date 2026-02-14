@@ -10,7 +10,11 @@ type StudentInsert = Database["public"]["Tables"]["students"]["Insert"]
 type StudentUpdate = Database["public"]["Tables"]["students"]["Update"]
 
 // View row 타입 (student_with_school_info)
+// school, school_type, grade는 뷰에서 student_schools/schools JOIN으로 제공
 interface StudentViewRow extends StudentRow {
+  school?: string | null
+  school_type?: string | null
+  grade?: number | null
   current_school_id?: string | null
   school_short_name?: string | null
   school_province?: string | null
@@ -29,9 +33,9 @@ function mapStudentRowToStudent(row: StudentRow | StudentViewRow): Student {
     payment_phone: row.payment_phone,
     status: row.status as Student["status"],
     department: row.department as Student["department"],
-    school: row.school,
-    school_type: row.school_type as Student["school_type"],
-    grade: row.grade,
+    school: viewRow.school ?? null,
+    school_type: (viewRow.school_type as Student["school_type"]) ?? null,
+    grade: viewRow.grade ?? null,
     lead_source: row.lead_source as Student["lead_source"],
     created_by_type: (row.created_by_type as Student["created_by_type"]) || 'employee',
     start_date: row.start_date,
@@ -148,9 +152,6 @@ export async function createStudent(
       payment_phone: student.payment_phone,
       status: student.status,
       department: student.department,
-      school: student.school,
-      school_type: student.school_type,
-      grade: student.grade,
       lead_source: student.lead_source,
       start_date: student.start_date,
       end_date: student.end_date,
@@ -185,9 +186,6 @@ export async function updateStudent(
       payment_phone: student.payment_phone,
       status: student.status,
       department: student.department,
-      school: student.school,
-      school_type: student.school_type,
-      grade: student.grade,
       lead_source: student.lead_source,
       start_date: student.start_date,
       end_date: student.end_date,

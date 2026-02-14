@@ -181,6 +181,7 @@ export async function createSchoolExam(formData: SchoolExamFormData): Promise<{ 
 
     // 시험지 데이터 생성
     const examData = {
+      school_id: formData.school_id,
       school_type: formData.school_type,
       grade: formData.grade,
       semester: formData.semester,
@@ -237,6 +238,7 @@ export async function updateSchoolExam(id: string, formData: SchoolExamFormData)
 
     // 시험지 데이터 업데이트
     const examData = {
+      school_id: formData.school_id,
       school_type: formData.school_type,
       grade: formData.grade,
       semester: formData.semester,

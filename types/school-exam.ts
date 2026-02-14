@@ -3,6 +3,7 @@ export type ExamType = "중간고사" | "기말고사"
 
 export interface SchoolExam {
   id: string
+  school_id: string | null
   school_type: SchoolType
   grade: 1 | 2 | 3
   semester: 1 | 2
@@ -31,6 +32,7 @@ export interface SchoolExamFilters {
 }
 
 export interface SchoolExamFormData {
+  school_id: string | null
   school_type: SchoolType
   grade: 1 | 2 | 3
   semester: 1 | 2

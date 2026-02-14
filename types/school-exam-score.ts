@@ -19,7 +19,6 @@ export interface SchoolExamScore {
   // Joined data
   student?: {
     name: string
-    grade: number
     status: string
   }
   school?: {

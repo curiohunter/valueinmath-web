@@ -57,8 +57,8 @@ function mapStudentRowToInfo(row: StudentRow): StudentInfo {
     id: row.id,
     name: row.name,
     department: row.department,
-    grade: row.grade,
-    school: row.school,
+    grade: (row as any).grade ?? null,
+    school: (row as any).school ?? null,
   }
 }
 
@@ -189,7 +189,7 @@ export async function getMonthlyAnalytics(
     
     // 1. 학생 정보 조회
     const { data: studentData, error: studentError } = await supabase
-      .from("students")
+      .from("student_with_school_info")
       .select("*")
       .eq("id", studentId)
       .single()
@@ -452,7 +452,7 @@ export async function getStudentsForAnalytics(): Promise<AnalyticsApiResponse<St
     const supabase = await createServerClient()
     
     const { data, error } = await supabase
-      .from("students")
+      .from("student_with_school_info")
       .select("id, name, department, grade, school")
       .eq("is_active", true)
       .eq("status", "재원")
@@ -676,7 +676,7 @@ export async function getSavedMonthlyReports(
       .from("monthly_reports")
       .select(`
         *,
-        student:students(id, name, school, grade, department)
+        student:students(id, name, department)
       `)
     
     if (studentId) {
@@ -727,7 +727,7 @@ export async function getSavedReportById(
       .from("monthly_reports")
       .select(`
         *,
-        student:students(id, name, school, grade, department)
+        student:students(id, name, department)
       `)
       .eq("id", reportId)
       .single()
@@ -836,7 +836,7 @@ export async function getStudentReportsStatus(
     
     // 1. 학생 목록 조회 (필터 적용, 활성 학생만)
     let studentsQuery = supabase
-      .from("students")
+      .from("student_with_school_info")
       .select(`
         id,
         name,

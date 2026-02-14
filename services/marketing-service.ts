@@ -535,7 +535,7 @@ export async function getActivityParticipants(
       .from('marketing_activity_participants')
       .select(`
         *,
-        student:students(id, name, school_type, grade, status)
+        student:students(id, name, status)
       `)
       .eq('marketing_activity_id', activityId)
       .order('created_at', { ascending: false })

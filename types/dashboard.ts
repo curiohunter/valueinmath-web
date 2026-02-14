@@ -3,11 +3,14 @@ import type { Database } from "@/types/database"
 // 학생 기본 타입
 export type Student = Database['public']['Tables']['students']['Row']
 
-// 상담 데이터 타입 (학생 + 입학테스트 정보)
+// 상담 데이터 타입 (학생 + 학교/학년 정보)
 export type ConsultationData = Database['public']['Tables']['students']['Row'] & {
   entrance_tests?: any[]
-  // student_schools + schools에서 가져온 학교 표시명
-  school_display_name?: string
+  // student_schools + schools에서 가져온 학교 정보
+  school?: string | null
+  school_type?: string | null
+  grade?: number | null
+  current_school_id?: string | null
 }
 
 // 학생 정보 요약 (통계 카드용)

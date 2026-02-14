@@ -32,18 +32,12 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { ChapterTreeSelector } from "../homework-analysis/student-analysis";
 import { ConceptData, ChapterSelection, CURRICULUM_LIST } from "../homework-analysis/types";
-
-interface School {
-  id: string;
-  name: string;
-  school_type: string;
-  short_name: string | null;
-}
+import { SchoolSelector, type SchoolData } from "@/components/students/SchoolSelector";
 
 interface ExamRange {
   id: string;
   school_id: string;
-  school: School;
+  school: { id: string; name: string; school_type: string; short_name: string | null };
   grade: number;
   exam_year: number;
   semester: number;
@@ -75,10 +69,9 @@ export default function ExamRangeManagement() {
 
   const [ranges, setRanges] = useState<ExamRange[]>([]);
   const [concepts, setConcepts] = useState<ConceptData[]>([]);
-  const [schools, setSchools] = useState<School[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isConceptsLoading, setIsConceptsLoading] = useState(true);
-  const [schoolSearch, setSchoolSearch] = useState("");
+  const [initialSchool, setInitialSchool] = useState<SchoolData | null>(null);
 
   const [filters, setFilters] = useState<ExamRangeFilters>({
     search: "",
@@ -110,26 +103,6 @@ export default function ExamRangeManagement() {
     littleChapters: [],
   });
   const [isSaving, setIsSaving] = useState(false);
-
-  // Load schools (중학교, 고등학교만)
-  useEffect(() => {
-    async function loadSchools() {
-      try {
-        const { data, error } = await supabase
-          .from("schools")
-          .select("id, name, school_type, short_name")
-          .in("school_type", ["중학교", "고등학교"])
-          .eq("is_active", true)
-          .order("name", { ascending: true });
-
-        if (error) throw error;
-        setSchools((data as School[]) || []);
-      } catch (err) {
-        console.error("학교 목록 로드 실패:", err);
-      }
-    }
-    loadSchools();
-  }, [supabase]);
 
   // Load concepts
   useEffect(() => {
@@ -218,7 +191,7 @@ export default function ExamRangeManagement() {
       middleChapters: [],
       littleChapters: [],
     });
-    setSchoolSearch("");
+    setInitialSchool(null);
     setIsModalOpen(true);
   };
 
@@ -241,7 +214,17 @@ export default function ExamRangeManagement() {
       middleChapters: range.middle_chapters,
       littleChapters: range.little_chapters,
     });
-    setSchoolSearch(range.school?.name || "");
+    if (range.school) {
+      setInitialSchool({
+        id: range.school.id,
+        name: range.school.name,
+        school_type: range.school.school_type,
+        province: "",
+        district: null,
+      });
+    } else {
+      setInitialSchool(null);
+    }
     setIsModalOpen(true);
   };
 
@@ -337,22 +320,12 @@ export default function ExamRangeManagement() {
     return groups;
   }, [ranges]);
 
-  // Filtered schools for autocomplete
-  const filteredSchools = useMemo(() => {
-    if (!schoolSearch.trim()) return schools.slice(0, 20);
-    const search = schoolSearch.toLowerCase();
-    return schools
-      .filter((s) =>
-        s.name.toLowerCase().includes(search) ||
-        (s.short_name && s.short_name.toLowerCase().includes(search))
-      )
-      .slice(0, 20);
-  }, [schools, schoolSearch]);
-
-  // Selected school info
-  const selectedSchool = useMemo(() => {
-    return schools.find((s) => s.id === formData.school_id);
-  }, [schools, formData.school_id]);
+  const handleSchoolSelect = (school: SchoolData | null) => {
+    setFormData((prev) => ({
+      ...prev,
+      school_id: school?.id || "",
+    }));
+  };
 
   return (
     <div className="space-y-6">
@@ -562,45 +535,10 @@ export default function ExamRangeManagement() {
                 <label className="text-sm font-medium text-slate-700 mb-1.5 block">
                   학교 선택
                 </label>
-                <div className="relative">
-                  <Input
-                    placeholder="학교명 검색... (예: 분당고, 낙생고)"
-                    value={schoolSearch}
-                    onChange={(e) => {
-                      setSchoolSearch(e.target.value);
-                      // 검색어 변경 시 선택 해제
-                      if (formData.school_id && e.target.value !== selectedSchool?.name) {
-                        setFormData({ ...formData, school_id: "" });
-                      }
-                    }}
-                  />
-                  {schoolSearch && !formData.school_id && filteredSchools.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredSchools.map((school) => (
-                        <button
-                          key={school.id}
-                          type="button"
-                          className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between"
-                          onClick={() => {
-                            setFormData({ ...formData, school_id: school.id });
-                            setSchoolSearch(school.name);
-                          }}
-                        >
-                          <span className="text-sm">{school.name}</span>
-                          <span className="text-xs text-slate-400">{school.school_type}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {selectedSchool && (
-                  <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-100">
-                      {selectedSchool.school_type}
-                    </span>
-                    <span>{selectedSchool.name}</span>
-                  </div>
-                )}
+                <SchoolSelector
+                  initialSchool={initialSchool}
+                  onSelect={handleSchoolSelect}
+                />
               </div>
 
               <div>

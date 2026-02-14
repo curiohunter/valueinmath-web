@@ -31,7 +31,7 @@ export function useStudentList(options: UseStudentListOptions = {}) {
     try {
       const supabase = createClient()
       let query = supabase
-        .from("students")
+        .from("student_with_school_info")
         .select("id, name, status, department, grade, school, student_phone, parent_phone")
         .eq("is_active", true)
         .order("name", { ascending: true })

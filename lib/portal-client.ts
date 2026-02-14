@@ -39,7 +39,7 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
     consultationRequestsData,
     testScoresWithAvgData,
   ] = await Promise.all([
-    supabase.from("students").select("*").eq("id", studentId).single(),
+    supabase.from("student_with_school_info").select("*").eq("id", studentId).single(),
     supabase
       .from("class_students")
       .select(`

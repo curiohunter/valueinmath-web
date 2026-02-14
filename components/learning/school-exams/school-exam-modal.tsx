@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { PdfUpload } from "./pdf-upload"
 import { createSchoolExam, updateSchoolExam } from "@/lib/school-exam-client"
-import type { SchoolExam, SchoolExamFormData } from "@/types/school-exam"
+import { SchoolSelector, type SchoolData } from "@/components/students/SchoolSelector"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import type { SchoolExam, SchoolExamFormData, SchoolType } from "@/types/school-exam"
 
 interface SchoolExamModalProps {
   isOpen: boolean
@@ -22,7 +24,9 @@ interface SchoolExamModalProps {
 
 export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExamModalProps) {
   const [loading, setLoading] = useState(false)
+  const [initialSchool, setInitialSchool] = useState<SchoolData | null>(null)
   const [formData, setFormData] = useState<SchoolExamFormData>({
+    school_id: null,
     school_type: "중학교",
     grade: 1,
     semester: 1,
@@ -35,9 +39,34 @@ export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExam
     pdf_file: undefined,
   })
 
+  // 수정 모드: school_id로 학교 정보 조회
+  useEffect(() => {
+    async function loadSchool() {
+      if (!exam?.school_id) {
+        setInitialSchool(null)
+        return
+      }
+      const supabase = getSupabaseBrowserClient()
+      const { data } = await supabase
+        .from("schools")
+        .select("id, name, school_type, province, district")
+        .eq("id", exam.school_id)
+        .single()
+      if (data) {
+        setInitialSchool(data as SchoolData)
+      }
+    }
+    if (isOpen && exam?.school_id) {
+      loadSchool()
+    } else {
+      setInitialSchool(null)
+    }
+  }, [exam?.school_id, isOpen])
+
   useEffect(() => {
     if (exam) {
       setFormData({
+        school_id: exam.school_id,
         school_type: exam.school_type,
         grade: exam.grade,
         semester: exam.semester,
@@ -51,6 +80,7 @@ export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExam
       })
     } else {
       setFormData({
+        school_id: null,
         school_type: "중학교",
         grade: 1,
         semester: 1,
@@ -65,11 +95,31 @@ export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExam
     }
   }, [exam, isOpen])
 
+  const handleSchoolSelect = (school: SchoolData | null) => {
+    if (school) {
+      // school_type 매핑: schools 테이블의 "중학교"/"고등학교" → SchoolType
+      const schoolType: SchoolType = school.school_type === "고등학교" ? "고등학교" : "중학교"
+      setFormData((prev) => ({
+        ...prev,
+        school_id: school.id,
+        school_name: school.name,
+        school_type: schoolType,
+      }))
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        school_id: null,
+        school_name: "",
+        school_type: "중학교",
+      }))
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.school_name.trim()) {
-      toast.error("학교명을 입력해주세요")
+    if (!formData.school_id) {
+      toast.error("학교를 선택해주세요")
       return
     }
 
@@ -115,24 +165,13 @@ export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExam
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 학교 타입 */}
+          {/* 학교 선택 */}
           <div className="space-y-2">
-            <Label htmlFor="school_type">학교 타입 *</Label>
-            <Select
-              value={formData.school_type}
-              onValueChange={(value) =>
-                setFormData({ ...formData, school_type: value as "중학교" | "고등학교" })
-              }
-              disabled={loading}
-            >
-              <SelectTrigger id="school_type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="중학교">중학교</SelectItem>
-                <SelectItem value="고등학교">고등학교</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label>학교 *</Label>
+            <SchoolSelector
+              initialSchool={initialSchool}
+              onSelect={handleSchoolSelect}
+            />
           </div>
 
           {/* 학년 / 학기 */}
@@ -177,19 +216,6 @@ export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExam
             </div>
           </div>
 
-          {/* 학교명 */}
-          <div className="space-y-2">
-            <Label htmlFor="school_name">학교명 *</Label>
-            <Input
-              id="school_name"
-              value={formData.school_name}
-              onChange={(e) => setFormData({ ...formData, school_name: e.target.value })}
-              placeholder="예: 서울중학교"
-              disabled={loading}
-              required
-            />
-          </div>
-
           {/* 출제연도 / 시험유형 */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -230,39 +256,31 @@ export function SchoolExamModal({ isOpen, onClose, exam, onSuccess }: SchoolExam
 
           {/* 수집 여부 / 매쓰플랫 업로드 여부 */}
           <div className="space-y-3">
-            <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
               <Checkbox
-                id="is_collected"
                 checked={formData.is_collected}
                 onCheckedChange={(checked) =>
                   setFormData({ ...formData, is_collected: checked as boolean })
                 }
                 disabled={loading}
               />
-              <Label
-                htmlFor="is_collected"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
+              <span className="text-sm font-medium leading-none">
                 시험지 수집 완료
-              </Label>
-            </div>
+              </span>
+            </label>
 
-            <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
               <Checkbox
-                id="is_uploaded_to_mathflat"
                 checked={formData.is_uploaded_to_mathflat}
                 onCheckedChange={(checked) =>
                   setFormData({ ...formData, is_uploaded_to_mathflat: checked as boolean })
                 }
                 disabled={loading}
               />
-              <Label
-                htmlFor="is_uploaded_to_mathflat"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-              >
+              <span className="text-sm font-medium leading-none">
                 매쓰플랫 업로드 완료
-              </Label>
-            </div>
+              </span>
+            </label>
           </div>
 
           {/* PDF 파일 */}

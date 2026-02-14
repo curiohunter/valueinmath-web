@@ -7,9 +7,9 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
 
-    // 재원생 데이터 조회 (is_active = true인 것만)
+    // 재원생 데이터 조회 (student_with_school_info 뷰 사용)
     const { data: students, error: studentsError } = await supabase
-      .from("students")
+      .from("student_with_school_info")
       .select("school, school_type, grade")
       .eq("status", "재원")
       .eq("is_active", true)

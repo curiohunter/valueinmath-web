@@ -263,7 +263,7 @@ export default function MarketingPage() {
     try {
       // 재원 학생 중 parent_phone이 있는 학생들 조회 (활성 학생만)
       const { data: studentsData, error } = await supabase
-        .from("students")
+        .from("student_with_school_info")
         .select("id, name, parent_phone, grade, school")
         .eq("is_active", true)
         .eq("status", "재원")
@@ -318,7 +318,7 @@ export default function MarketingPage() {
 
       // 재원 학생 정보 조회 (활성 학생만)
       const { data: studentsData, error: sError } = await supabase
-        .from("students")
+        .from("student_with_school_info")
         .select("id, name, grade, school, status")
         .eq("is_active", true)
         .eq("status", "재원")

@@ -65,7 +65,7 @@ export default function ConsultationsPage() {
 
   const loadStudents = async () => {
     const { data, error } = await supabase
-      .from("students")
+      .from("student_with_school_info")
       .select("*")
       .eq("is_active", true)
       .order("name");
@@ -90,7 +90,7 @@ export default function ConsultationsPage() {
         ai_decision_maker,
         ai_sentiment,
         ai_analyzed_at,
-        student:students(name, school, grade),
+        student:students(name),
         counselor:employees(name, department)
       `)
       .order("date", { ascending: false });

@@ -32,7 +32,7 @@ export function useLearningMasterData(): UseLearningMasterDataReturn {
       const [classRes, classStudentRes, studentRes, teacherRes] = await Promise.all([
         supabase.from("classes").select("id, name, teacher_id").eq("is_active", true),
         supabase.from("class_students").select("class_id, student_id"),
-        supabase.from("students").select("id, name, status, grade, school_type").eq("is_active", true),
+        supabase.from("student_with_school_info").select("id, name, status, grade, school_type").eq("is_active", true),
         supabase.from("employees").select("id, name")
       ])
 

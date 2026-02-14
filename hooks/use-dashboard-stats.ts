@@ -127,19 +127,19 @@ async function fetchDashboardStats(): Promise<DashboardStats> {
         cohortRes
       ] = await Promise.all([
         // 재원생 수 (is_active = true인 학생만)
-        supabase.from('students').select('*').eq('status', '재원').eq('is_active', true),
+        supabase.from('student_with_school_info').select('*').eq('status', '재원').eq('is_active', true),
         // 이번달 신규상담
-        supabase.from('students').select('*').eq('is_active', true).gte('first_contact_date', monthStart).lt('first_contact_date', monthEnd),
+        supabase.from('student_with_school_info').select('*').eq('is_active', true).gte('first_contact_date', monthStart).lt('first_contact_date', monthEnd),
         // 작년 동월 신규상담
-        supabase.from('students').select('*').eq('is_active', true).gte('first_contact_date', lastYearMonthStart).lt('first_contact_date', lastYearMonthEnd),
+        supabase.from('student_with_school_info').select('*').eq('is_active', true).gte('first_contact_date', lastYearMonthStart).lt('first_contact_date', lastYearMonthEnd),
         // 이번달 입학테스트
         supabase.from('entrance_tests').select(`*, students!student_id (department)`).gte('test_date', monthStart).lt('test_date', monthEnd),
         // 이번달 신규등원
-        supabase.from('students').select('*').eq('is_active', true).gte('start_date', monthStart).lt('start_date', monthEnd).eq('status', '재원'),
+        supabase.from('student_with_school_info').select('*').eq('is_active', true).gte('start_date', monthStart).lt('start_date', monthEnd).eq('status', '재원'),
         // 이번달 퇴원
-        supabase.from('students').select('*').eq('is_active', true).gte('end_date', monthStart).lt('end_date', monthEnd).eq('status', '퇴원'),
+        supabase.from('student_with_school_info').select('*').eq('is_active', true).gte('end_date', monthStart).lt('end_date', monthEnd).eq('status', '퇴원'),
         // 작년 동월 퇴원
-        supabase.from('students').select('*').eq('is_active', true).gte('end_date', lastYearMonthStart).lt('end_date', lastYearMonthEnd).eq('status', '퇴원'),
+        supabase.from('student_with_school_info').select('*').eq('is_active', true).gte('end_date', lastYearMonthStart).lt('end_date', lastYearMonthEnd).eq('status', '퇴원'),
         // 보강 데이터
         supabase.from('makeup_classes').select(`*, classes!inner (id, name, teacher_id, employees!teacher_id (id, name))`).eq('status', 'scheduled'),
         // 학원비 납부 통계

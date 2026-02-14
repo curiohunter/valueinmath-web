@@ -16,12 +16,10 @@ interface UseConsultationsReturn {
   refresh: () => Promise<void>
 }
 
-// SWR fetcher - 단일 쿼리로 최적화 (async-parallel)
+// SWR fetcher - students + student_schools 조회
 async function fetchConsultations(): Promise<ConsultationData[]> {
   const supabase = createClient()
 
-  // students 테이블만 조회하고, school_display_name은 기존 school 필드 사용
-  // student_schools JOIN은 성능 이슈로 제거 (formatSchoolName으로 일관성 유지)
   const { data: students, error } = await supabase
     .from('students')
     .select('*')
@@ -31,7 +29,32 @@ async function fetchConsultations(): Promise<ConsultationData[]> {
     .limit(20)
 
   if (error) throw error
-  return students || []
+  if (!students || students.length === 0) return []
+
+  // student_schools + schools에서 현재 학교/학년 정보 가져오기
+  const studentIds = students.map(s => s.id)
+  const { data: studentSchools } = await supabase
+    .from('student_schools')
+    .select('student_id, grade, school:schools(name, school_type)')
+    .in('student_id', studentIds)
+    .eq('is_current', true)
+
+  const schoolMap = new Map<string, { school: string | null; school_type: string | null; grade: number | null }>()
+  studentSchools?.forEach((ss: any) => {
+    schoolMap.set(ss.student_id, {
+      school: ss.school?.name || null,
+      school_type: ss.school?.school_type || null,
+      grade: ss.grade || null,
+    })
+  })
+
+  // 학생 데이터에 학교/학년 정보 병합
+  return students.map(student => ({
+    ...student,
+    school: schoolMap.get(student.id)?.school || null,
+    school_type: schoolMap.get(student.id)?.school_type || null,
+    grade: schoolMap.get(student.id)?.grade || null,
+  }))
 }
 
 /**
@@ -61,13 +84,18 @@ export function useConsultations(): UseConsultationsReturn {
         ...cleanObj(consultationData),
         name: consultationData.name ?? '',
         parent_phone: consultationData.parent_phone ?? '',
-        school: consultationData.school ?? '',
-        grade: consultationData.grade ?? 1,
         department: consultationData.department ?? '',
         status: consultationData.status ?? '신규상담',
         notes: consultationData.notes ?? '',
         first_contact_date: consultationData.first_contact_date ?? new Date().toISOString().split('T')[0]
       }
+      // students 테이블에 없는 필드 제거 (school/grade는 student_schools 테이블에 저장)
+      delete cleanData.school
+      delete cleanData.school_type
+      delete cleanData.grade
+      delete cleanData.school_display_name
+      delete cleanData.current_school_id
+      delete cleanData.entrance_tests
 
       // lead_source는 값이 있을 때만 포함
       if (consultationData.lead_source && consultationData.lead_source.trim() !== '') {
