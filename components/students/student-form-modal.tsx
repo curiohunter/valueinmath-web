@@ -134,7 +134,7 @@ export function StudentFormModal({
   // 학생 정보가 변경될 때 폼 리셋
   useEffect(() => {
     if (student) {
-      // 학생의 student_schools 정보 조회
+      // student_schools에서 현재 학교 정보 조회
       const loadStudentSchool = async () => {
         try {
           const { data: studentSchool } = await supabase
@@ -145,84 +145,15 @@ export function StudentFormModal({
             .single()
 
           if (studentSchool?.schools) {
-            // school_id가 있고 schools JOIN 성공한 경우
             const school = studentSchool.schools as unknown as SchoolData
             setSelectedSchool(school)
             setOriginalSchoolId(school.id)
-            const ssData = studentSchool as any
-            setOriginalGrade(ssData.grade || null)
-          } else if (student.school) {
-            // school_id가 없지만 students.school이 있는 경우: 학교 검색해서 매칭 시도
-            // 광진구 우선, 없으면 서울 우선
-            let matchedSchool = null
-            const schoolText = student.school.trim()
-
-            // 학교 타입 추론 (광남초 → 초등학교, 가람고 → 고등학교)
-            let inferredType = ''
-            if (schoolText.endsWith('초') || schoolText.includes('초등')) {
-              inferredType = '초등학교'
-            } else if (schoolText.endsWith('중') || schoolText.includes('중학')) {
-              inferredType = '중학교'
-            } else if (schoolText.endsWith('고') || schoolText.includes('고등')) {
-              inferredType = '고등학교'
-            }
-
-            // 1차: short_name으로 검색 (가람고 → short_name='가람고')
-            const { data: shortNameSchool } = await supabase
-              .from('schools')
-              .select('id, name, short_name, school_type, province, district')
-              .eq('short_name', schoolText)
-              .limit(1)
-              .single()
-
-            if (shortNameSchool) {
-              matchedSchool = shortNameSchool
-            } else {
-              // 2차: 정확한 이름 매칭 (광진구 우선)
-              const { data: exactSchool } = await supabase
-                .from('schools')
-                .select('id, name, short_name, school_type, province, district')
-                .eq('name', schoolText)
-                .eq('district', '광진구')
-                .limit(1)
-                .single()
-
-              if (exactSchool) {
-                matchedSchool = exactSchool
-              } else {
-                // 3차: 학교명 앞부분 + 학교타입으로 부분 매칭
-                // "광남초" → "서울광남초등학교" 매칭
-                // "가람고" → "...가람고등학교" 매칭
-                const baseName = schoolText.replace(/초등학교$|중학교$|고등학교$|초$|중$|고$/, '')
-                const searchPattern = inferredType
-                  ? `%${baseName}${inferredType}%`
-                  : `%${baseName}%`
-
-                const { data: partialSchools } = await supabase
-                  .from('schools')
-                  .select('id, name, short_name, school_type, province, district')
-                  .ilike('name', searchPattern)
-                  .order('district', { ascending: true }) // 광진구가 먼저 나오도록
-                  .limit(5)
-
-                if (partialSchools && partialSchools.length > 0) {
-                  // 광진구 학교 우선
-                  const gwangjinSchool = partialSchools.find(s => s.district === '광진구')
-                  // 서울 학교 우선
-                  const seoulSchool = partialSchools.find(s => s.province === '서울특별시')
-                  matchedSchool = gwangjinSchool || seoulSchool || partialSchools[0]
-                }
-              }
-            }
-
-            if (matchedSchool) {
-              setSelectedSchool(matchedSchool as SchoolData)
-              setOriginalSchoolId(matchedSchool.id)
-            } else {
-              setSelectedSchool(null)
-              setOriginalSchoolId(null)
-            }
-            setOriginalGrade(student.grade || null)
+            setOriginalGrade(studentSchool.grade || null)
+            // form values도 동기화
+            form.setValue('school_id', school.id)
+            form.setValue('school', school.name)
+            form.setValue('school_type', school.school_type)
+            form.setValue('grade', studentSchool.grade || null)
           } else {
             setSelectedSchool(null)
             setOriginalSchoolId(null)
@@ -257,10 +188,10 @@ export function StudentFormModal({
           payment_phone: student.payment_phone,
           status: student.status,
           department: student.department,
-          school: student.school,
-          school_type: student.school_type,
-          school_id: null, // student_schools에서 조회
-          grade: student.grade,
+          school: student.school || null,
+          school_type: student.school_type || null,
+          school_id: student.current_school_id || null,
+          grade: student.grade ?? null,
           lead_source: student.lead_source,
           start_date: startDate,
           end_date: endDate,
@@ -410,9 +341,6 @@ export function StudentFormModal({
         payment_phone: values.payment_phone || null,
         status: values.status as StudentStatus,
         department: values.department || null,
-        school: values.school || null,
-        school_type: values.school_type || null,  // 빈 문자열을 null로 변환
-        grade: values.grade || null,
         lead_source: values.lead_source || null,
         start_date: values.start_date ? getKoreanDateString(values.start_date) : null,
         end_date: values.end_date ? getKoreanDateString(values.end_date) : null,
@@ -463,7 +391,7 @@ export function StudentFormModal({
 
       // student_schools 테이블에 학교 정보 저장/업데이트
       const studentIdToUse = student?.id || savedStudentId || (await supabase.from("students").select("id").eq("name", values.name).single()).data?.id
-      if (studentIdToUse && (values.school_id || values.school || values.grade)) {
+      if (studentIdToUse && (values.school_id || values.grade)) {
         const newSchoolId = values.school_id || null
         const newGrade = values.grade || null
         const schoolChanged = newSchoolId !== originalSchoolId
@@ -482,6 +410,8 @@ export function StudentFormModal({
             school_id: newSchoolId,
             grade: newGrade,
             is_current: true,
+            student_name_snapshot: values.name,
+            school_name_snapshot: selectedSchool?.name || null,
           })
         } else if (gradeChanged && originalSchoolId) {
           // 학교는 같고 학년만 변경됨: 기존 레코드 UPDATE
@@ -490,13 +420,15 @@ export function StudentFormModal({
             .update({ grade: newGrade, updated_at: new Date().toISOString() })
             .eq('student_id', studentIdToUse)
             .eq('is_current', true)
-        } else if (!originalSchoolId && (newSchoolId || values.school || newGrade)) {
+        } else if (!originalSchoolId && (newSchoolId || newGrade)) {
           // 기존 학교 정보가 없었던 경우: 새 레코드 삽입
           await supabase.from('student_schools').insert({
             student_id: studentIdToUse,
             school_id: newSchoolId,
             grade: newGrade,
             is_current: true,
+            student_name_snapshot: values.name,
+            school_name_snapshot: selectedSchool?.name || null,
           })
         }
       }
@@ -515,7 +447,7 @@ export function StudentFormModal({
             start_time: `${startDateStr}T09:00:00`,
             end_time: `${startDateStr}T10:00:00`,
             event_type: "new_enrollment",
-            description: `${values.name} 학생 신규등록\n담당관: ${values.department || '-'}\n학교: ${values.school || '-'} ${values.school_type || ''} ${values.grade ? values.grade + '학년' : ''}`
+            description: `${values.name} 학생 신규등록\n담당관: ${values.department || '-'}\n학교: ${selectedSchool?.name || '-'} ${selectedSchool?.school_type || ''} ${values.grade ? values.grade + '학년' : ''}`
           })
           toast.success("학생 정보가 저장되었습니다. 캘린더에 신규등록 일정이 추가되었습니다.")
         } catch (calendarError) {
@@ -819,7 +751,7 @@ export function StudentFormModal({
                           <FormLabel>학년</FormLabel>
                           <Select
                             onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                            value={field.value?.toString() || undefined}
+                            value={field.value != null ? field.value.toString() : ""}
                           >
                             <FormControl>
                               <SelectTrigger>

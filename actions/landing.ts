@@ -48,8 +48,6 @@ export async function submitConsultationInquiry(data: {
     const insertData = {
         name: data.name,
         parent_phone: cleanedPhone,  // 하이픈 제거된 전화번호 저장
-        school_type: data.school_type || null,
-        grade: data.grade || null,
         notes: data.notes || null,
         status: '신규상담',
         lead_source: '홈페이지',
@@ -73,6 +71,16 @@ export async function submitConsultationInquiry(data: {
             code: error.code
         })
         throw new Error(`상담 신청 실패: ${error.message}`)
+    }
+
+    // 학년 정보가 있으면 student_schools에 저장
+    if (student && data.grade) {
+        await supabase.from('student_schools').insert({
+            student_id: student.id,
+            grade: data.grade,
+            is_current: true,
+            student_name_snapshot: data.name,
+        })
     }
 
     return { success: true, student }
