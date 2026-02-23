@@ -15,7 +15,7 @@ export async function GET(
       .from("reviews")
       .select(`
         *,
-        student:students!student_id(name, school, grade),
+        student:students!student_id(name, student_schools(grade, school_name_snapshot)),
         collector:employees!collected_by(name)
       `)
       .eq("id", id)
@@ -92,7 +92,7 @@ export async function PATCH(
       .eq("id", id)
       .select(`
         *,
-        student:students!student_id(name, school, grade),
+        student:students!student_id(name, student_schools(grade, school_name_snapshot)),
         collector:employees!collected_by(name)
       `)
       .single()

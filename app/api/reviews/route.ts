@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       .from("reviews")
       .select(`
         *,
-        student:students!student_id(name, school, grade),
+        student:students!student_id(name, student_schools(grade, school_name_snapshot)),
         collector:employees!collected_by(name)
       `)
       .order("created_at", { ascending: false })
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       })
       .select(`
         *,
-        student:students!student_id(name, school, grade),
+        student:students!student_id(name, student_schools(grade, school_name_snapshot)),
         collector:employees!collected_by(name)
       `)
       .single()

@@ -70,15 +70,20 @@ export function ParentStudentApprovalSection() {
           if (studentName) {
             const { data: student } = await supabase
               .from("students")
-              .select("grade, school")
+              .select(`
+                id,
+                student_schools (grade, school_name_snapshot)
+              `)
               .eq("name", studentName)
+              .eq("student_schools.is_current", true)
               .single()
 
+            const currentSchool = (student?.student_schools as any[])?.[0]
             return {
               ...reg,
               student_names: reg.student_names || (reg.student_name ? [reg.student_name] : null),
-              student_grade: student?.grade || null,
-              student_school: student?.school || null,
+              student_grade: currentSchool?.grade || null,
+              student_school: currentSchool?.school_name_snapshot || null,
             }
           }
           return {

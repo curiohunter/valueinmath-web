@@ -166,7 +166,7 @@ export default function TuitionDetailPage() {
           note, period_start_date, period_end_date, created_at, updated_at,
           student_name_snapshot, class_name_snapshot,
           parent_tuition_fee_id, is_split_child,
-          students!left(id, name, grade, school, parent_phone, payment_phone, status),
+          students!left(id, name, parent_phone, payment_phone, status, student_schools(grade, school_name_snapshot)),
           classes!left(id, name),
           payssam_bills(id, bill_id, request_status, short_url, sent_at, paid_at, payment_method, transaction_id, cancelled_at, destroyed_at, last_sync_at)
         `)
@@ -567,12 +567,12 @@ export default function TuitionDetailPage() {
               <div>
                 <div className="text-sm text-muted-foreground">학년</div>
                 <div className="font-medium">
-                  {data.students?.grade ? `${data.students.grade}학년` : "-"}
+                  {(data.students as any)?.student_schools?.[0]?.grade ? `${(data.students as any).student_schools[0].grade}학년` : "-"}
                 </div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">학교</div>
-                <div className="font-medium">{data.students?.school || "-"}</div>
+                <div className="font-medium">{(data.students as any)?.student_schools?.[0]?.school_name_snapshot || "-"}</div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">상태</div>

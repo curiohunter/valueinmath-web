@@ -98,12 +98,33 @@ export default function PortalPage() {
       // 연결된 학생들의 상세 정보 조회
       const { data: linkedStudents } = await supabase
         .from("students")
-        .select("id, name, grade, school, school_type, status")
+        .select(`
+          id, name, status,
+          student_schools (
+            grade,
+            school_name_snapshot,
+            school:schools (school_type)
+          )
+        `)
         .in("id", linkedStudentIds)
+        .eq("student_schools.is_current", true)
 
       if (linkedStudents && linkedStudents.length > 0) {
+        // student_schools에서 grade/school/school_type 매핑
+        const mappedStudents: Sibling[] = linkedStudents.map((s: any) => {
+          const currentSchool = s.student_schools?.[0]
+          return {
+            id: s.id,
+            name: s.name,
+            status: s.status,
+            grade: currentSchool?.grade ?? null,
+            school: currentSchool?.school_name_snapshot ?? null,
+            school_type: currentSchool?.school?.school_type ?? null,
+          }
+        })
+
         // 재원 학생만 필터링하여 siblings로 설정
-        const activeStudents = linkedStudents.filter(s => s.status === "재원")
+        const activeStudents = mappedStudents.filter(s => s.status === "재원")
 
         if (activeStudents.length > 0) {
           setSiblings(activeStudents)

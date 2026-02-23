@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Phone, School, Calendar, FileText, ClipboardList } from "lucide-react"
+import { Loader2, Phone, School, Calendar, FileText, ClipboardList, GraduationCap } from "lucide-react"
 
 interface StudentInfoData {
   id: string
@@ -46,6 +46,15 @@ interface EntranceTest {
   created_at: string
 }
 
+interface SchoolHistory {
+  id: string
+  school_name_snapshot: string | null
+  grade: number | null
+  is_current: boolean
+  created_at: string
+  school_type: string | null
+}
+
 const TEST_STATUS_COLORS: Record<string, string> = {
   "대기": "bg-yellow-50 text-yellow-700 border-yellow-200",
   "완료": "bg-green-50 text-green-700 border-green-200",
@@ -66,6 +75,7 @@ export function StudentInfoSubTab({ studentId }: { studentId: string }) {
   const [info, setInfo] = useState<StudentInfoData | null>(null)
   const [classes, setClasses] = useState<{ name: string; teacher_name: string }[]>([])
   const [entranceTests, setEntranceTests] = useState<EntranceTest[]>([])
+  const [schoolHistory, setSchoolHistory] = useState<SchoolHistory[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -74,7 +84,7 @@ export function StudentInfoSubTab({ studentId }: { studentId: string }) {
       try {
         const supabase = createClient()
 
-        const [studentRes, classesRes, testsRes] = await Promise.all([
+        const [studentRes, classesRes, testsRes, schoolHistoryRes] = await Promise.all([
           supabase
             .from("student_with_school_info")
             .select("*")
@@ -94,6 +104,11 @@ export function StudentInfoSubTab({ studentId }: { studentId: string }) {
             .select("*")
             .eq("student_id", studentId)
             .order("created_at", { ascending: false }),
+          supabase
+            .from("student_schools")
+            .select("id, school_name_snapshot, grade, is_current, created_at, schools(school_type)")
+            .eq("student_id", studentId)
+            .order("created_at", { ascending: false }),
         ])
 
         if (studentRes.error) throw studentRes.error
@@ -107,6 +122,16 @@ export function StudentInfoSubTab({ studentId }: { studentId: string }) {
           }))
         setClasses(mappedClasses)
         setEntranceTests(testsRes.data || [])
+        setSchoolHistory(
+          (schoolHistoryRes.data || []).map((row: any) => ({
+            id: row.id,
+            school_name_snapshot: row.school_name_snapshot,
+            grade: row.grade,
+            is_current: row.is_current,
+            created_at: row.created_at,
+            school_type: row.schools?.school_type || null,
+          }))
+        )
       } catch (error) {
         console.error("Failed to load student info:", error)
       } finally {
@@ -157,6 +182,39 @@ export function StudentInfoSubTab({ studentId }: { studentId: string }) {
           <InfoRow label="부서" value={info.department} />
         </CardContent>
       </Card>
+
+      {/* 학교 이력 */}
+      {schoolHistory.length > 1 && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">학교 이력</h3>
+            </div>
+            <div className="space-y-2">
+              {schoolHistory.map((sh) => (
+                <div key={sh.id} className="flex items-center justify-between py-1.5 border-b last:border-b-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{sh.school_name_snapshot || "알 수 없음"}</span>
+                    {sh.school_type && (
+                      <span className="text-xs text-muted-foreground">({sh.school_type})</span>
+                    )}
+                    {sh.grade && (
+                      <span className="text-xs text-muted-foreground">{sh.grade}학년</span>
+                    )}
+                    {sh.is_current && (
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px]">현재</Badge>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {sh.created_at?.split("T")[0]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 반 정보 */}
       <Card>

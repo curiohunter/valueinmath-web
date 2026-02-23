@@ -78,8 +78,10 @@ export interface Review {
   // 조인된 데이터
   student?: {
     name: string
-    school: string | null
-    grade: string | null
+    student_schools?: Array<{
+      grade: number | null
+      school_name_snapshot: string | null
+    }>
   }
   collector?: {
     name: string

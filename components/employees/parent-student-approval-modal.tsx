@@ -120,9 +120,13 @@ export function ParentStudentApprovalModal({
 
     const { data, error } = await supabase
       .from("students")
-      .select("id, name, grade, school, status, parent_phone")
+      .select(`
+        id, name, status, parent_phone,
+        student_schools (grade, school_name_snapshot)
+      `)
       .eq("is_active", true)
       .in("status", ["재원", "퇴원"])
+      .eq("student_schools.is_current", true)
       .order("status", { ascending: true })
       .order("name", { ascending: true })
 
@@ -131,7 +135,15 @@ export function ParentStudentApprovalModal({
       toast.error("학생 목록을 불러오는데 실패했습니다")
       setStudents([])
     } else {
-      setStudents(data || [])
+      const mapped: Student[] = (data || []).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        status: s.status,
+        parent_phone: s.parent_phone,
+        grade: s.student_schools?.[0]?.grade ?? null,
+        school: s.student_schools?.[0]?.school_name_snapshot ?? null,
+      }))
+      setStudents(mapped)
     }
     setStudentsLoading(false)
   }

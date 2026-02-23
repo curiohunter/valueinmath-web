@@ -175,9 +175,11 @@ export async function getTeacherStudents(teacherId: string) {
         student:students (
           id,
           name,
-          grade,
-          school,
-          status
+          status,
+          student_schools (
+            grade,
+            school_name_snapshot
+          )
         )
       )
     `)
@@ -193,11 +195,12 @@ export async function getTeacherStudents(teacherId: string) {
     classStudents?.forEach((cs) => {
       const student = cs.student
       if (student && student.status === '재원' && !students.has(student.id)) {
+        const currentSchool = (student.student_schools as any[])?.[0]
         students.set(student.id, {
           id: student.id,
           name: student.name,
-          grade: student.grade,
-          school: student.school,
+          grade: currentSchool?.grade != null ? String(currentSchool.grade) : "",
+          school: currentSchool?.school_name_snapshot || "",
           status: student.status,
         })
       }
@@ -277,8 +280,6 @@ export async function getStudentsWithCommentStatus(
     .select(`
       id,
       name,
-      grade,
-      school,
       status,
       class_students (
         classes (
@@ -289,14 +290,22 @@ export async function getStudentsWithCommentStatus(
             name
           )
         )
+      ),
+      student_schools (
+        grade,
+        school_name_snapshot
       )
     `)
     .eq("is_active", true)
     .eq("status", "재원")
+    .eq("student_schools.is_current", true)
 
   const { data: studentsData, error: studentsError } = await studentsQuery
 
-  if (studentsError) throw studentsError
+  if (studentsError) {
+    console.error("getStudentsWithCommentStatus 쿼리 에러:", JSON.stringify(studentsError))
+    throw studentsError
+  }
 
   // teacherId가 있으면 해당 선생님 담당 학생만 필터링
   let filteredStudents = studentsData || []
@@ -348,6 +357,10 @@ export async function getStudentsWithCommentStatus(
 
   filteredStudents.forEach((student) => {
     const classStudents = student.class_students as any[]
+    const studentSchools = student.student_schools as any[]
+    const currentSchool = studentSchools?.[0]
+    const grade = currentSchool?.grade != null ? String(currentSchool.grade) : ""
+    const school = currentSchool?.school_name_snapshot || ""
     const comment = commentsMap.get(student.id)
 
     // 반 정보가 있는 경우
@@ -358,8 +371,8 @@ export async function getStudentsWithCommentStatus(
           result.push({
             id: student.id,
             name: student.name,
-            grade: student.grade,
-            school: student.school,
+            grade,
+            school,
             status: student.status,
             className: cs.classes.name,
             teacherName: cs.classes.teacher?.name || "",
@@ -373,8 +386,8 @@ export async function getStudentsWithCommentStatus(
       result.push({
         id: student.id,
         name: student.name,
-        grade: student.grade,
-        school: student.school,
+        grade,
+        school,
         status: student.status,
         className: "",
         teacherName: "",
