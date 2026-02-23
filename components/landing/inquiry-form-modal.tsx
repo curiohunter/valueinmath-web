@@ -68,27 +68,12 @@ export function InquiryFormModal({ open, onOpenChange }: InquiryFormModalProps) 
         return
       }
 
-      // 오늘 날짜 (KST)
-      const today = new Date()
-      const kstDate = new Date(today.getTime() + (9 * 60 * 60 * 1000))
-        .toISOString()
-        .split('T')[0]
-
-      const insertData = {
-        name: formData.name,
-        parent_phone: cleanedPhone,
-        school_type: formData.school_type || null,
-        grade: formData.grade || null,
-        notes: formData.notes || null,
-        status: '신규상담' as const,
-        lead_source: '홈페이지' as const,
-        created_by_type: 'self_service' as const,
-        first_contact_date: kstDate,
-      }
-
-      const { error } = await supabase
-        .from('students')
-        .insert(insertData)
+      const { error } = await supabase.rpc('submit_inquiry', {
+        p_name: formData.name,
+        p_parent_phone: cleanedPhone,
+        p_grade: formData.grade || null,
+        p_notes: formData.notes || null,
+      })
 
       if (error) {
         console.error('상담 신청 오류:', error)
