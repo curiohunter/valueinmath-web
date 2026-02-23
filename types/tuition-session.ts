@@ -136,3 +136,47 @@ export interface CalendarDaySession {
   status: 'scheduled' | 'closure' | 'excluded' | 'added'
   closureReason?: string
 }
+
+// --- 캘린더 출석/보강 배지 타입 ---
+
+/** 출석 상세 (Popover용) */
+export interface AttendanceDetail {
+  studentId: string
+  studentName: string
+  status: 'pending' | 'present' | 'late' | 'early_leave' | 'absent'
+  checkInAt: string | null
+  checkOutAt: string | null
+  absenceReason: string | null
+  isMakeup: boolean
+}
+
+/** 날짜+반별 출석 집계 (배지용) */
+export interface CalendarAttendanceSummary {
+  classId: string
+  className: string
+  color: string
+  attended: number   // present + late + early_leave
+  absent: number
+  pending: number
+  details: AttendanceDetail[]
+}
+
+/** 보강 상세 (Popover용) */
+export interface MakeupDetail {
+  studentId: string
+  studentName: string
+  className: string | null
+  status: 'scheduled' | 'completed' | 'cancelled'
+  makeupDate: string | null
+  startTime: string | null
+  endTime: string | null
+  absenceDate: string | null
+}
+
+/** 날짜별 보강 집계 (배지용) */
+export interface CalendarMakeupSummary {
+  scheduled: number
+  completed: number
+  cancelled: number
+  details: MakeupDetail[]
+}

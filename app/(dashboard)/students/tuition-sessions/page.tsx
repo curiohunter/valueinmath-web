@@ -19,7 +19,14 @@ import {
   saveStudentMonthlyPlan,
 } from "@/services/tuition-session-service"
 import { toast } from "sonner"
-import type { ClassSessionSegment, StudentMonthlyPlan } from "@/types/tuition-session"
+import type {
+  ClassSessionSegment,
+  StudentMonthlyPlan,
+  CalendarAttendanceSummary,
+  CalendarMakeupSummary,
+  AttendanceDetail,
+  MakeupDetail,
+} from "@/types/tuition-session"
 import { CLASS_COLORS } from "@/types/tuition-session"
 
 interface SegmentState {
@@ -66,6 +73,10 @@ export default function TuitionSessionsPage() {
   const [excludedDates, setExcludedDates] = useState<Set<string>>(new Set())
   const [addedDates, setAddedDates] = useState<Map<string, string>>(new Map()) // date → classId
   const [isSaving, setIsSaving] = useState(false)
+
+  // --- 출석/보강 데이터 (캘린더 배지용) ---
+  const [attendancesByDate, setAttendancesByDate] = useState<Map<string, CalendarAttendanceSummary[]>>(new Map())
+  const [makeupsByDate, setMakeupsByDate] = useState<Map<string, CalendarMakeupSummary>>(new Map())
 
   // --- Refs (안정적 콜백용) ---
   const classesRef = useRef(classes)
@@ -455,6 +466,126 @@ export default function TuitionSessionsPage() {
     })
   }, [])
 
+  // --- 출석/보강 데이터 로드 (캘린더 배지용) ---
+  useEffect(() => {
+    async function fetchAttendanceAndMakeup() {
+      const selectedClassIds = [...selectedStudentsByClass.keys()]
+      if (selectedClassIds.length === 0) {
+        setAttendancesByDate(new Map())
+        setMakeupsByDate(new Map())
+        return
+      }
+
+      // 캘린더 표시 월의 전체 범위 (앞뒤 주 포함을 위해 넉넉히)
+      const startDate = `${calendarYear}-${String(calendarMonth).padStart(2, "0")}-01`
+      const lastDay = new Date(calendarYear, calendarMonth, 0).getDate()
+      const endDate = `${calendarYear}-${String(calendarMonth).padStart(2, "0")}-${lastDay}`
+
+      // 선택된 학생 ID 수집
+      const selectedStudentIds: string[] = []
+      for (const [, ids] of selectedStudentsByClass) {
+        for (const id of ids) selectedStudentIds.push(id)
+      }
+
+      const [attRes, makeupRes] = await Promise.all([
+        supabase
+          .from("attendances")
+          .select("attendance_date, student_id, class_id, status, check_in_at, check_out_at, absence_reason, is_makeup, student_name_snapshot, class_name_snapshot")
+          .in("class_id", selectedClassIds)
+          .gte("attendance_date", startDate)
+          .lte("attendance_date", endDate),
+        supabase
+          .from("makeup_classes")
+          .select("makeup_date, student_id, class_id, status, student_name_snapshot, class_name_snapshot, start_time, end_time, absence_date")
+          .in("student_id", selectedStudentIds)
+          .gte("makeup_date", startDate)
+          .lte("makeup_date", endDate),
+      ])
+
+      // 출석 데이터: 날짜 → 반별 집계
+      const attMap = new Map<string, CalendarAttendanceSummary[]>()
+      for (const row of attRes.data ?? []) {
+        const date = row.attendance_date as string
+        const classId = row.class_id as string
+        const status = row.status as AttendanceDetail["status"]
+
+        const existing = attMap.get(date) ?? []
+        let classSummary = existing.find((s) => s.classId === classId)
+        if (!classSummary) {
+          const cls = classes.find((c) => c.id === classId)
+          const colorIndex = classes.findIndex((c) => c.id === classId)
+          classSummary = {
+            classId,
+            className: cls?.name ?? row.class_name_snapshot ?? "",
+            color: CLASS_COLORS[colorIndex >= 0 ? colorIndex % CLASS_COLORS.length : 0],
+            attended: 0,
+            absent: 0,
+            pending: 0,
+            details: [],
+          }
+          existing.push(classSummary)
+        }
+
+        if (status === "present" || status === "late" || status === "early_leave") {
+          classSummary.attended++
+        } else if (status === "absent") {
+          classSummary.absent++
+        } else {
+          classSummary.pending++
+        }
+
+        const studentInfo = studentsByClass.get(classId)?.find((s) => s.id === row.student_id)
+        classSummary.details.push({
+          studentId: row.student_id as string,
+          studentName: studentInfo?.name ?? (row.student_name_snapshot as string) ?? "알 수 없음",
+          status,
+          checkInAt: row.check_in_at as string | null,
+          checkOutAt: row.check_out_at as string | null,
+          absenceReason: row.absence_reason as string | null,
+          isMakeup: row.is_makeup as boolean,
+        })
+
+        attMap.set(date, existing)
+      }
+
+      // 보강 데이터: 날짜별 집계
+      const mkMap = new Map<string, CalendarMakeupSummary>()
+      for (const row of makeupRes.data ?? []) {
+        const date = row.makeup_date as string | null
+        if (!date) continue
+
+        const status = row.status as MakeupDetail["status"]
+        const existing = mkMap.get(date) ?? { scheduled: 0, completed: 0, cancelled: 0, details: [] }
+
+        if (status === "scheduled") existing.scheduled++
+        else if (status === "completed") existing.completed++
+        else if (status === "cancelled") existing.cancelled++
+
+        const studentInfo = [...studentsByClass.values()]
+          .flat()
+          .find((s) => s.id === row.student_id)
+
+        existing.details.push({
+          studentId: row.student_id as string,
+          studentName: studentInfo?.name ?? (row.student_name_snapshot as string) ?? "알 수 없음",
+          className: row.class_name_snapshot as string | null,
+          status,
+          makeupDate: date,
+          startTime: row.start_time as string | null,
+          endTime: row.end_time as string | null,
+          absenceDate: row.absence_date as string | null,
+        })
+
+        mkMap.set(date, existing)
+      }
+
+      setAttendancesByDate(attMap)
+      setMakeupsByDate(mkMap)
+    }
+
+    fetchAttendanceAndMakeup()
+  }, [calendarYear, calendarMonth, selectedStudentsByClass, classes, studentsByClass])
+
   // --- 반 접기/펼치기 ---
   const handleToggleCollapse = useCallback((classId: string) => {
     setCollapsedClasses((prev) => {
@@ -732,6 +863,8 @@ export default function TuitionSessionsPage() {
             onToggleDate={handleToggleDate}
             onReset={handleReset}
             onSave={handleSave}
+            attendancesByDate={attendancesByDate}
+            makeupsByDate={makeupsByDate}
           />
         </div>
       </div>

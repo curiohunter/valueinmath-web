@@ -22,7 +22,11 @@ import {
 } from "lucide-react"
 import { SessionCalendarGrid } from "./session-calendar-grid"
 import { SessionSummary } from "./session-summary"
-import type { ClassSessionSegment } from "@/types/tuition-session"
+import type {
+  ClassSessionSegment,
+  CalendarAttendanceSummary,
+  CalendarMakeupSummary,
+} from "@/types/tuition-session"
 
 export interface SegmentStartConfig {
   classId: string
@@ -59,6 +63,9 @@ interface SessionPlannerMainProps {
   onToggleDate: (date: string) => void
   onReset: () => void
   onSave: () => void
+  // 출석/보강 배지 데이터
+  attendancesByDate: Map<string, CalendarAttendanceSummary[]>
+  makeupsByDate: Map<string, CalendarMakeupSummary>
 }
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -84,6 +91,8 @@ export function SessionPlannerMain({
   onToggleDate,
   onReset,
   onSave,
+  attendancesByDate,
+  makeupsByDate,
 }: SessionPlannerMainProps) {
   const hasSegments = segments.length > 0
   const canSave = hasSegments && totalRecordCount > 0
@@ -276,6 +285,8 @@ export function SessionPlannerMain({
             excludedDates={excludedDates}
             addedDates={addedDates}
             onToggleDate={onToggleDate}
+            attendancesByDate={attendancesByDate}
+            makeupsByDate={makeupsByDate}
           />
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400">
