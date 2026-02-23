@@ -294,8 +294,10 @@ function CalendarCell({
   const isWeekend = day.dayOfWeek === "일" || day.dayOfWeek === "토"
   const hasSession = day.sessions.length > 0
   const hasAttendanceData = (attendanceSummaries?.length ?? 0) > 0
-  const hasMakeupData =
-    makeupSummary && (makeupSummary.scheduled + makeupSummary.completed + makeupSummary.cancelled) > 0
+  // 보강 배지/팝오버: completed는 출석 섹션에서 (보강) 태그로 표시하므로 제외
+  const pendingMakeupCount =
+    (makeupSummary?.scheduled ?? 0) + (makeupSummary?.cancelled ?? 0)
+  const hasMakeupData = pendingMakeupCount > 0
 
   const isClickable =
     day.isCurrentMonth &&
@@ -482,14 +484,12 @@ function AttendanceBadge({ summary }: { summary: CalendarAttendanceSummary }) {
 // --- MakeupBadge ---
 
 function MakeupBadge({ summary }: { summary: CalendarMakeupSummary }) {
-  const total = summary.scheduled + summary.completed + summary.cancelled
-  if (total === 0) return null
+  // completed는 출석 섹션에서 (보강) 태그로 표시하므로 여기선 미완료 건만
+  const pending = summary.scheduled + summary.cancelled
+  if (pending === 0) return null
 
   return (
     <div className="flex items-center gap-0.5 text-[8px] leading-none font-medium">
-      {summary.completed > 0 && (
-        <span className="text-purple-600">◆{summary.completed}</span>
-      )}
       {summary.scheduled > 0 && (
         <span className="text-blue-500">◇{summary.scheduled}</span>
       )}
@@ -547,15 +547,15 @@ function AttendancePopoverContent({
         </div>
       ))}
 
-      {/* 보강 상세 */}
-      {makeupSummary && makeupSummary.details.length > 0 && (
+      {/* 보강 상세: completed 제외 (출석 섹션에서 (보강) 태그로 이미 표시) */}
+      {makeupSummary && makeupSummary.details.filter((d) => d.status !== "completed").length > 0 && (
         <div className="space-y-1 border-t border-slate-100 pt-1.5">
           <div className="flex items-center gap-1.5">
             <span className="text-purple-600 font-bold">◆</span>
             <span className="font-medium text-slate-600">보강</span>
           </div>
           <div className="space-y-0.5 pl-3.5">
-            {makeupSummary.details.map((detail, i) => (
+            {makeupSummary.details.filter((d) => d.status !== "completed").map((detail, i) => (
               <MakeupDetailRow key={`${detail.studentId}-${i}`} detail={detail} />
             ))}
           </div>
