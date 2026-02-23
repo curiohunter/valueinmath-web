@@ -32,6 +32,7 @@ import {
   revertAbsent,
   bulkCheckIn,
   bulkCheckOut,
+  saveNoteForPending,
 } from "@/services/attendance-service"
 import {
   makeupCheckIn,
@@ -143,7 +144,9 @@ export function AttendanceOverviewTab() {
 
   // Note dialog
   const [noteDialog, setNoteDialog] = useState<{
-    attendanceId: string
+    attendanceId?: string
+    studentId?: string
+    classId?: string
     studentName: string
     currentNote: string
   } | null>(null)
@@ -339,7 +342,11 @@ export function AttendanceOverviewTab() {
   const handleSaveNote = useCallback(async () => {
     if (!noteDialog) return
     try {
-      await updateAttendance(noteDialog.attendanceId, { note: editNote })
+      if (noteDialog.attendanceId) {
+        await updateAttendance(noteDialog.attendanceId, { note: editNote })
+      } else if (noteDialog.studentId && noteDialog.classId) {
+        await saveNoteForPending(noteDialog.studentId, noteDialog.classId, date, editNote)
+      }
       toast.success("메모가 저장되었습니다")
       refresh()
     } catch {
@@ -348,7 +355,7 @@ export function AttendanceOverviewTab() {
       setNoteDialog(null)
       setEditNote("")
     }
-  }, [noteDialog, editNote, refresh])
+  }, [noteDialog, editNote, date, refresh])
 
   // --- Reason change ---
   const handleReasonChange = useCallback(async () => {
@@ -573,6 +580,10 @@ export function AttendanceOverviewTab() {
               onNoteEdit={(attendanceId, studentName, currentNote) => {
                 setNoteDialog({ attendanceId, studentName, currentNote })
                 setEditNote(currentNote)
+              }}
+              onNoteEditPending={(studentId, studentName, classId) => {
+                setNoteDialog({ studentId, classId, studentName, currentNote: "" })
+                setEditNote("")
               }}
               onReasonChange={(attendanceId, studentName, currentReason) => {
                 setReasonChange({ attendanceId, studentName })

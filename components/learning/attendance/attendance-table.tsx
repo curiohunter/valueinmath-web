@@ -62,6 +62,7 @@ import {
   revertAbsent,
   bulkCheckIn,
   bulkCheckOut,
+  saveNoteForPending,
 } from "@/services/attendance-service"
 import {
   makeupCheckIn,
@@ -193,7 +194,8 @@ export function AttendanceTable({
 
   // 메모 다이얼로그
   const [noteDialog, setNoteDialog] = useState<{
-    attendanceId: string
+    attendanceId?: string
+    studentId?: string
     studentName: string
     currentNote: string
   } | null>(null)
@@ -245,9 +247,12 @@ export function AttendanceTable({
       (a) => a.student_id === studentId && !a.is_makeup
     )
 
-  // 일괄 선택용 computed 값
+  // 일괄 선택용 computed 값 (메모만 있는 pending도 미처리로 취급)
   const pendingStudentIds = useMemo(
-    () => students.filter((s) => !getAttendance(s.id)).map((s) => s.id),
+    () => students.filter((s) => {
+      const att = getAttendance(s.id)
+      return !att || (att.status === "pending" && !att.check_in_at)
+    }).map((s) => s.id),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [students, attendances]
   )
@@ -469,7 +474,11 @@ export function AttendanceTable({
   const handleSaveNote = useCallback(async () => {
     if (!noteDialog) return
     try {
-      await updateAttendance(noteDialog.attendanceId, { note: editNote })
+      if (noteDialog.attendanceId) {
+        await updateAttendance(noteDialog.attendanceId, { note: editNote })
+      } else if (noteDialog.studentId) {
+        await saveNoteForPending(noteDialog.studentId, classId, date, editNote)
+      }
       toast.success("메모가 저장되었습니다")
       onRefresh()
     } catch {
@@ -478,7 +487,7 @@ export function AttendanceTable({
       setNoteDialog(null)
       setEditNote("")
     }
-  }, [noteDialog, editNote, onRefresh])
+  }, [noteDialog, editNote, classId, date, onRefresh])
 
   const handleReasonChange = useCallback(async () => {
     if (!reasonChange) return
@@ -1050,6 +1059,8 @@ export function AttendanceTable({
               const hasCheckedIn = !!attendance?.check_in_at
               const hasCheckedOut = !!attendance?.check_out_at
               const isAbsent = attendance?.status === "absent"
+              // 메모만 있는 pending 기록 (등원 전)
+              const isPendingNote = !!attendance && attendance.status === "pending" && !attendance.check_in_at
 
               return (
                 <tr
@@ -1165,8 +1176,8 @@ export function AttendanceTable({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
-                          {/* 미처리 상태 */}
-                          {!attendance && (
+                          {/* 미처리 상태 (출석 기록 없음 또는 메모만 있는 pending) */}
+                          {(!attendance || isPendingNote) && (
                             <>
                               <DropdownMenuItem
                                 onClick={() => openCheckTimeDialog({
@@ -1190,11 +1201,26 @@ export function AttendanceTable({
                                 <UserX className="w-3.5 h-3.5 mr-2" />
                                 결석 처리
                               </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setNoteDialog({
+                                    attendanceId: attendance?.id,
+                                    studentId: student.id,
+                                    studentName: student.name,
+                                    currentNote: attendance?.note ?? "",
+                                  })
+                                  setEditNote(attendance?.note ?? "")
+                                }}
+                              >
+                                <StickyNote className="w-3.5 h-3.5 mr-2" />
+                                메모
+                              </DropdownMenuItem>
                             </>
                           )}
 
                           {/* 출석 중 (등원 완료) */}
-                          {attendance && !isAbsent && (
+                          {attendance && !isPendingNote && !isAbsent && (
                             <>
                               <DropdownMenuItem
                                 onClick={() =>

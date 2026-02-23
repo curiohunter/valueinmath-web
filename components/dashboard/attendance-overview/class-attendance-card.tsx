@@ -48,6 +48,7 @@ interface Props {
   onRevertAbsent: (attendanceId: string, studentName: string) => void
   onTimeEdit: (attendanceId: string, studentName: string, field: "check_in" | "check_out", currentIso: string | null) => void
   onNoteEdit: (attendanceId: string, studentName: string, currentNote: string) => void
+  onNoteEditPending: (studentId: string, studentName: string, classId: string) => void
   onReasonChange: (attendanceId: string, studentName: string, currentReason: AbsenceReason | null) => void
   onRevertPending: (attendanceId: string, studentName: string) => void
   onBulkCheckIn: (classId: string, studentIds: string[]) => void
@@ -98,6 +99,7 @@ export const ClassAttendanceCard = forwardRef<HTMLDivElement, Props>(function Cl
     onRevertAbsent,
     onTimeEdit,
     onNoteEdit,
+    onNoteEditPending,
     onReasonChange,
     onRevertPending,
     onBulkCheckIn,
@@ -128,9 +130,12 @@ export const ClassAttendanceCard = forwardRef<HTMLDivElement, Props>(function Cl
     return { total, present, late, absent, processed }
   }, [cls.students.length, attendances])
 
-  // Bulk selection computed values
+  // Bulk selection computed values (메모만 있는 pending도 미처리로 취급)
   const pendingStudentIds = useMemo(
-    () => cls.students.filter((s) => !getAttendance(s.id)).map((s) => s.id),
+    () => cls.students.filter((s) => {
+      const att = getAttendance(s.id)
+      return !att || (att.status === "pending" && !att.check_in_at)
+    }).map((s) => s.id),
     [cls.students, getAttendance]
   )
 
@@ -284,6 +289,7 @@ export const ClassAttendanceCard = forwardRef<HTMLDivElement, Props>(function Cl
                 const hasCheckedIn = !!att?.check_in_at
                 const hasCheckedOut = !!att?.check_out_at
                 const isAbsent = att?.status === "absent"
+                const isPendingNote = !!att && att.status === "pending" && !att.check_in_at
                 const isHighlighted = highlightedStudentId === student.id
 
                 return (
@@ -374,7 +380,7 @@ export const ClassAttendanceCard = forwardRef<HTMLDivElement, Props>(function Cl
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40">
-                            {!att && (
+                            {(!att || isPendingNote) && (
                               <>
                                 <DropdownMenuItem onClick={() => onCheckIn(student.id, student.name, cls.id)}>
                                   <LogIn className="w-3.5 h-3.5 mr-2" />
@@ -387,10 +393,23 @@ export const ClassAttendanceCard = forwardRef<HTMLDivElement, Props>(function Cl
                                   <UserX className="w-3.5 h-3.5 mr-2" />
                                   결석 처리
                                 </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    if (att) {
+                                      onNoteEdit(att.id, student.name, att.note ?? "")
+                                    } else {
+                                      onNoteEditPending(student.id, student.name, cls.id)
+                                    }
+                                  }}
+                                >
+                                  <StickyNote className="w-3.5 h-3.5 mr-2" />
+                                  메모
+                                </DropdownMenuItem>
                               </>
                             )}
 
-                            {att && !isAbsent && (
+                            {att && !isPendingNote && !isAbsent && (
                               <>
                                 <DropdownMenuItem
                                   onClick={() => onTimeEdit(att.id, student.name, "check_in", att.check_in_at)}

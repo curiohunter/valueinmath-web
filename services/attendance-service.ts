@@ -159,9 +159,9 @@ export async function checkIn(input: AttendanceCheckInInput): Promise<Attendance
     return data as unknown as Attendance
   } catch (error: unknown) {
     const pgError = error as { code?: string }
-    // unique_violation → 이미 등원 기록 있음 → 기존 레코드 반환
+    // unique_violation → 이미 기록 있음
     if (pgError.code === '23505') {
-      const { data } = await supabase
+      const { data: existing } = await supabase
         .from('attendances')
         .select()
         .match({
@@ -171,7 +171,34 @@ export async function checkIn(input: AttendanceCheckInInput): Promise<Attendance
           is_makeup: isMakeup,
         })
         .single()
-      return data as unknown as Attendance
+
+      // pending 기록 (메모만 있는 경우) → check_in 정보로 업데이트
+      if (existing && !existing.check_in_at && existing.status === 'pending') {
+        const { data: updated, error: updateError } = await supabase
+          .from('attendances')
+          .update({
+            check_in_at: checkInTime.toISOString(),
+            status,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single()
+
+        if (!updateError && updated) {
+          if (!isMakeup) {
+            await supabase.rpc('link_attendance_to_session', {
+              p_attendance_id: updated.id,
+              p_student_id: updated.student_id,
+              p_class_id: updated.class_id,
+              p_date: updated.attendance_date,
+              p_status: updated.status,
+            })
+          }
+          return updated as unknown as Attendance
+        }
+      }
+
+      return existing as unknown as Attendance
     }
     throw error
   }
@@ -337,6 +364,78 @@ export async function markAbsent(
     }
     throw error
   }
+}
+
+/**
+ * 미처리 학생 메모 저장
+ *
+ * 출석 기록이 없는 학생에게 메모만 먼저 저장.
+ * 기존 기록이 있으면 메모만 업데이트.
+ */
+export async function saveNoteForPending(
+  studentId: string,
+  classId: string,
+  date: string,
+  note: string
+): Promise<Attendance> {
+  const supabase = createClient()
+
+  // 기존 기록 확인
+  const { data: existing } = await supabase
+    .from('attendances')
+    .select()
+    .match({
+      student_id: studentId,
+      class_id: classId,
+      attendance_date: date,
+      is_makeup: false,
+    })
+    .maybeSingle()
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from('attendances')
+      .update({ note })
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data as unknown as Attendance
+  }
+
+  // 신규 pending 기록 생성 (check_in 없이 메모만)
+  const [studentRes, classRes, employeeRes] = await Promise.all([
+    supabase.from('students').select('name').eq('id', studentId).single(),
+    supabase.from('classes').select('name').eq('id', classId).single(),
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return null
+      const { data } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('auth_id', user.id)
+        .maybeSingle()
+      return data
+    }),
+  ])
+
+  const { data, error } = await supabase
+    .from('attendances')
+    .insert({
+      student_id: studentId,
+      class_id: classId,
+      attendance_date: date,
+      status: 'pending',
+      is_makeup: false,
+      note,
+      student_name_snapshot: studentRes.data?.name ?? null,
+      class_name_snapshot: classRes.data?.name ?? null,
+      created_by: employeeRes?.id ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as unknown as Attendance
 }
 
 /**
@@ -601,8 +700,41 @@ export async function bulkCheckIn(input: BulkCheckInInput): Promise<BulkResult> 
         return { studentId, studentName }
       } catch (error: unknown) {
         const pgError = error as { code?: string }
-        // unique_violation → 이미 등원됨 → 성공으로 처리
         if (pgError.code === '23505') {
+          // pending 기록 (메모만 있는 경우) → check_in 업데이트
+          const { data: existing } = await supabase
+            .from('attendances')
+            .select()
+            .match({
+              student_id: studentId,
+              class_id: input.class_id,
+              attendance_date: input.attendance_date,
+              is_makeup: false,
+            })
+            .maybeSingle()
+
+          if (existing && !existing.check_in_at && existing.status === 'pending') {
+            const { data: updated, error: updateError } = await supabase
+              .from('attendances')
+              .update({
+                check_in_at: checkInTime.toISOString(),
+                status,
+              })
+              .eq('id', existing.id)
+              .select()
+              .single()
+
+            if (!updateError && updated) {
+              await supabase.rpc('link_attendance_to_session', {
+                p_attendance_id: updated.id,
+                p_student_id: updated.student_id,
+                p_class_id: updated.class_id,
+                p_date: updated.attendance_date,
+                p_status: updated.status,
+              })
+            }
+          }
+
           return { studentId, studentName, alreadyCheckedIn: true }
         }
         throw { studentName: studentName ?? studentId, error }
