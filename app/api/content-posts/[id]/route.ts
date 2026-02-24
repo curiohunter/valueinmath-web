@@ -60,6 +60,7 @@ export async function PATCH(
     const allowedFields = [
       "content_type",
       "status",
+      "slug",
       "title",
       "body",
       "summary",

@@ -43,6 +43,11 @@ export function Footer() {
                 </a>
               </li>
               <li>
+                <Link href="/blog" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
+                  블로그
+                </Link>
+              </li>
+              <li>
                 <Link href="/login" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
                   관리시스템 로그인
                 </Link>

@@ -268,6 +268,9 @@ export async function saveTuitionFee(
         total_discount: data.total_discount || 0,
         discount_details: data.discount_details || [],
         final_amount: data.final_amount || null,
+        // 추가비용 관련 필드
+        additional_details: data.additional_details || [],
+        total_additional: data.total_additional || 0,
         // 세션 기반 필드
         sessions_count: data.sessions_count ?? null,
         per_session_fee: data.per_session_fee ?? null,
@@ -341,6 +344,9 @@ export async function saveTuitionFees(
       total_discount: data.total_discount || 0,
       discount_details: data.discount_details || [],
       final_amount: data.final_amount || null,
+      // 추가비용 관련 필드
+      additional_details: data.additional_details || [],
+      total_additional: data.total_additional || 0,
       // 세션 기반 필드
       sessions_count: data.sessions_count ?? null,
       per_session_fee: data.per_session_fee ?? null,

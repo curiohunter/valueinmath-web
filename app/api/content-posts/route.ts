@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     const {
       content_type,
       status = "draft",
+      slug,
       title,
       body: postBody,
       summary,
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
       .insert({
         content_type,
         status,
+        slug: slug || null,
         title,
         body: postBody,
         summary,

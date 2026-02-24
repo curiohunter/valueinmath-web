@@ -43,6 +43,7 @@ const sidebarItems: SidebarItem[] = [
       { title: "입학테스트", href: "/students/entrance-tests" },
       { title: "수강 이력", href: "/students/enrollment-history" },
       { title: "수업료 계산", href: "/students/tuition-sessions", beta: true },
+      { title: "교재 관리", href: "/students/textbooks" },
     ],
   },
   {

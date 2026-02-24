@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Calendar, Save, ExternalLink, Gift, Users, ChevronDown, Check, Tag } from "lucide-react"
+import { Trash2, Calendar, Save, ExternalLink, Gift, Users, ChevronDown, Check, Tag, BookOpen } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
@@ -49,6 +49,10 @@ interface TuitionRowProps {
   onApplyPolicy?: (policy: Campaign, discountAmount: number) => void
   // 할인 취소 핸들러
   onCancelDiscount?: (index: number, discountId: string) => void
+  // 교재 배정
+  pendingTextbooks?: any[]
+  onApplyTextbook?: (assignmentId: string) => void
+  onCancelTextbook?: (assignmentId: string) => void
 }
 
 export function TuitionRow({
@@ -70,7 +74,10 @@ export function TuitionRow({
   onApplyEvent,
   availablePolicies = [],
   onApplyPolicy,
-  onCancelDiscount
+  onCancelDiscount,
+  pendingTextbooks = [],
+  onApplyTextbook,
+  onCancelTextbook,
 }: TuitionRowProps) {
   const router = useRouter()
 
@@ -346,11 +353,15 @@ export function TuitionRow({
       <td className="min-w-[100px] w-[10%] px-2 py-3">
         {(() => {
           const hasAvailableDiscounts = pendingEvents.length > 0 || availablePolicies.length > 0
+          const hasTextbooks = pendingTextbooks.length > 0
           const appliedCount = row.appliedDiscounts?.length || 0
           const totalDiscount = row.appliedDiscounts?.reduce((sum, d) => sum + d.amount, 0) || 0
+          const appliedTextbookCount = row.appliedTextbooks?.length || 0
+          const totalTextbookCharge = row.appliedTextbooks?.reduce((sum, t) => sum + t.amount, 0) || 0
+          const hasAnyApplied = appliedCount > 0 || appliedTextbookCount > 0
 
-          // 할인 가능한 것도 없고 적용된 것도 없으면 - 표시
-          if (!hasAvailableDiscounts && appliedCount === 0) {
+          // 할인/교재 모두 없으면 - 표시
+          if (!hasAvailableDiscounts && !hasTextbooks && !hasAnyApplied) {
             return <span className="text-slate-400 text-sm">-</span>
           }
 
@@ -363,20 +374,35 @@ export function TuitionRow({
                   disabled={isReadOnly}
                   className={cn(
                     "h-7 px-2 text-xs font-medium",
-                    appliedCount > 0
+                    hasAnyApplied
                       ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
                       : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200"
                   )}
                 >
-                  {appliedCount > 0 ? (
+                  {appliedCount > 0 && appliedTextbookCount > 0 ? (
+                    <>
+                      <Tag className="w-3 h-3 mr-1" />
+                      -{totalDiscount.toLocaleString()}/+{totalTextbookCharge.toLocaleString()}
+                    </>
+                  ) : appliedCount > 0 ? (
                     <>
                       <Tag className="w-3 h-3 mr-1" />
                       -{totalDiscount.toLocaleString()}원
                     </>
+                  ) : appliedTextbookCount > 0 ? (
+                    <>
+                      <BookOpen className="w-3 h-3 mr-1" />
+                      +{totalTextbookCharge.toLocaleString()}원
+                    </>
+                  ) : hasTextbooks && !hasAvailableDiscounts ? (
+                    <>
+                      <BookOpen className="w-3 h-3 mr-1" />
+                      교재선택
+                    </>
                   ) : (
                     <>
                       <Gift className="w-3 h-3 mr-1" />
-                      할인선택
+                      할인/교재
                     </>
                   )}
                   <ChevronDown className="w-3 h-3 ml-1" />
@@ -442,6 +468,51 @@ export function TuitionRow({
                             </span>
                           </div>
                           {isApplied && <Check className="w-4 h-4 text-green-600" />}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </>
+                )}
+                {/* 교재비 (대기 + 적용됨) */}
+                {(hasTextbooks || appliedTextbookCount > 0) && (
+                  <>
+                    {(hasAvailableDiscounts || appliedCount > 0) && <DropdownMenuSeparator />}
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      📚 교재비
+                    </DropdownMenuLabel>
+                    {/* 적용된 교재비 (취소 가능) */}
+                    {row.appliedTextbooks?.map((tb) => (
+                      <DropdownMenuItem
+                        key={tb.assignmentId}
+                        onClick={() => onCancelTextbook?.(tb.assignmentId)}
+                        className="flex items-center justify-between cursor-pointer"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm">{tb.textbookName}</span>
+                          <span className="text-xs text-muted-foreground">
+                            x{tb.quantity} · +{tb.amount.toLocaleString()}원
+                          </span>
+                        </div>
+                        <Check className="w-4 h-4 text-green-600" />
+                      </DropdownMenuItem>
+                    ))}
+                    {/* 대기 중인 교재 배정 (적용 가능) */}
+                    {pendingTextbooks.map((assignment) => {
+                      const textbook = assignment.textbook as any
+                      const textbookName = textbook?.name || assignment.textbook_name_snapshot || "교재"
+                      return (
+                        <DropdownMenuItem
+                          key={assignment.id}
+                          onClick={() => onApplyTextbook?.(assignment.id)}
+                          className="flex items-center justify-between cursor-pointer"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-medium text-sm">{textbookName}</span>
+                            <span className="text-xs text-muted-foreground">
+                              x{assignment.quantity} · +{assignment.total_price.toLocaleString()}원
+                            </span>
+                          </div>
+                          <BookOpen className="w-4 h-4 text-indigo-500" />
                         </DropdownMenuItem>
                       )
                     })}

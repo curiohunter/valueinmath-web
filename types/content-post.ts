@@ -44,6 +44,9 @@ export interface ContentPost {
   content_type: ContentType
   status: ContentStatus
 
+  // URL slug (블로그용)
+  slug: string | null
+
   // 콘텐츠 본문
   title: string | null
   body: string | null
@@ -92,6 +95,7 @@ export interface ContentPost {
 export interface ContentPostFormData {
   content_type: ContentType
   status?: ContentStatus
+  slug?: string
   title?: string
   body?: string
   summary?: string

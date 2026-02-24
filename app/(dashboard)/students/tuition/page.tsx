@@ -19,6 +19,7 @@ import { Download, ChevronLeft, ChevronRight, Gift, ArrowRight, AlertCircle, Use
 import type { TuitionRow, TuitionFeeInput, DiscountDetailInput } from "@/types/tuition"
 import { createClient } from "@/lib/supabase/client"
 import { getPendingRewards, markRewardApplied, getApplicablePoliciesBatch, type CampaignParticipant, type Campaign } from "@/services/campaign-service"
+import { getPendingAssignments, type TextbookAssignment } from "@/services/textbook-service"
 
 // 해당 월의 첫날과 마지막 날 계산
 function getMonthDateRange(year: number, month: number) {
@@ -71,6 +72,9 @@ export default function TuitionPage() {
   // 적용 대기 중인 이벤트 ID (저장 시에만 'applied'로 변경)
   const [pendingApplyEventIds, setPendingApplyEventIds] = useState<string[]>([])
 
+  // 학생별 대기 중인 교재 배정
+  const [pendingTextbooksByStudent, setPendingTextbooksByStudent] = useState<Record<string, any[]>>({})
+
   // 단일월 생성 모드 - 필터링 상태는 필요없음
 
   // 클래스 데이터는 공통으로 사용
@@ -116,6 +120,29 @@ export default function TuitionPage() {
       }
     }
     fetchPendingRewardsData()
+  }, [])
+
+  // 대기 중인 교재 배정 조회
+  useEffect(() => {
+    const fetchPendingTextbooks = async () => {
+      const supabase = createClient()
+      try {
+        const result = await getPendingAssignments(supabase)
+        if (result.success && result.data) {
+          const byStudent: Record<string, any[]> = {}
+          for (const assignment of result.data) {
+            if (!byStudent[assignment.student_id]) {
+              byStudent[assignment.student_id] = []
+            }
+            byStudent[assignment.student_id].push(assignment)
+          }
+          setPendingTextbooksByStudent(byStudent)
+        }
+      } catch (error) {
+        console.error('Failed to fetch pending textbooks:', error)
+      }
+    }
+    fetchPendingTextbooks()
   }, [])
 
   // 형제 가능성 있는 학생 조회 (같은 parent_phone + 재원 상태)
@@ -735,6 +762,49 @@ export default function TuitionPage() {
     sonnerToast.info(`할인이 취소되었습니다.`)
   }, [])
 
+  // 교재비 적용 핸들러 (수강료 저장 후 실제 적용)
+  const handleApplyTextbook = useCallback((assignmentId: string, index: number) => {
+    // 해당 배정 정보 찾기
+    let assignment: any = null
+    for (const studentId in pendingTextbooksByStudent) {
+      const found = pendingTextbooksByStudent[studentId].find((a: any) => a.id === assignmentId)
+      if (found) { assignment = found; break }
+    }
+    if (!assignment) return
+
+    const textbookName = (assignment.textbook as any)?.name || assignment.textbook_name_snapshot || "교재"
+
+    // rows의 amount에 교재비 추가
+    setDisplayRows(prev => {
+      const updated = [...prev]
+      const row = updated[index]
+      if (row) {
+        updated[index] = {
+          ...row,
+          amount: row.amount + assignment.total_price,
+          note: row.note
+            ? `${row.note}, ${textbookName} +${assignment.total_price.toLocaleString()}원`
+            : `${textbookName} +${assignment.total_price.toLocaleString()}원`,
+        }
+      }
+      return updated
+    })
+
+    // UI에서 pending 목록에서 제거
+    setPendingTextbooksByStudent(prev => {
+      const updated = { ...prev }
+      for (const studentId in updated) {
+        updated[studentId] = updated[studentId].filter((a: any) => a.id !== assignmentId)
+        if (updated[studentId].length === 0) {
+          delete updated[studentId]
+        }
+      }
+      return updated
+    })
+
+    sonnerToast.success(`${textbookName} +${assignment.total_price.toLocaleString()}원이 추가되었습니다. 저장하면 최종 반영됩니다.`)
+  }, [pendingTextbooksByStudent])
+
   return (
     <div className="space-y-6">
       <StudentClassTabs />
@@ -782,6 +852,8 @@ export default function TuitionPage() {
             policiesByStudent={policiesByStudent}
             onApplyPolicy={handleApplyPolicy}
             onCancelDiscount={handleCancelDiscount}
+            pendingTextbooksByStudent={pendingTextbooksByStudent}
+            onApplyTextbook={handleApplyTextbook}
           />
         </div>
       </div>

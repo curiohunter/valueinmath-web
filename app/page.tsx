@@ -3,6 +3,7 @@ import { HeroSection } from '@/components/landing/hero-section'
 import { FeaturesSection } from '@/components/landing/features-section'
 import { ReviewsSection } from '@/components/landing/reviews-section'
 import { TeachersSection } from '@/components/landing/teachers-section'
+import { BlogSection } from '@/components/landing/blog-section'
 import { CTASection } from '@/components/landing/cta-section'
 import { Header } from '@/components/landing/header'
 import { Footer } from '@/components/landing/footer'
@@ -91,6 +92,7 @@ export default function LandingPage() {
         <FeaturesSection />
         <ReviewsSection />
         <TeachersSection />
+        <BlogSection />
         <CTASection />
       </main>
       <Footer />

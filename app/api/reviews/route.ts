@@ -96,19 +96,19 @@ export async function POST(request: NextRequest) {
       .from("reviews")
       .insert({
         source,
-        reviewer_name,
-        reviewer_type,
-        rating,
-        title,
+        reviewer_name: reviewer_name || null,
+        reviewer_type: reviewer_type || null,
+        rating: rating || null,
+        title: title || null,
         content,
         student_id: student_id || null,
-        source_url,
-        original_date,
+        source_url: source_url || null,
+        original_date: original_date || null,
         is_featured,
         is_verified,
         can_use_marketing,
         highlights,
-        collected_by,
+        collected_by: collected_by || null,
       })
       .select(`
         *,

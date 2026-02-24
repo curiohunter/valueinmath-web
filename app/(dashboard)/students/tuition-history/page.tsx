@@ -13,7 +13,7 @@ import { TuitionTable } from "@/components/tuition/tuition-table";
 import { Save, Trash2, Download, Filter, Calendar, Send, RefreshCw, CreditCard, Receipt, CheckCircle2, AlertCircle, Clock, UserX, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput, AppliedDiscount } from "@/types/tuition";
+import type { TuitionRow, PaymentStatus, ClassType, TuitionFeeInput, AppliedDiscount, AppliedTextbook } from "@/types/tuition";
 import {
   removeDiscountFromTuition,
   applyPolicyToTuition,
@@ -24,6 +24,7 @@ import {
   type Campaign,
   type CampaignParticipant
 } from "@/services/campaign-service";
+import { getPendingAssignments, applyTextbookToTuition, removeTextbookFromTuition } from "@/services/textbook-service";
 import { exportTuitionToExcelWithPhone } from "@/lib/excel-export";
 import { SendInvoiceModal, PointBalance } from "@/components/payssam";
 
@@ -122,6 +123,8 @@ export default function TuitionHistoryPage() {
   // 할인 정책 관련 상태
   const [policiesByStudent, setPoliciesByStudent] = useState<Record<string, Campaign[]>>({});
   const [pendingRewardsByStudent, setPendingRewardsByStudent] = useState<Record<string, CampaignParticipant[]>>({});
+  // 교재 배정 관련 상태
+  const [pendingTextbooksByStudent, setPendingTextbooksByStudent] = useState<Record<string, any[]>>({});
 
   // 학원비 미생성 학생 관련 상태
   const [missingTuitionStudents, setMissingTuitionStudents] = useState<{
@@ -346,8 +349,21 @@ export default function TuitionHistoryPage() {
         });
         setPendingRewardsByStudent(rewardsByStudent);
       }
+
+      // 교재 배정 조회
+      const textbooksResult = await getPendingAssignments(supabase);
+      if (textbooksResult.success && textbooksResult.data) {
+        const byStudent: Record<string, any[]> = {};
+        for (const assignment of textbooksResult.data) {
+          if (!byStudent[assignment.student_id]) {
+            byStudent[assignment.student_id] = [];
+          }
+          byStudent[assignment.student_id].push(assignment);
+        }
+        setPendingTextbooksByStudent(byStudent);
+      }
     } catch (error) {
-      console.error("할인 정책 데이터 조회 에러:", error);
+      console.error("할인/교재 데이터 조회 에러:", error);
     }
   }
 
@@ -375,6 +391,8 @@ export default function TuitionHistoryPage() {
           base_amount,
           total_discount,
           discount_details,
+          additional_details,
+          total_additional,
           classes!left(name),
           students!left(name, status),
           payssam_bills(bill_id, request_status, short_url, sent_at, paid_at)
@@ -456,6 +474,17 @@ export default function TuitionHistoryPage() {
           rawValue: d.amount,
         }));
 
+        // additional_details JSONB를 appliedTextbooks로 변환
+        const additionalDetails = (item.additional_details || []) as any[];
+        const appliedTextbooks: AppliedTextbook[] = additionalDetails
+          .filter((d: any) => d.type === 'textbook')
+          .map((d: any) => ({
+            assignmentId: d.assignment_id,
+            textbookName: d.textbook_name || '교재',
+            amount: d.amount || 0,
+            quantity: d.quantity || 1,
+          }));
+
         // 활성 청구서 찾기 (payssam_bills JOIN 결과에서)
         const bills = (item.payssam_bills || []) as any[];
         const activeBill = bills.find(
@@ -487,6 +516,8 @@ export default function TuitionHistoryPage() {
           // 할인 필드
           appliedDiscounts: appliedDiscounts.length > 0 ? appliedDiscounts : undefined,
           originalAmount: item.base_amount || undefined,
+          // 교재비 필드
+          appliedTextbooks: appliedTextbooks.length > 0 ? appliedTextbooks : undefined,
         };
       });
 
@@ -775,6 +806,56 @@ export default function TuitionHistoryPage() {
     } catch (error: any) {
       console.error("이벤트 보상 적용 오류:", error);
       toast.error(error.message || "이벤트 보상 적용 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 교재비 적용 핸들러
+  const handleApplyTextbook = async (assignmentId: string, index: number) => {
+    if (index >= paginatedData.length) return;
+    const row = paginatedData[index];
+
+    try {
+      const result = await applyTextbookToTuition(supabase, assignmentId, row.id);
+      if (result.success) {
+        toast.success("교재비가 적용되었습니다.");
+        fetchTuitionHistoryWithFilters(false);
+        // pending 목록에서 제거
+        setPendingTextbooksByStudent(prev => {
+          const updated = { ...prev };
+          for (const studentId in updated) {
+            updated[studentId] = updated[studentId].filter((a: any) => a.id !== assignmentId);
+            if (updated[studentId].length === 0) delete updated[studentId];
+          }
+          return updated;
+        });
+      } else {
+        toast.error(result.error || "교재비 적용에 실패했습니다.");
+      }
+    } catch (error: any) {
+      console.error("교재비 적용 오류:", error);
+      toast.error(error.message || "교재비 적용 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 교재비 취소 핸들러
+  const handleCancelTextbook = async (assignmentId: string, index: number) => {
+    if (index >= paginatedData.length) return;
+    const row = paginatedData[index];
+
+    const confirm = window.confirm("이 교재비를 제거하시겠습니까?");
+    if (!confirm) return;
+
+    try {
+      const result = await removeTextbookFromTuition(supabase, row.id, assignmentId);
+      if (result.success) {
+        toast.success("교재비가 제거되었습니다.");
+        fetchTuitionHistoryWithFilters(false);
+      } else {
+        toast.error(result.error || "교재비 제거에 실패했습니다.");
+      }
+    } catch (error: any) {
+      console.error("교재비 제거 오류:", error);
+      toast.error(error.message || "교재비 제거 중 오류가 발생했습니다.");
     }
   };
 
@@ -1490,6 +1571,9 @@ export default function TuitionHistoryPage() {
             pendingRewardsByStudent={pendingRewardsByStudent}
             onApplyPolicy={handleApplyPolicy}
             onApplyEvent={handleApplyEvent}
+            pendingTextbooksByStudent={pendingTextbooksByStudent}
+            onApplyTextbook={handleApplyTextbook}
+            onCancelTextbook={handleCancelTextbook}
           />
           
         </div>

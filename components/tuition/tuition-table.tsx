@@ -75,6 +75,10 @@ interface TuitionTableProps {
   onApplyPolicy?: (arg1: any, arg2: any) => void
   // 할인 취소 콜백
   onCancelDiscount?: (index: number, discountId: string) => void
+  // 교재 배정 (학생별 pending 배정 목록)
+  pendingTextbooksByStudent?: Record<string, any[]>  // studentId -> assignments[]
+  onApplyTextbook?: (assignmentId: string, index: number) => void
+  onCancelTextbook?: (assignmentId: string, index: number) => void
 }
 
 export function TuitionTable({
@@ -125,7 +129,10 @@ export function TuitionTable({
   onApplyEvent,
   policiesByStudent = {},
   onApplyPolicy,
-  onCancelDiscount
+  onCancelDiscount,
+  pendingTextbooksByStudent = {},
+  onApplyTextbook,
+  onCancelTextbook,
 }: TuitionTableProps) {
   const allSelected = rows.length > 0 && selectedRows.length === rows.length
   const someSelected = selectedRows.length > 0 && selectedRows.length < rows.length
@@ -845,7 +852,7 @@ export function TuitionTable({
                     학생명
                   </th>
                   <th className="px-2 py-4 text-left font-semibold text-slate-700">
-                    할인
+                    할인/교재
                   </th>
                   {/* 연월+기간 접힘 상태일 때 */}
                   {isDateColumnsCollapsed ? (
@@ -992,6 +999,7 @@ export function TuitionTable({
                   const hasPendingRewards = studentRewards.length > 0
                   const hasSiblingCandidate = !!siblingCandidates[row.studentId]
                   const studentPolicies = policiesByStudent[row.studentId] || []
+                  const studentTextbooks = pendingTextbooksByStudent[row.studentId] || []
 
                   return (
                     <TuitionTableRow
@@ -1015,6 +1023,9 @@ export function TuitionTable({
                       availablePolicies={studentPolicies}
                       onApplyPolicy={onApplyPolicy}
                       onCancelDiscount={onCancelDiscount}
+                      pendingTextbooks={studentTextbooks}
+                      onApplyTextbook={onApplyTextbook ? (assignmentId) => onApplyTextbook(assignmentId, index) : undefined}
+                      onCancelTextbook={onCancelTextbook ? (assignmentId) => onCancelTextbook(assignmentId, index) : undefined}
                     />
                   )
                 })}

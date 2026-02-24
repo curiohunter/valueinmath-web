@@ -75,7 +75,10 @@ export async function PATCH(
 
     for (const field of allowedFields) {
       if (field in body) {
-        updateData[field] = body[field as keyof ReviewFormData]
+        let value = body[field as keyof ReviewFormData]
+        // 빈 문자열을 null로 변환 (DB date/text 타입 호환)
+        if (value === '') value = undefined
+        updateData[field] = value ?? null
       }
     }
 

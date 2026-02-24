@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react"
 import { toast } from "sonner"
-import { Plus, Search, Filter, RefreshCw } from "lucide-react"
+import { Plus, Search, Filter, RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +20,7 @@ import MarketingTabs from "@/components/marketing/MarketingTabs"
 import { ContentList } from "@/components/marketing/content-studio/ContentList"
 import { ContentEditor } from "@/components/marketing/content-studio/ContentEditor"
 import { useContentPosts } from "@/components/marketing/content-studio/hooks/use-content-posts"
+import { AIBlogGenerator } from "@/components/marketing/content-studio/AIBlogGenerator"
 import { CONTENT_TYPE_OPTIONS } from "@/components/marketing/content-studio/constants"
 
 import type { ContentPost, ContentType, ContentStatus, ContentPostFormData } from "@/types/content-post"
@@ -43,6 +44,9 @@ export default function ContentStudioPage() {
   const [search, setSearch] = useState("")
   const [filterType, setFilterType] = useState<ContentType | "all">("all")
   const [filterStatus, setFilterStatus] = useState<ContentStatus | "all">("all")
+
+  // AI 생성 모달 상태
+  const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false)
 
   // 에디터 모달 상태
   const [isEditorOpen, setIsEditorOpen] = useState(false)
@@ -144,6 +148,13 @@ export default function ContentStudioPage() {
           <Button variant="outline" size="icon" onClick={() => refresh()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setIsAIGeneratorOpen(true)}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            AI 블로그 생성
+          </Button>
           <Button onClick={handleCreateNew}>
             <Plus className="mr-2 h-4 w-4" />
             새 콘텐츠
@@ -243,6 +254,13 @@ export default function ContentStudioPage() {
         editingPost={editingPost}
         onSave={handleSave}
         isSubmitting={isSubmitting}
+      />
+
+      {/* AI 블로그 생성 모달 */}
+      <AIBlogGenerator
+        open={isAIGeneratorOpen}
+        onOpenChange={setIsAIGeneratorOpen}
+        onSaved={() => refresh()}
       />
     </div>
   )

@@ -74,3 +74,6 @@ HANDOFF.md
 
 # GitHub 설정
 .github/
+
+# Playwright CLI 작업 디렉토리
+.playwright-cli/

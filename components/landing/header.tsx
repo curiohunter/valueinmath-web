@@ -1,10 +1,13 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { InquiryFormModal } from './inquiry-form-modal'
 
 export function Header() {
+  const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false)
+
   return (
     <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -23,23 +26,29 @@ export function Header() {
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link 
-              href="#features" 
+            <Link
+              href="/#features"
               className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               특징
             </Link>
-            <Link 
-              href="#stats" 
+            <Link
+              href="/#teachers"
               className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
-              실적
+              강사진
             </Link>
             <Link
-              href="#contact"
+              href="/#contact"
               className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
             >
               문의
+            </Link>
+            <Link
+              href="/blog"
+              className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+            >
+              블로그
             </Link>
             <div className="flex items-center space-x-3">
               <Button 
@@ -50,9 +59,10 @@ export function Header() {
               >
                 로그인
               </Button>
-              <Button 
+              <Button
                 size="sm"
                 className="bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200"
+                onClick={() => setIsInquiryModalOpen(true)}
               >
                 상담 신청
               </Button>
@@ -61,8 +71,8 @@ export function Header() {
 
           {/* Mobile menu button */}
           <div className="md:hidden">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={() => window.location.href = '/login'}
             >
@@ -71,6 +81,11 @@ export function Header() {
           </div>
         </div>
       </div>
+
+      <InquiryFormModal
+        open={isInquiryModalOpen}
+        onOpenChange={setIsInquiryModalOpen}
+      />
     </header>
   )
 }

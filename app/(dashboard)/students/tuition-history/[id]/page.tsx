@@ -33,6 +33,10 @@ import {
 } from "@/services/campaign-service"
 import { TuitionDiscountSection } from "@/components/tuition/tuition-discount-section"
 import { TuitionEventSection } from "@/components/tuition/tuition-event-section"
+import { TuitionTextbookSection } from "@/components/tuition/tuition-textbook-section"
+import { TuitionChargeSection } from "@/components/tuition/tuition-charge-section"
+import { removeTextbookFromTuition } from "@/services/textbook-service"
+import type { AdditionalDetail } from "@/types/textbook"
 import { PaymentStatusBadge, PaymentMethodBadge } from "@/components/payssam"
 import { SplitInvoiceModal } from "@/components/payssam/split-invoice-modal"
 import type { PaysSamRequestStatus, PaymentStatus, ClassType } from "@/types/tuition"
@@ -55,6 +59,7 @@ interface ActiveBill {
 // 학원비 상세 데이터 인터페이스
 interface TuitionDetail {
   id: string
+  student_id: string | null
   year: number
   month: number
   amount: number
@@ -152,6 +157,10 @@ export default function TuitionDetailPage() {
   const [discountDetails, setDiscountDetails] = useState<DiscountDetail[]>([])
   const [discountLoading, setDiscountLoading] = useState(false)
 
+  // 추가비용 관련 상태
+  const [additionalDetails, setAdditionalDetails] = useState<AdditionalDetail[]>([])
+  const [chargeLoading, setChargeLoading] = useState(false)
+
   const tuitionId = params.id as string
 
   // 데이터 조회
@@ -162,7 +171,7 @@ export default function TuitionDetailPage() {
       const { data: tuitionData, error: tuitionError } = await supabase
         .from("tuition_fees")
         .select(`
-          id, year, month, amount, payment_status, class_type, is_sibling,
+          id, student_id, year, month, amount, payment_status, class_type, is_sibling,
           note, period_start_date, period_end_date, created_at, updated_at,
           student_name_snapshot, class_name_snapshot,
           parent_tuition_fee_id, is_split_child,
@@ -216,6 +225,49 @@ export default function TuitionDetailPage() {
     }
   }
 
+  // 추가비용 데이터 조회
+  const fetchCharges = async () => {
+    if (!tuitionId) return
+
+    setChargeLoading(true)
+    try {
+      const { data: tuitionData } = await supabase
+        .from("tuition_fees")
+        .select("additional_details")
+        .eq("id", tuitionId)
+        .single()
+
+      setAdditionalDetails((tuitionData?.additional_details as AdditionalDetail[]) || [])
+    } catch (error) {
+      console.error("추가비용 데이터 조회 오류:", error)
+    } finally {
+      setChargeLoading(false)
+    }
+  }
+
+  // 추가비용 제거 핸들러
+  const handleRemoveCharge = async (assignmentId: string) => {
+    const confirm = window.confirm("이 교재비를 제거하시겠습니까?")
+    if (!confirm) return
+
+    setChargeLoading(true)
+    try {
+      const result = await removeTextbookFromTuition(supabase, tuitionId, assignmentId)
+      if (result.success) {
+        toast.success("교재비가 제거되었습니다")
+        await fetchCharges()
+        await fetchData()
+      } else {
+        toast.error(result.error || "교재비 제거에 실패했습니다")
+      }
+    } catch (error: any) {
+      console.error("교재비 제거 오류:", error)
+      toast.error(error.message || "교재비 제거 중 오류가 발생했습니다")
+    } finally {
+      setChargeLoading(false)
+    }
+  }
+
   // 할인 제거 핸들러
   const handleRemoveDiscount = async (participantId: string) => {
     const confirm = window.confirm("이 할인을 제거하시겠습니까?")
@@ -245,10 +297,11 @@ export default function TuitionDetailPage() {
     }
   }, [tuitionId, user])
 
-  // 데이터 로드 후 할인 정보 조회
+  // 데이터 로드 후 할인/추가비용 정보 조회
   useEffect(() => {
     if (tuitionId && data) {
       fetchDiscounts()
+      fetchCharges()
     }
   }, [tuitionId, data])
 
@@ -514,6 +567,7 @@ export default function TuitionDetailPage() {
   const studentName = data.students?.name || data.student_name_snapshot || "(알 수 없음)"
   const className = data.classes?.name || data.class_name_snapshot || "(반 정보 없음)"
   const phone = data.students?.payment_phone || data.students?.parent_phone || "-"
+  const resolvedStudentId = data.students?.id || data.student_id
 
   // 활성 청구서 찾기 (payssam_bills JOIN 결과에서)
   const bills = (data.payssam_bills || []) as ActiveBill[]
@@ -657,13 +711,33 @@ export default function TuitionDetailPage() {
           />
 
           {/* 이벤트 참여 관리 - 새로운 컴포넌트 */}
-          {data.students?.id && (
+          {resolvedStudentId && (
             <TuitionEventSection
-              studentId={data.students.id}
+              studentId={resolvedStudentId}
               studentName={studentName}
               tuitionFeeId={tuitionId}
               onDiscountApplied={async () => {
                 await fetchDiscounts()
+                await fetchData()
+              }}
+            />
+          )}
+
+          {/* 추가비용 내역 */}
+          <TuitionChargeSection
+            additionalDetails={additionalDetails}
+            loading={chargeLoading}
+            onRemoveCharge={handleRemoveCharge}
+          />
+
+          {/* 교재 배정 내역 */}
+          {resolvedStudentId && (
+            <TuitionTextbookSection
+              studentId={resolvedStudentId}
+              studentName={studentName}
+              tuitionFeeId={tuitionId}
+              onChargeApplied={async () => {
+                await fetchCharges()
                 await fetchData()
               }}
             />

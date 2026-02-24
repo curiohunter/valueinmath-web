@@ -31,6 +31,14 @@ export interface AppliedDiscount {
   rawValue: number  // 원본 값 (퍼센트일 경우 퍼센트 값)
 }
 
+// 적용된 교재비 추적 인터페이스
+export interface AppliedTextbook {
+  assignmentId: string  // textbook_assignments.id
+  textbookName: string
+  amount: number
+  quantity: number
+}
+
 // PaysSam 청구 상태
 // 참고: 'created'는 레거시 상태. 1단계 워크플로우 적용으로 pending → sent로 직접 전환됨.
 export const PAYSSAM_REQUEST_STATUS = ['pending', 'created', 'sent', 'paid', 'failed', 'cancelled', 'destroyed'] as const
@@ -103,6 +111,8 @@ export interface TuitionRow {
   // 할인 추적 필드 (생성 모드에서만 사용)
   appliedDiscounts?: AppliedDiscount[]
   originalAmount?: number  // 할인 적용 전 원본 금액
+  // 교재비 추적 필드
+  appliedTextbooks?: AppliedTextbook[]
 }
 
 // 할인 상세 정보 (DB 저장용)
@@ -113,6 +123,16 @@ export interface DiscountDetailInput {
   campaign_id?: string
   participant_id?: string
   description?: string
+}
+
+// 추가비용 상세 정보 (DB 저장용)
+export interface AdditionalDetailInput {
+  type: 'textbook'
+  amount: number
+  assignment_id: string
+  textbook_name: string
+  quantity: number
+  description: string
 }
 
 // 학원비 생성/수정을 위한 입력 인터페이스
@@ -137,6 +157,9 @@ export interface TuitionFeeInput {
   total_discount?: number
   discount_details?: DiscountDetailInput[]
   final_amount?: number
+  // 추가비용 관련 필드
+  additional_details?: AdditionalDetailInput[]
+  total_additional?: number
 }
 
 // 반별 학생 정보
