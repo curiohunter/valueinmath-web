@@ -8,6 +8,7 @@ import type {
   MathFlatWorksheetProblem,
   MathFlatWorkItem,
   MathFlatStudent,
+  MathFlatKmmExamGroup,
 } from './mathflat-types.ts';
 
 const MATHFLAT_BASE_URL = 'https://api.mathflat.com';
@@ -377,6 +378,14 @@ export class MathFlatApiClient {
 
     results.students = Array.from(studentMap.values());
     return results;
+  }
+
+  async getKmmResults(yearMonth: string): Promise<MathFlatKmmExamGroup[]> {
+    const url = `${MATHFLAT_BASE_URL}/exam/award?yearMonth=${yearMonth}&type=KMM`;
+    const response = await this.authenticatedFetch<MathFlatKmmExamGroup[]>(url);
+    const groups = Array.isArray(response) ? response : [];
+    console.log(`[MathFlatAPI] KMM ${yearMonth}: ${groups.length}개 학년 그룹 조회됨`);
+    return groups;
   }
 
   async getAllActiveStudents(): Promise<MathFlatStudent[]> {

@@ -194,17 +194,27 @@ export function normalizePhone(phone: string): string {
 }
 
 /**
- * 만료일 계산 (해당 월 말일)
- * @param year - 연도
- * @param month - 월
+ * 만료일 계산 — 수강료 월과 현재 월 중 더 늦은 월의 말일
+ * 지난 달 수강료를 이번 달에 청구해도 만료되지 않도록 보장
+ * @param year - 수강료 연도
+ * @param month - 수강료 월
  * @returns YYYY-MM-DD 형식 (API 규격서 v1.2.4 기준)
  */
 export function getExpireDate(year?: number, month?: number): string {
   const now = new Date()
-  const targetYear = year || now.getFullYear()
-  const targetMonth = month || now.getMonth() + 1
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
 
-  // 해당 월의 마지막 날
+  const feeYear = year || currentYear
+  const feeMonth = month || currentMonth
+
+  // 수강료 월과 현재 월 중 더 늦은 쪽 사용
+  const useCurrentMonth = (currentYear > feeYear) ||
+    (currentYear === feeYear && currentMonth > feeMonth)
+
+  const targetYear = useCurrentMonth ? currentYear : feeYear
+  const targetMonth = useCurrentMonth ? currentMonth : feeMonth
+
   const lastDay = new Date(targetYear, targetMonth, 0).getDate()
 
   const yyyy = targetYear.toString()

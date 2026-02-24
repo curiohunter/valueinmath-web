@@ -174,6 +174,57 @@ export interface TargetClassInfo {
   dayOfWeek: string;
 }
 
+// KMM 경시대회 API 응답 타입
+export interface MathFlatKmmExamGroup {
+  id: number;
+  type: string;
+  schoolType: string;
+  grade: string;
+  semester: string | null;
+  subject: string | null;
+  studentExams: MathFlatKmmStudentExam[];
+}
+
+export interface MathFlatKmmStudentExam {
+  id: number;
+  studentId: string;
+  studentName: string;
+  status: string;
+  score: number | null;
+  correctCount: number;
+  wrongCount: number;
+  tier: string | null;
+}
+
+// KMM DB 저장용 타입
+export interface DBMathflatKmmResult {
+  id?: string;
+  year_month: string;
+  exam_id: number;
+  school_type: string;
+  grade: string;
+  student_exam_id: number;
+  mathflat_student_id: string;
+  student_name: string;
+  status: string | null;
+  score: number | null;
+  correct_count: number;
+  wrong_count: number;
+  tier: string | null;
+}
+
+// KMM 수집 결과 타입
+export interface KmmCollectionResult {
+  success: boolean;
+  yearMonth: string;
+  totalExamGroups: number;
+  totalStudentResults: number;
+  errors: string[];
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+}
+
 // 수집 옵션/결과 타입
 export interface DailyWorkCollectionOptions {
   targetDate: Date;
