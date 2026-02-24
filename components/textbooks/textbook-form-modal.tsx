@@ -72,10 +72,10 @@ export function TextbookFormModal({
       if (isEdit && textbook) {
         const result = await updateTextbook(supabase, textbook.id, {
           name: name.trim(),
-          publisher: publisher.trim() || undefined,
+          publisher: publisher.trim() || null,
           price: parseInt(price),
-          category: category || undefined,
-          description: description.trim() || undefined,
+          category: category || null,
+          description: description.trim() || null,
           current_stock: parseInt(currentStock) || 0,
         })
         if (result.success) {

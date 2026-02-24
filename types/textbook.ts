@@ -28,10 +28,10 @@ export interface CreateTextbookData {
 
 export interface UpdateTextbookData {
   name?: string
-  publisher?: string
+  publisher?: string | null
   price?: number
-  category?: string
-  description?: string
+  category?: string | null
+  description?: string | null
   is_active?: boolean
   current_stock?: number
 }
