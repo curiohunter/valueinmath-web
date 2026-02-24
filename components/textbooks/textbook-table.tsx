@@ -24,6 +24,7 @@ interface TextbookTableProps {
   onEdit: (textbook: Textbook) => void
   onInventory: (textbook: Textbook) => void
   onRefresh: () => void
+  onStockUpdate: (textbookId: string, stockDelta: number) => void
 }
 
 export function TextbookTable({
@@ -31,6 +32,7 @@ export function TextbookTable({
   onEdit,
   onInventory,
   onRefresh,
+  onStockUpdate,
 }: TextbookTableProps) {
   const supabase = createClient()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -55,9 +57,9 @@ export function TextbookTable({
     }
   }
 
-  const handleAssignmentChange = () => {
+  const handleAssignmentChange = (textbookId: string, stockDelta: number) => {
     setRefreshKey((prev) => prev + 1)
-    onRefresh()
+    onStockUpdate(textbookId, stockDelta)
   }
 
   if (textbooks.length === 0) {
@@ -215,9 +217,12 @@ export function TextbookTable({
                           <AssignmentSection
                             textbookId={textbook.id}
                             textbookName={textbook.name}
+                            textbookPrice={textbook.price}
                             currentStock={textbook.current_stock}
                             refreshKey={refreshKey}
-                            onAssignmentChange={handleAssignmentChange}
+                            onAssignmentChange={(stockDelta) =>
+                              handleAssignmentChange(textbook.id, stockDelta)
+                            }
                           />
                         </div>
                       </div>

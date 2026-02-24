@@ -85,6 +85,16 @@ export default function TextbooksPage() {
     setEditingTextbook(null)
   }
 
+  const handleStockUpdate = (textbookId: string, stockDelta: number) => {
+    setTextbooks((prev) =>
+      prev.map((tb) =>
+        tb.id === textbookId
+          ? { ...tb, current_stock: tb.current_stock + stockDelta }
+          : tb
+      )
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* 헤더 */}
@@ -170,6 +180,7 @@ export default function TextbooksPage() {
             onEdit={handleEdit}
             onInventory={handleInventory}
             onRefresh={loadTextbooks}
+            onStockUpdate={handleStockUpdate}
           />
         )}
       </Card>

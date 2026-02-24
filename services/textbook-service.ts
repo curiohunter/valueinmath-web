@@ -33,7 +33,7 @@ export async function createTextbook(
       price: data.price,
       category: data.category || null,
       initial_stock: data.initial_stock || 0,
-      current_stock: data.initial_stock || 0,
+      current_stock: 0,
       description: data.description || null,
       created_by: data.created_by || null,
     })
@@ -499,6 +499,139 @@ export async function applyTextbookToTuition(
   }
 
   return { success: true }
+}
+
+// ============ 일괄 배정 ============
+
+export interface BulkAssignResult {
+  successCount: number
+  failCount: number
+  totalStockUsed: number
+  errors: string[]
+}
+
+export async function bulkAssignTextbook(
+  supabase: SupabaseClient,
+  params: {
+    textbookId: string
+    studentIds: string[]
+    quantity: number
+    createdBy?: string
+  }
+): Promise<ServiceResult<BulkAssignResult>> {
+  const { textbookId, studentIds, quantity, createdBy } = params
+
+  if (studentIds.length === 0) {
+    return { success: false, error: "배부할 학생을 선택해주세요" }
+  }
+
+  // 1. 교재 정보 조회
+  const { data: textbook, error: tbError } = await supabase
+    .from("textbooks")
+    .select("name, price, current_stock")
+    .eq("id", textbookId)
+    .single()
+
+  if (tbError || !textbook) {
+    return { success: false, error: "교재를 찾을 수 없습니다" }
+  }
+
+  // 2. 재고 총량 검증
+  const totalNeeded = studentIds.length * quantity
+  if (textbook.current_stock < totalNeeded) {
+    return {
+      success: false,
+      error: `재고가 부족합니다. (필요: ${totalNeeded}, 현재 재고: ${textbook.current_stock})`,
+    }
+  }
+
+  // 3. 이미 배부된 학생 필터링
+  const { data: existingAssignments } = await supabase
+    .from("textbook_assignments")
+    .select("student_id")
+    .eq("textbook_id", textbookId)
+    .neq("status", "cancelled")
+    .in("student_id", studentIds)
+
+  const alreadyAssignedIds = new Set(
+    (existingAssignments || []).map((a) => a.student_id)
+  )
+  const filteredStudentIds = studentIds.filter(
+    (id) => !alreadyAssignedIds.has(id)
+  )
+
+  if (filteredStudentIds.length === 0) {
+    return { success: false, error: "선택한 학생들은 모두 이미 배부되었습니다" }
+  }
+
+  // 4. 학생 이름 조회
+  const { data: studentsData } = await supabase
+    .from("students")
+    .select("id, name")
+    .in("id", filteredStudentIds)
+
+  const studentMap = new Map(
+    (studentsData || []).map((s) => [s.id, s.name])
+  )
+
+  // 5. 순차 처리 (DB 트리거 경합 방지)
+  const result: BulkAssignResult = {
+    successCount: 0,
+    failCount: 0,
+    totalStockUsed: 0,
+    errors: [],
+  }
+
+  for (const studentId of filteredStudentIds) {
+    const studentName = studentMap.get(studentId) || "학생"
+
+    // 배정 생성
+    const { data: assignment, error: assignError } = await supabase
+      .from("textbook_assignments")
+      .insert({
+        textbook_id: textbookId,
+        student_id: studentId,
+        quantity,
+        unit_price: textbook.price,
+        total_price: textbook.price * quantity,
+        status: "pending",
+        student_name_snapshot: studentName,
+        textbook_name_snapshot: textbook.name,
+        created_by: createdBy || null,
+      })
+      .select()
+      .single()
+
+    if (assignError) {
+      result.failCount++
+      result.errors.push(`${studentName}: ${assignError.message}`)
+      continue
+    }
+
+    // 출고 이력 생성 (트리거가 재고 차감)
+    const { error: logError } = await supabase
+      .from("textbook_inventory_logs")
+      .insert({
+        textbook_id: textbookId,
+        log_type: "out",
+        quantity,
+        reason: "distribution",
+        note: `${studentName} 배정`,
+        reference_id: assignment.id,
+        created_by: createdBy || null,
+      })
+
+    if (logError) {
+      result.failCount++
+      result.errors.push(`${studentName}: 출고 이력 생성 실패`)
+      continue
+    }
+
+    result.successCount++
+    result.totalStockUsed += quantity
+  }
+
+  return { success: true, data: result }
 }
 
 export async function removeTextbookFromTuition(
