@@ -916,11 +916,25 @@ export async function saveStudentMonthlyPlan(
 
     // 청구 가능 세션만 카운트 (excluded 제외)
     const scheduledSessions = segment.sessions.filter(s => s.status === 'scheduled')
+    const closureSessions = segment.sessions.filter(s => s.status === 'closure')
     const billableCount = scheduledSessions.length
     const calculatedAmount = billableCount * segment.perSessionFee
 
-    // 비고: [연,월], [반이름], [회차]
-    const note = `${plan.year}년 ${plan.month}월, ${segment.className}, ${billableCount}회`
+    // 실제 첫/마지막 수업일 기준으로 기간 설정
+    const actualStartDate = scheduledSessions.length > 0 ? scheduledSessions[0].date : segment.startDate
+    const actualEndDate = scheduledSessions.length > 0 ? scheduledSessions[scheduledSessions.length - 1].date : segment.endDate
+
+    // 비고: 수업일 목록 + 휴원일 안내
+    const formatShortDate = (dateStr: string) => {
+      const d = parseDate(dateStr)
+      return `${d.getMonth() + 1}/${d.getDate()}`
+    }
+    const sessionDates = scheduledSessions.map(s => formatShortDate(s.date)).join(', ')
+    let note = `수업일: ${sessionDates} (${billableCount}회)`
+    if (closureSessions.length > 0) {
+      const closureDates = closureSessions.map(s => `${formatShortDate(s.date)}(${s.dayOfWeek})`).join(', ')
+      note += ` / 휴원: ${closureDates}`
+    }
 
     // tuition_fee 생성
     const { data: fee, error: feeError } = await supabase
@@ -936,8 +950,8 @@ export async function saveStudentMonthlyPlan(
         final_amount: calculatedAmount,
         sessions_count: billableCount,
         per_session_fee: segment.perSessionFee,
-        period_start_date: segment.startDate,
-        period_end_date: segment.endDate,
+        period_start_date: actualStartDate,
+        period_end_date: actualEndDate,
         payment_status: '미납',
         student_name_snapshot: plan.studentName,
         class_name_snapshot: segment.className,
