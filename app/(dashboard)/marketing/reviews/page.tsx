@@ -50,7 +50,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Review, ReviewSource, ReviewerType, ReviewFormData } from "@/types/review"
 import { REVIEW_SOURCES, REVIEWER_TYPES } from "@/types/review"
-import MarketingTabs from "@/components/marketing/MarketingTabs"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -244,8 +243,6 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-6">
-      <MarketingTabs />
-
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

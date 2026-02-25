@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useMemo, useCallback } from "react";
-import LearningTabs from "@/components/learning/LearningTabs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -244,8 +243,6 @@ export default function LearningPage() {
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        <LearningTabs />
-
         {/* 메인 콘텐츠 */}
         <div className="flex gap-6 relative">
 

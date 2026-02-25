@@ -1,6 +1,5 @@
 "use client"
 
-import AnalyticsTabs from "@/components/analytics/AnalyticsTabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -110,7 +109,6 @@ export function FunnelAnalysisPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">통계 분석</h1>
-      <AnalyticsTabs />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">

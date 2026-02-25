@@ -39,7 +39,6 @@ import {
   TrendingUp,
 } from "lucide-react"
 import { toast } from "sonner"
-import MarketingTabs from "@/components/marketing/MarketingTabs"
 import type {
   BrandSettings,
   BrandSettingsFormData,
@@ -182,7 +181,6 @@ export default function BrandingSettingsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <MarketingTabs />
         <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>로딩 중...</span>
@@ -193,8 +191,6 @@ export default function BrandingSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <MarketingTabs />
-
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Palette className="h-6 w-6 text-primary" />

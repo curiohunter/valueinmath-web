@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import LearningTabs from "@/components/learning/LearningTabs";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/providers/auth-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -476,8 +475,6 @@ export default function TestLogsPage() {
   return (
     <TooltipProvider>
       <div className="space-y-6">
-        <LearningTabs />
-
         <div className="flex gap-6 relative">
           <div className={`transition-all duration-300 ${isSidebarOpen ? 'w-72' : 'w-0 overflow-hidden'}`}>
             <div className="w-72 flex-shrink-0 space-y-4">

@@ -11,7 +11,6 @@ import { ConsultationHistoryTab } from "@/components/consultations/ConsultationH
 import { ConsultationRequestsManagement } from "@/components/consultations/consultation-requests-management";
 import { calendarService } from "@/services/calendar";
 import { getConsultationRequests } from "@/services/consultation-requests";
-import StudentClassTabs from "@/components/students/StudentClassTabs";
 import type { Database } from "@/types/database";
 import type { Consultation, ConsultationPageStats } from "@/types/consultation";
 
@@ -318,9 +317,6 @@ export default function ConsultationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Student Class Tabs */}
-      <StudentClassTabs />
-
       {/* Statistics Cards */}
       <ConsultationStats
         stats={stats}

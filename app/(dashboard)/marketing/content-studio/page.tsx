@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import MarketingTabs from "@/components/marketing/MarketingTabs"
 
 // 직접 import로 번들 최적화 (@see bundle-barrel-imports)
 import { ContentList } from "@/components/marketing/content-studio/ContentList"
@@ -134,8 +133,6 @@ export default function ContentStudioPage() {
 
   return (
     <div className="space-y-6">
-      <MarketingTabs />
-
       {/* 헤더 */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

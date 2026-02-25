@@ -38,7 +38,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
-import SettingsTabs from "@/components/settings/SettingsTabs"
 import { AI_TAG_LABELS } from "@/services/consultation-ai-service"
 
 interface CommentLLMLog {
@@ -319,8 +318,6 @@ export default function AILogsPage() {
 
   return (
     <div className="container mx-auto p-6">
-      <SettingsTabs />
-
       {/* 통합 통계 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>

@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import LearningTabs from "@/components/learning/LearningTabs";
 import { MakeupSidebar } from "@/components/learning/makeup-classes/makeup-sidebar";
 import { MakeupTable } from "@/components/learning/makeup-classes/makeup-table";
 import { MakeupStats } from "@/components/learning/makeup-classes/makeup-stats";
@@ -352,7 +351,6 @@ export default function MakeupClassesPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <LearningTabs />
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
         </div>
@@ -362,8 +360,6 @@ export default function MakeupClassesPage() {
 
   return (
     <div className="space-y-6">
-      <LearningTabs />
-      
       {/* 상단 통계 카드 */}
       <MakeupStats stats={stats} />
       

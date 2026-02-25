@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import LearningTabs from "@/components/learning/LearningTabs";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/providers/auth-provider";
@@ -418,7 +417,6 @@ export default function LearningHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <LearningTabs />
       {/* 필터 카드 */}
       <div className="bg-white rounded-xl shadow border p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 items-end">

@@ -28,7 +28,6 @@ import { format } from "date-fns"
 import { ko } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import AnalyticsTabs from "@/components/analytics/AnalyticsTabs"
 import { StudentListPanel } from "./student-list-panel"
 import { StudentDetailPanel } from "./student-detail-panel"
 import { StudentFollowup, FollowupData, URGENCY_COLORS } from "./types"
@@ -202,11 +201,6 @@ export function FunnelActionCenter() {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-7xl">
-      {/* 헤더 */}
-      <div className="mb-4">
-        <AnalyticsTabs />
-      </div>
-
       {/* 페이지 제목 & 액션 */}
       <div className="flex items-center justify-between mb-4">
         <div>

@@ -47,7 +47,6 @@ import {
   Tag,
 } from "lucide-react"
 import { toast } from "sonner"
-import SettingsTabs from "@/components/settings/SettingsTabs"
 
 // 카테고리 설정
 const CATEGORY_CONFIG: Record<string, { label: string; order: number }> = {
@@ -278,8 +277,6 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto p-6">
-      <SettingsTabs />
-
       {/* AI 코멘트 키워드 관리 */}
       <Card>
         <CardHeader>

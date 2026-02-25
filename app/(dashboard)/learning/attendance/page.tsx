@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import LearningTabs from "@/components/learning/LearningTabs"
 import { AttendanceClassSidebar } from "@/components/learning/attendance/attendance-class-sidebar"
 import { AttendanceTable } from "@/components/learning/attendance/attendance-table"
 import { Card } from "@/components/ui/card"
@@ -228,7 +227,6 @@ export default function AttendancePage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <LearningTabs />
         <div className="p-8 text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-500 mx-auto mb-4" />
           <div className="text-slate-400 text-sm">로딩 중...</div>
@@ -239,8 +237,6 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-4">
-      <LearningTabs />
-
       <div className="flex gap-4 relative">
         {/* Sidebar */}
         <div

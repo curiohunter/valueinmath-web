@@ -14,7 +14,6 @@ import { toast as sonnerToast } from "sonner"
 import { useClassesWithStudents, useTuitionMutate } from "@/hooks/use-tuition"
 import { useEmployees } from "@/hooks/use-employees"
 import { useNewConsultStudents } from "@/hooks/use-students"
-import StudentClassTabs from "@/components/students/StudentClassTabs"
 import { Download, ChevronLeft, ChevronRight, Gift, ArrowRight, AlertCircle, Users } from "lucide-react"
 import type { TuitionRow, TuitionFeeInput, DiscountDetailInput } from "@/types/tuition"
 import { createClient } from "@/lib/supabase/client"
@@ -807,8 +806,6 @@ export default function TuitionPage() {
 
   return (
     <div className="space-y-6">
-      <StudentClassTabs />
-
       {/* 메인 콘텐츠 */}
       <div className="flex gap-6 relative">
         {/* 왼쪽 사이드바 */}

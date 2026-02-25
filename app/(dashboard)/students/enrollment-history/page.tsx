@@ -3,7 +3,6 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import StudentClassTabs from "@/components/students/StudentClassTabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -131,11 +130,6 @@ export default function EnrollmentHistoryPage() {
 
   return (
     <div className="space-y-6">
-      {/* 헤더 - 탭 */}
-      <div>
-        <StudentClassTabs />
-      </div>
-
       {/* 메인 카드 */}
       <Card className="overflow-hidden">
         {/* 필터 영역 */}

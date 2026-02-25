@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
-import LearningTabs from "@/components/learning/LearningTabs"
 import { StudentManagementList } from "@/components/dashboard/student-management-list"
 import { PortalView } from "@/components/portal/portal-view"
 import { Home, BookOpen, MessageCircle } from "lucide-react"
@@ -54,8 +53,6 @@ export default function LearningCommentsPage() {
 
   return (
     <div className="space-y-6">
-      <LearningTabs />
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 좌측: 학생 목록 */}
         <div>

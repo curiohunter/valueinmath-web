@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import StudentClassTabs from "@/components/students/StudentClassTabs"
 import {
   SessionPlannerSidebar,
   type ClassInfo,
@@ -788,7 +787,6 @@ export default function TuitionSessionsPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <StudentClassTabs />
         <div className="p-8 text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto mb-4" />
           <div className="text-slate-400 text-sm">로딩 중...</div>
@@ -799,8 +797,6 @@ export default function TuitionSessionsPage() {
 
   return (
     <div className="space-y-4">
-      <StudentClassTabs />
-
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-800">수업 세션 관리</h2>

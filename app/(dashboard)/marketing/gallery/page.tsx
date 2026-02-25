@@ -46,7 +46,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { ContentImage, ImageCategory } from "@/types/content-image"
 import { IMAGE_CATEGORIES } from "@/types/content-image"
-import MarketingTabs from "@/components/marketing/MarketingTabs"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -229,8 +228,6 @@ export default function GalleryPage() {
 
   return (
     <div className="space-y-6">
-      <MarketingTabs />
-
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

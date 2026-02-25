@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
-import LearningTabs from "@/components/learning/LearningTabs"
 import { Pagination } from "@/components/ui/pagination"
 import { SchoolExamScoreModal } from "@/components/learning/school-exam-scores/school-exam-score-modal"
 import { SchoolExamScoreFiltersComponent } from "@/components/learning/school-exam-scores/school-exam-score-filters"
@@ -104,9 +103,6 @@ export default function SchoolExamScoresPage() {
 
   return (
     <div className="space-y-6">
-      {/* Tabs */}
-      <LearningTabs />
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

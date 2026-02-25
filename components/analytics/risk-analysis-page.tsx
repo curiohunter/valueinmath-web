@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import AnalyticsTabs from "@/components/analytics/AnalyticsTabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -290,7 +289,6 @@ export function RiskAnalysisPageClient() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">통계 분석</h1>
-      <AnalyticsTabs />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

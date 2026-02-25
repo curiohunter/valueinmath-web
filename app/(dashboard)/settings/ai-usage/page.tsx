@@ -26,7 +26,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
-import SettingsTabs from "@/components/settings/SettingsTabs"
 import { RATE_LIMITS } from "@/lib/ai-rate-limiter"
 
 interface UserUsage {
@@ -131,8 +130,6 @@ export default function AIUsagePage() {
 
   return (
     <div className="container mx-auto p-6">
-      <SettingsTabs />
-
       {/* 설정값 정보 */}
       <div className="mb-6 p-4 bg-muted/50 rounded-lg border">
         <h3 className="text-sm font-medium mb-2 flex items-center gap-2">

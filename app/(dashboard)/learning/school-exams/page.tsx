@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw, FileText, BookOpen } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import LearningTabs from "@/components/learning/LearningTabs"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Pagination } from "@/components/ui/pagination"
 import { SchoolExamModal } from "@/components/learning/school-exams/school-exam-modal"
@@ -100,9 +99,6 @@ export default function SchoolExamsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Tabs */}
-      <LearningTabs />
-
       {/* Sub Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start h-auto p-1 bg-white border border-slate-200 rounded-xl shadow-sm">

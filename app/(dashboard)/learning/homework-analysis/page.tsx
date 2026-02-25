@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import LearningTabs from "@/components/learning/LearningTabs";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ClipboardList, UserSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,8 +11,6 @@ export default function HomeworkAnalysisPage() {
 
   return (
     <div className="space-y-6">
-      <LearningTabs />
-
       {/* 서브 탭 */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start h-auto p-1 bg-white border border-slate-200 rounded-xl shadow-sm">

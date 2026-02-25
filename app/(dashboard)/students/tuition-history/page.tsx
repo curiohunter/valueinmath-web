@@ -1,7 +1,6 @@
 // @ts-nocheck
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import StudentClassTabs from "@/components/students/StudentClassTabs";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1263,8 +1262,6 @@ export default function TuitionHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <StudentClassTabs />
-
       {/* PaysSam 관리 영역 */}
       <div className="flex items-center justify-between">
         <PointBalance compact />
