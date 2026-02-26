@@ -20,8 +20,8 @@ import DashboardCalendar from "@/components/dashboard/DashboardCalendar"
 import { ConsultationTable } from "@/components/dashboard/ConsultationTable"
 import { EntranceTestTable } from "@/components/dashboard/EntranceTestTable"
 import ChurnRiskCard from "@/components/dashboard/ChurnRiskCard"
+import HomeworkAlertCard from "@/components/dashboard/HomeworkAlertCard"
 import { StatsCards } from "@/components/dashboard/StatsCards"
-import { QuickAccessSection } from "@/components/dashboard/QuickAccessSection"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/providers/auth-provider"
 import { toast } from "sonner"
@@ -63,6 +63,7 @@ import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 import { useConsultations } from "@/hooks/use-consultations"
 import { useEntranceTests } from "@/hooks/use-entrance-tests"
 import { useChurnRiskStudents } from "@/hooks/use-churn-risk"
+import { useHomeworkAlerts } from "@/hooks/use-homework-alerts"
 import { useEnrollmentFlow } from "@/hooks/use-enrollment-flow"
 import { useDashboardCalendar } from "@/hooks/use-dashboard-calendar"
 
@@ -75,6 +76,7 @@ export default function DashboardPage() {
   const { consultations, isLoading: consultationsLoading, saveConsultation, deleteConsultation, refresh: refreshConsultations } = useConsultations()
   const { entranceTests, isLoading: testsLoading, createTest, saveTest, deleteTest, refresh: refreshEntranceTests } = useEntranceTests()
   const { students: churnRiskStudents, isLoading: churnLoading, refresh: refreshChurnRisk } = useChurnRiskStudents()
+  const { students: homeworkAlertStudents, stats: homeworkAlertStats, lastCalculatedAt: homeworkLastCalculated, isLoading: homeworkLoading, refresh: refreshHomeworkAlerts } = useHomeworkAlerts()
   const { handleCreateCalendarEvent } = useDashboardCalendar()
   const {
     editingStudentForTest,
@@ -113,9 +115,10 @@ export default function DashboardPage() {
       refreshStats(),
       refreshConsultations(),
       refreshEntranceTests(),
-      refreshChurnRisk()
+      refreshChurnRisk(),
+      refreshHomeworkAlerts()
     ])
-  }, [refreshStats, refreshConsultations, refreshEntranceTests, refreshChurnRisk])
+  }, [refreshStats, refreshConsultations, refreshEntranceTests, refreshChurnRisk, refreshHomeworkAlerts])
 
   // 직원 ID 로드
   useEffect(() => {
@@ -304,8 +307,14 @@ export default function DashboardPage() {
           {/* 통계 카드 */}
           <StatsCards stats={stats} />
 
-          {/* 바로가기 섹션 */}
-          <QuickAccessSection />
+          {/* 숙제 미완료 알림 */}
+          <HomeworkAlertCard
+            students={homeworkAlertStudents}
+            stats={homeworkAlertStats}
+            lastCalculatedAt={homeworkLastCalculated}
+            loading={homeworkLoading}
+            onRefresh={refreshHomeworkAlerts}
+          />
 
           {/* 중간 영역: 신규상담 + 입학테스트 관리 */}
           <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
