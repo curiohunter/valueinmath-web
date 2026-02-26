@@ -27,6 +27,13 @@ import type {
   MakeupDetail,
 } from "@/types/tuition-session"
 import { CLASS_COLORS } from "@/types/tuition-session"
+import { WizardProvider, useWizard } from "@/components/tuition-wizard/wizard-context"
+import { WizardStepIndicator } from "@/components/tuition-wizard/wizard-steps"
+import { StepDiscount } from "@/components/tuition-wizard/step-discount"
+import { StepTextbook } from "@/components/tuition-wizard/step-textbook"
+import { StepReview } from "@/components/tuition-wizard/step-review"
+import { Button } from "@/components/ui/button"
+import { ChevronRight } from "lucide-react"
 
 interface SegmentState {
   startDate: string
@@ -43,7 +50,16 @@ function getCurrentYearMonth(): { year: number; month: number } {
 }
 
 export default function TuitionSessionsPage() {
+  return (
+    <WizardProvider>
+      <TuitionSessionsContent />
+    </WizardProvider>
+  )
+}
+
+function TuitionSessionsContent() {
   const supabase = createClient()
+  const { state: wizardState, dispatch: wizardDispatch } = useWizard()
 
   // --- 기본 데이터 ---
   const [classes, setClasses] = useState<ClassInfo[]>([])
@@ -784,6 +800,36 @@ export default function TuitionSessionsPage() {
     }))
   }, [selectedStudentsByClass, classes, getClassName])
 
+  // --- 위자드 핸들러 ---
+  const handleActivateWizard = useCallback(() => {
+    if (totalRecordCount === 0) {
+      toast.error("학생을 먼저 선택하세요")
+      return
+    }
+    if (currentSegments.length === 0) {
+      toast.error("세션이 생성되지 않았습니다")
+      return
+    }
+    wizardDispatch({ type: "ACTIVATE_WIZARD" })
+  }, [totalRecordCount, currentSegments.length, wizardDispatch])
+
+  const handleWizardSaveComplete = useCallback(() => {
+    // 위자드 완료 후 savedKeys 업데이트
+    for (const [classId, studentIds] of selectedStudentsByClass) {
+      for (const studentId of studentIds) {
+        setSavedKeys((prev) => {
+          const next = new Set(prev)
+          next.add(`${classId}:${studentId}`)
+          return next
+        })
+      }
+    }
+  }, [selectedStudentsByClass])
+
+  const handleWizardBackToStep1 = useCallback(() => {
+    wizardDispatch({ type: "GO_TO_STEP", step: 1 })
+  }, [wizardDispatch])
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -799,7 +845,7 @@ export default function TuitionSessionsPage() {
     <div className="space-y-4">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-800">수업 세션 관리</h2>
+        <h2 className="text-lg font-bold text-slate-800">학원비 생성</h2>
         {headerInfo && (
           <div className="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
             {headerInfo.map((info) => (
@@ -818,51 +864,110 @@ export default function TuitionSessionsPage() {
         )}
       </div>
 
+      {/* 위자드 스텝 인디케이터 (위자드 활성화 시에만) */}
+      {wizardState.isWizardActive && <WizardStepIndicator />}
+
       {/* 메인 레이아웃 */}
       <div
         className="flex border border-slate-200 rounded-lg overflow-hidden bg-slate-50"
-        style={{ height: "calc(100vh - 200px)" }}
+        style={{ height: wizardState.isWizardActive ? "calc(100vh - 250px)" : "calc(100vh - 200px)" }}
       >
-        <SessionPlannerSidebar
-          classes={classes}
-          teachers={teachers}
-          studentsByClass={studentsByClass}
-          selectedStudentsByClass={selectedStudentsByClass}
-          savedKeys={savedKeys}
-          generatingClassIds={generatingClassIds}
-          filterClassId={filterClassId}
-          onFilterClassChange={setFilterClassId}
-          onToggleStudent={handleToggleStudent}
-          onToggleClass={handleToggleClass}
-          collapsedClasses={collapsedClasses}
-          onToggleCollapse={handleToggleCollapse}
-        />
+        {/* Step 1: 기존 세션 플래너 (위자드 비활성화 또는 Step 1일 때) */}
+        {(!wizardState.isWizardActive || wizardState.currentStep === 1) && (
+          <>
+            <SessionPlannerSidebar
+              classes={classes}
+              teachers={teachers}
+              studentsByClass={studentsByClass}
+              selectedStudentsByClass={selectedStudentsByClass}
+              savedKeys={savedKeys}
+              generatingClassIds={generatingClassIds}
+              filterClassId={filterClassId}
+              onFilterClassChange={setFilterClassId}
+              onToggleStudent={handleToggleStudent}
+              onToggleClass={handleToggleClass}
+              collapsedClasses={collapsedClasses}
+              onToggleCollapse={handleToggleCollapse}
+            />
 
-        <div className="flex-1 p-4 overflow-y-auto">
-          <SessionPlannerMain
-            billingYear={billingYear}
-            billingMonth={billingMonth}
-            onBillingChange={handleBillingChange}
-            segmentStartConfigs={segmentStartConfigs}
-            onSegmentStartDateChange={handleSegmentStartDateChange}
-            onToggleSegmentManualStartDate={handleToggleSegmentManualStartDate}
-            onSegmentEndDateChange={handleSegmentEndDateChange}
-            onToggleSegmentManualEndDate={handleToggleSegmentManualEndDate}
-            calendarYear={calendarYear}
-            calendarMonth={calendarMonth}
-            onCalendarNavigate={handleCalendarNavigate}
-            segments={currentSegments}
-            excludedDates={excludedDates}
-            addedDates={addedDates}
-            totalRecordCount={totalRecordCount}
-            isSaving={isSaving}
-            onToggleDate={handleToggleDate}
-            onReset={handleReset}
-            onSave={handleSave}
-            attendancesByDate={attendancesByDate}
-            makeupsByDate={makeupsByDate}
-          />
-        </div>
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 p-4 overflow-y-auto">
+                <SessionPlannerMain
+                  billingYear={billingYear}
+                  billingMonth={billingMonth}
+                  onBillingChange={handleBillingChange}
+                  segmentStartConfigs={segmentStartConfigs}
+                  onSegmentStartDateChange={handleSegmentStartDateChange}
+                  onToggleSegmentManualStartDate={handleToggleSegmentManualStartDate}
+                  onSegmentEndDateChange={handleSegmentEndDateChange}
+                  onToggleSegmentManualEndDate={handleToggleSegmentManualEndDate}
+                  calendarYear={calendarYear}
+                  calendarMonth={calendarMonth}
+                  onCalendarNavigate={handleCalendarNavigate}
+                  segments={currentSegments}
+                  excludedDates={excludedDates}
+                  addedDates={addedDates}
+                  totalRecordCount={totalRecordCount}
+                  isSaving={isSaving}
+                  onToggleDate={handleToggleDate}
+                  onReset={handleReset}
+                  onSave={handleSave}
+                  attendancesByDate={attendancesByDate}
+                  makeupsByDate={makeupsByDate}
+                  extraActions={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs border-indigo-300 text-indigo-600 hover:bg-indigo-50"
+                      onClick={handleActivateWizard}
+                      disabled={totalRecordCount === 0 || currentSegments.length === 0}
+                    >
+                      다음: 할인/교재
+                      <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  }
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Step 2: 할인 적용 */}
+        {wizardState.isWizardActive && wizardState.currentStep === 2 && (
+          <div className="flex-1">
+            <StepDiscount
+              selectedStudentsByClass={selectedStudentsByClass}
+              studentsByClass={studentsByClass}
+              segments={currentSegments}
+            />
+          </div>
+        )}
+
+        {/* Step 3: 교재비 */}
+        {wizardState.isWizardActive && wizardState.currentStep === 3 && (
+          <div className="flex-1">
+            <StepTextbook
+              selectedStudentsByClass={selectedStudentsByClass}
+              studentsByClass={studentsByClass}
+              segments={currentSegments}
+            />
+          </div>
+        )}
+
+        {/* Step 4: 확인/저장 */}
+        {wizardState.isWizardActive && wizardState.currentStep === 4 && (
+          <div className="flex-1">
+            <StepReview
+              selectedStudentsByClass={selectedStudentsByClass}
+              studentsByClass={studentsByClass}
+              segments={currentSegments}
+              segmentStates={segmentStates}
+              excludedDates={excludedDates}
+              addedDates={addedDates}
+              onSaveComplete={handleWizardSaveComplete}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

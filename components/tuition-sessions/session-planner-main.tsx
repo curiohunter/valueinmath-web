@@ -66,6 +66,8 @@ interface SessionPlannerMainProps {
   // 출석/보강 배지 데이터
   attendancesByDate: Map<string, CalendarAttendanceSummary[]>
   makeupsByDate: Map<string, CalendarMakeupSummary>
+  // 위자드 연동
+  extraActions?: React.ReactNode
 }
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -93,6 +95,7 @@ export function SessionPlannerMain({
   onSave,
   attendancesByDate,
   makeupsByDate,
+  extraActions,
 }: SessionPlannerMainProps) {
   const hasSegments = segments.length > 0
   const canSave = hasSegments && totalRecordCount > 0
@@ -329,6 +332,7 @@ export function SessionPlannerMain({
               )}
               선택한 {totalRecordCount}건 저장
             </Button>
+            {extraActions}
           </div>
         </>
       )}

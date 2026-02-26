@@ -41,15 +41,15 @@ export default function StudentClassTabs() {
         상담 관리
       </Link>
       <Link
-        href="/students/tuition"
+        href="/students/tuition-sessions"
         className={clsx(
           "px-4 py-2 font-semibold",
-          pathname === "/students/tuition"
+          pathname === "/students/tuition-sessions"
             ? "border-b-2 border-primary text-primary"
             : "text-muted-foreground"
         )}
       >
-        학원비
+        학원비 생성
       </Link>
       <Link
         href="/students/tuition-history"

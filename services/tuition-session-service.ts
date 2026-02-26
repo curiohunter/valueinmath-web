@@ -10,6 +10,7 @@ import type {
   StudentMonthlyPlan,
   TransferInfo,
 } from '@/types/tuition-session'
+import type { AppliedDiscount, AppliedTextbook } from '@/types/tuition'
 import { CLASS_COLORS } from '@/types/tuition-session'
 import type { AcademyClosure } from '@/types/closure'
 import { getClosuresForClass } from '@/services/closure-service'
@@ -889,9 +890,16 @@ export async function generateStudentMonthlyPlan(
 /**
  * 학생 세션 플랜 저장 (tuition_fees + tuition_sessions)
  * 수동으로 조정된 세션 목록을 반영
+ *
+ * options.discounts: 위자드 Step 2에서 적용된 할인 목록
+ * options.textbooks: 위자드 Step 3에서 적용된 교재비 목록
  */
 export async function saveStudentMonthlyPlan(
-  plan: StudentMonthlyPlan
+  plan: StudentMonthlyPlan,
+  options?: {
+    discounts?: AppliedDiscount[]
+    textbooks?: AppliedTextbook[]
+  }
 ): Promise<{ created: number; skipped: number }> {
   const supabase = createClient()
 
@@ -920,6 +928,31 @@ export async function saveStudentMonthlyPlan(
     const billableCount = scheduledSessions.length
     const calculatedAmount = billableCount * segment.perSessionFee
 
+    // 할인/교재비 계산
+    const totalDiscount = (options?.discounts ?? []).reduce((sum, d) => sum + d.amount, 0)
+    const totalAdditional = (options?.textbooks ?? []).reduce((sum, t) => sum + t.amount, 0)
+    const finalAmount = calculatedAmount - totalDiscount + totalAdditional
+
+    // 할인 상세 (DB 저장 형식)
+    const discountDetails = options?.discounts?.map(d => ({
+      type: d.type,
+      amount: d.amount,
+      amount_type: d.amountType,
+      campaign_id: d.type === 'policy' ? d.id : undefined,
+      participant_id: d.type === 'event' ? d.id : undefined,
+      description: d.title,
+    })) ?? []
+
+    // 교재 상세 (DB 저장 형식)
+    const additionalDetails = options?.textbooks?.map(t => ({
+      type: 'textbook' as const,
+      amount: t.amount,
+      assignment_id: t.assignmentId,
+      textbook_name: t.textbookName,
+      quantity: t.quantity,
+      description: `${t.textbookName} x ${t.quantity}`,
+    })) ?? []
+
     // 실제 첫/마지막 수업일 기준으로 기간 설정
     const actualStartDate = scheduledSessions.length > 0 ? scheduledSessions[0].date : segment.startDate
     const actualEndDate = scheduledSessions.length > 0 ? scheduledSessions[scheduledSessions.length - 1].date : segment.endDate
@@ -945,9 +978,13 @@ export async function saveStudentMonthlyPlan(
         year: plan.year,
         month: plan.month,
         class_type: '정규',
-        amount: calculatedAmount,
+        amount: finalAmount,
         base_amount: calculatedAmount,
-        final_amount: calculatedAmount,
+        total_discount: totalDiscount > 0 ? totalDiscount : 0,
+        discount_details: discountDetails.length > 0 ? discountDetails : null,
+        total_additional: totalAdditional > 0 ? totalAdditional : 0,
+        additional_details: additionalDetails.length > 0 ? additionalDetails : null,
+        final_amount: finalAmount,
         sessions_count: billableCount,
         per_session_fee: segment.perSessionFee,
         period_start_date: actualStartDate,
