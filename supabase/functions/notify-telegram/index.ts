@@ -28,7 +28,7 @@ function buildInquiryMessage(body: Record<string, string>): string {
 }
 
 function buildConsultationMessage(body: Record<string, string>): string {
-  const { student_name, counselor_name, consultation_type, method, created_at } = body;
+  const { student_name, counselor_name, consultation_type, method, content, consultation_date, registered_at } = body;
 
   const lines = [
     "\ud83d\udde3\ufe0f \uc0c1\ub2f4 \ub0b4\uc5ed \ub4f1\ub85d",
@@ -37,8 +37,14 @@ function buildConsultationMessage(body: Record<string, string>): string {
     `\ud83d\udc64 \ud559\uc0dd: ${student_name || "\ubbf8\uc785\ub825"}`,
     `\ud83d\udccc \uc720\ud615: ${consultation_type || "\uae30\ud0c0"}`,
     `\ud83d\udcde \ubc29\ubc95: ${method || "-"}`,
-    `\u23f0 \uc2dc\uac01: ${created_at}`,
   ];
+
+  if (content) {
+    lines.push(`\ud83d\udcdd \ub0b4\uc6a9: ${content}`);
+  }
+
+  lines.push(`\ud83d\udcc5 \uc0c1\ub2f4\uc2dc\uac04: ${consultation_date}`);
+  lines.push(`\u23f0 \ub4f1\ub85d\uc2dc\uac01: ${registered_at}`);
 
   return lines.join("\n");
 }
