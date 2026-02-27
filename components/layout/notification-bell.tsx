@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Bell, UserCheck, UserX, Clock } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Bell, UserCheck, MessageSquare, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase/client"
 import { testGetPendingUsers } from "@/actions/test-pending-users"
+import type { Notification } from "@/types/consultation-requests"
 
 interface PendingUser {
   id: string
@@ -28,60 +29,104 @@ interface NotificationBellProps {
 
 export function NotificationBell({ user }: NotificationBellProps) {
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const supabase = createClient()
 
-  // 관리자 권한 및 데이터 로드
+  // Load employee info, admin status, pending users, and notifications
   useEffect(() => {
     async function loadData() {
-      if (!user) {
-        return
-      }
+      if (!user) return
 
       try {
-        
-        // 관리자 권한 확인
+        // Get employee info
         const { data: employee, error: employeeError } = await supabase
           .from("employees")
-          .select("position, name")
+          .select("id, position, name")
           .eq("auth_id", user.id)
           .single()
 
-        
-        const adminStatus = employee?.position === "원장" || employee?.position === "부원장"
-        
+        if (employeeError || !employee) return
+
+        setEmployeeId(employee.id)
+        const adminStatus = employee.position === "원장" || employee.position === "부원장"
         setIsAdmin(adminStatus)
 
-        if (!adminStatus) {
-          return
+        // Load unread notifications for this employee
+        const { data: notifData } = await supabase
+          .from("notifications")
+          .select("*")
+          .eq("employee_id", employee.id)
+          .eq("is_read", false)
+          .order("created_at", { ascending: false })
+          .limit(20)
+
+        if (notifData) {
+          setNotifications(notifData as Notification[])
         }
 
-        // 승인 대기 중인 사용자 목록 가져오기
-        const { data: pendingUsersData, error } = await supabase
-          .from("profiles")
-          .select("id, name, email, approval_status, created_at")
-          .eq("approval_status", "pending")
-          .order("created_at", { ascending: false })
+        // Load pending users (admin only)
+        if (adminStatus) {
+          const { data: pendingUsersData, error } = await supabase
+            .from("profiles")
+            .select("id, name, email, approval_status, created_at")
+            .eq("approval_status", "pending")
+            .order("created_at", { ascending: false })
 
-        
-        if (error) {
-        } else {
-          setPendingUsers(pendingUsersData || [])
+          if (!error) {
+            setPendingUsers(pendingUsersData || [])
+          }
         }
       } catch (error) {
+        console.error("NotificationBell loadData error:", error)
       }
     }
 
     loadData()
   }, [user, supabase])
 
-  // 실시간 새로운 승인 요청 구독
+  // Realtime: notifications table INSERT
+  useEffect(() => {
+    if (!employeeId) return
+
+    const channel = supabase
+      .channel(`notif_bell_${employeeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `employee_id=eq.${employeeId}`,
+        },
+        (payload) => {
+          const newNotif = payload.new as Notification
+
+          setNotifications((prev) => [newNotif, ...prev])
+
+          // Show toast for new inquiry notifications
+          if (newNotif.type === "new_inquiry") {
+            toast.info(`새 상담 신청: ${newNotif.content}`, {
+              duration: 10000,
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [employeeId, supabase])
+
+  // Realtime: profiles table for pending users (admin only)
   useEffect(() => {
     if (!isAdmin) return
 
     const channel = supabase
-      .channel("notification_bell")
+      .channel("notification_bell_profiles")
       .on(
         "postgres_changes",
         {
@@ -91,13 +136,10 @@ export function NotificationBell({ user }: NotificationBellProps) {
         },
         (payload) => {
           if (payload.new.approval_status === "pending") {
-            // 새로운 승인 요청 알림
-            toast.info(`🔔 ${payload.new.email}님이 회원가입했습니다. 승인이 필요합니다.`, {
+            toast.info(`${payload.new.email}님이 회원가입했습니다. 승인이 필요합니다.`, {
               duration: 10000,
             })
-
-            // 목록에 추가
-            setPendingUsers(prev => [payload.new as PendingUser, ...prev])
+            setPendingUsers((prev) => [payload.new as PendingUser, ...prev])
           }
         }
       )
@@ -109,79 +151,104 @@ export function NotificationBell({ user }: NotificationBellProps) {
           table: "profiles",
         },
         (payload) => {
-          
-          // pending으로 변경된 경우 목록에 추가
           if (payload.new.approval_status === "pending") {
-            setPendingUsers(prev => {
-              // 중복 확인
-              const exists = prev.some(user => user.id === payload.new.id)
+            setPendingUsers((prev) => {
+              const exists = prev.some((u) => u.id === payload.new.id)
               if (exists) {
-                return prev.map(user => 
-                  user.id === payload.new.id ? payload.new as PendingUser : user
+                return prev.map((u) =>
+                  u.id === payload.new.id ? (payload.new as PendingUser) : u
                 )
               }
               return [payload.new as PendingUser, ...prev]
             })
-          }
-          // 승인/거부 시 목록에서 제거
-          else if (payload.new.approval_status !== "pending") {
-            setPendingUsers(prev => prev.filter(user => user.id !== payload.new.id))
+          } else if (payload.new.approval_status !== "pending") {
+            setPendingUsers((prev) => prev.filter((u) => u.id !== payload.new.id))
           }
         }
       )
       .subscribe()
 
     return () => {
-      channel.unsubscribe()
+      supabase.removeChannel(channel)
     }
   }, [isAdmin, supabase])
 
-  // 수동 새로고침 기능 추가
-  const refreshPendingUsers = async () => {
+  // Refresh pending users when dropdown opens (admin only)
+  const refreshPendingUsers = useCallback(async () => {
     if (!isAdmin) return
-    
+
     try {
-      
-      // 먼저 서버 사이드 테스트
       const serverResult = await testGetPendingUsers()
-      
-      // 클라이언트 사이드 조회 (대체 방법)
-      
-      // 서버 사이드 데이터가 있으면 그것을 사용
       if (serverResult.success && serverResult.pendingUsers) {
         setPendingUsers(serverResult.pendingUsers)
         return
       }
-      
-      // 폴백: 클라이언트 사이드 조회
+
       const { data: pendingUsersData, error } = await supabase
         .from("profiles")
         .select("id, name, email, approval_status, created_at")
         .eq("approval_status", "pending")
         .order("created_at", { ascending: false })
 
-      
-      if (error) {
-      } else {
+      if (!error) {
         setPendingUsers(pendingUsersData || [])
       }
     } catch (error) {
+      console.error("refreshPendingUsers error:", error)
     }
-  }
+  }, [isAdmin, supabase])
 
-  // 드롭다운 열 때마다 새로고침
+  // Refresh on dropdown open
   useEffect(() => {
     if (isOpen && isAdmin) {
       refreshPendingUsers()
     }
-  }, [isOpen, isAdmin])
+  }, [isOpen, isAdmin, refreshPendingUsers])
 
-  // 관리자가 아니면 일반 알림 버튼만 표시
-  if (!isAdmin) {
+  // Mark a single notification as read
+  const handleMarkAsRead = async (notificationId: string) => {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("id", notificationId)
+
+    if (!error) {
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId))
+    }
+  }
+
+  // Mark all notifications as read
+  const handleMarkAllAsRead = async () => {
+    if (!employeeId || notifications.length === 0) return
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("employee_id", employeeId)
+      .eq("is_read", false)
+
+    if (!error) {
+      setNotifications([])
+    }
+  }
+
+  // Navigate to consultation page when clicking inquiry notification
+  const handleInquiryClick = (notification: Notification) => {
+    handleMarkAsRead(notification.id)
+    setIsOpen(false)
+    window.location.href = "/consultations"
+  }
+
+  const inquiryNotifications = notifications.filter((n) => n.type === "new_inquiry")
+  const pendingCount = isAdmin ? pendingUsers.length : 0
+  const totalBadge = inquiryNotifications.length + pendingCount
+
+  // Non-employee: disabled bell
+  if (!employeeId) {
     return (
-      <Button 
-        variant="ghost" 
-        size="icon" 
+      <Button
+        variant="ghost"
+        size="icon"
         className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
         disabled
       >
@@ -190,23 +257,21 @@ export function NotificationBell({ user }: NotificationBellProps) {
     )
   }
 
-  const pendingCount = pendingUsers.length
-
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="relative h-9 w-9 rounded-full hover:bg-gray-100 transition-colors"
         >
           <Bell className="h-4 w-4" />
-          {pendingCount > 0 && (
-            <Badge 
-              variant="destructive" 
+          {totalBadge > 0 && (
+            <Badge
+              variant="destructive"
               className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
             >
-              {pendingCount > 9 ? "9+" : pendingCount}
+              {totalBadge > 9 ? "9+" : totalBadge}
             </Badge>
           )}
         </Button>
@@ -216,25 +281,81 @@ export function NotificationBell({ user }: NotificationBellProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Bell className="w-4 h-4" />
-              신규 가입 알림
-              {pendingCount > 0 && (
-                <Badge variant="destructive">{pendingCount}</Badge>
+              알림
+              {totalBadge > 0 && (
+                <Badge variant="destructive">{totalBadge}</Badge>
+              )}
+              {inquiryNotifications.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-7 text-xs text-muted-foreground"
+                  onClick={handleMarkAllAsRead}
+                >
+                  <CheckCheck className="w-3 h-3 mr-1" />
+                  모두 읽음
+                </Button>
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            {pendingCount === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">신규 가입 신청이 없습니다</p>
+          <CardContent className="pt-0 space-y-4 max-h-96 overflow-y-auto">
+            {/* Section 1: New Inquiry Notifications */}
+            {inquiryNotifications.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  상담 신청
+                </p>
+                {inquiryNotifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className="border rounded-lg p-3 bg-orange-50 hover:bg-orange-100 cursor-pointer transition-colors"
+                    onClick={() => handleInquiryClick(notif)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 flex-1">
+                        <p className="text-sm font-medium flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                          {notif.title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {notif.content}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatTimeAgo(notif.created_at)}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleMarkAsRead(notif.id)
+                        }}
+                        title="읽음 처리"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {pendingUsers.map((user) => (
-                  <div key={user.id} className="border rounded-lg p-3 space-y-3">
+            )}
+
+            {/* Section 2: Pending Users (admin only) */}
+            {isAdmin && pendingUsers.length > 0 && (
+              <div className="space-y-2">
+                {inquiryNotifications.length > 0 && (
+                  <div className="border-t pt-3" />
+                )}
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  가입 승인 대기
+                </p>
+                {pendingUsers.map((pendingUser) => (
+                  <div key={pendingUser.id} className="border rounded-lg p-3 space-y-3">
                     <div className="space-y-1">
                       <p className="text-sm font-medium">
-                        이름: {user.name && user.name.trim() !== "" ? user.name : "이름 없음"}, 이메일: {user.email}
+                        이름: {pendingUser.name && pendingUser.name.trim() !== "" ? pendingUser.name : "이름 없음"}, 이메일: {pendingUser.email}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         신청 계정연결 하세요
@@ -246,7 +367,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
                         variant="outline"
                         onClick={() => {
                           setIsOpen(false)
-                          window.location.href = '/employees'
+                          window.location.href = "/employees"
                         }}
                         className="flex-1"
                       >
@@ -258,9 +379,36 @@ export function NotificationBell({ user }: NotificationBellProps) {
                 ))}
               </div>
             )}
+
+            {/* Empty state */}
+            {inquiryNotifications.length === 0 && pendingCount === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">새로운 알림이 없습니다</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+/** Format a timestamp as relative time in Korean */
+function formatTimeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+
+  if (diffMin < 1) return "방금 전"
+  if (diffMin < 60) return `${diffMin}분 전`
+
+  const diffHour = Math.floor(diffMin / 60)
+  if (diffHour < 24) return `${diffHour}시간 전`
+
+  const diffDay = Math.floor(diffHour / 24)
+  if (diffDay < 7) return `${diffDay}일 전`
+
+  return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" })
 }

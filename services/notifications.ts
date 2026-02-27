@@ -50,6 +50,7 @@ export async function getUnreadNotificationCount(
     consultation_request: 0,
     new_comment: 0,
     comment_reply: 0,
+    new_inquiry: 0,
   }
 
   notifications.forEach((n) => {
