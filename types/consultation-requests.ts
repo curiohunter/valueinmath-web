@@ -33,7 +33,7 @@ export interface ConsultationRequestFormData {
 }
 
 // 알림 타입
-export type NotificationType = 'consultation_request' | 'new_comment' | 'comment_reply' | 'new_inquiry'
+export type NotificationType = 'consultation_request' | 'new_comment' | 'comment_reply' | 'new_inquiry' | 'new_consultation'
 
 // 직원 알림
 export interface Notification {
@@ -55,6 +55,7 @@ export interface NotificationCount {
     new_comment: number
     comment_reply: number
     new_inquiry: number
+    new_consultation: number
   }
 }
 

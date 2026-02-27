@@ -5,6 +5,44 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function buildInquiryMessage(body: Record<string, string>): string {
+  const { student_name, parent_phone, notes, lead_source, created_at } = body;
+
+  const lines = [
+    "\ud83d\udccb \uc0c8 \uc0c1\ub2f4 \uc2e0\uccad",
+    "",
+    `\ud83d\udc64 \uc774\ub984: ${student_name || "\ubbf8\uc785\ub825"}`,
+  ];
+
+  if (parent_phone) {
+    lines.push(`\ud83d\udcf1 \uc5f0\ub77d\ucc98: ${parent_phone}`);
+  }
+  if (notes) {
+    lines.push(`\ud83d\udcdd \ubb38\uc758: ${notes}`);
+  }
+
+  lines.push(`\ud83d\udd17 \uc720\uc785: ${lead_source || "\uc54c \uc218 \uc5c6\uc74c"}`);
+  lines.push(`\u23f0 \uc2dc\uac01: ${created_at}`);
+
+  return lines.join("\n");
+}
+
+function buildConsultationMessage(body: Record<string, string>): string {
+  const { student_name, counselor_name, consultation_type, method, created_at } = body;
+
+  const lines = [
+    "\ud83d\udde3\ufe0f \uc0c1\ub2f4 \ub0b4\uc5ed \ub4f1\ub85d",
+    "",
+    `\ud83d\udc68\u200d\ud83c\udfeb \ub2f4\ub2f9: ${counselor_name || "\ubbf8\uc9c0\uc815"}`,
+    `\ud83d\udc64 \ud559\uc0dd: ${student_name || "\ubbf8\uc785\ub825"}`,
+    `\ud83d\udccc \uc720\ud615: ${consultation_type || "\uae30\ud0c0"}`,
+    `\ud83d\udcde \ubc29\ubc95: ${method || "-"}`,
+    `\u23f0 \uc2dc\uac01: ${created_at}`,
+  ];
+
+  return lines.join("\n");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -23,27 +61,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { student_name, parent_phone, notes, lead_source, created_at } = body;
 
-    // Build Telegram message
-    const lines = [
-      "\ud83d\udccb \uc0c8 \uc0c1\ub2f4 \uc2e0\uccad",
-      "",
-      `\ud83d\udc64 \uc774\ub984: ${student_name || "\ubbf8\uc785\ub825"}`,
-    ];
-
-    if (parent_phone) {
-      lines.push(`\ud83d\udcf1 \uc5f0\ub77d\ucc98: ${parent_phone}`);
-    }
-
-    if (notes) {
-      lines.push(`\ud83d\udcdd \ubb38\uc758: ${notes}`);
-    }
-
-    lines.push(`\ud83d\udd17 \uc720\uc785: ${lead_source || "\uc54c \uc218 \uc5c6\uc74c"}`);
-    lines.push(`\u23f0 \uc2dc\uac01: ${created_at}`);
-
-    const message = lines.join("\n");
+    // Route to appropriate message builder
+    const message = body.is_consultation
+      ? buildConsultationMessage(body)
+      : buildInquiryMessage(body);
 
     // Send to Telegram Bot API
     const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;

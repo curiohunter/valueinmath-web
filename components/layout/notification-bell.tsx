@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Bell, UserCheck, MessageSquare, CheckCheck } from "lucide-react"
+import { Bell, UserCheck, MessageSquare, CheckCheck, PhoneCall } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -106,10 +106,14 @@ export function NotificationBell({ user }: NotificationBellProps) {
 
           setNotifications((prev) => [newNotif, ...prev])
 
-          // Show toast for new inquiry notifications
+          // Show toast for new notifications
           if (newNotif.type === "new_inquiry") {
             toast.info(`새 상담 신청: ${newNotif.content}`, {
               duration: 10000,
+            })
+          } else if (newNotif.type === "new_consultation") {
+            toast.info(`상담 내역 등록: ${newNotif.content}`, {
+              duration: 8000,
             })
           }
         }
@@ -232,16 +236,22 @@ export function NotificationBell({ user }: NotificationBellProps) {
     }
   }
 
-  // Navigate to consultation page when clicking inquiry notification
-  const handleInquiryClick = (notification: Notification) => {
+  // Navigate to relevant page when clicking notification
+  const handleNotificationClick = (notification: Notification) => {
     handleMarkAsRead(notification.id)
     setIsOpen(false)
-    window.location.href = "/consultations"
+    if (notification.type === "new_consultation") {
+      window.location.href = "/students/consultations"
+    } else {
+      window.location.href = "/students/consultations"
+    }
   }
 
   const inquiryNotifications = notifications.filter((n) => n.type === "new_inquiry")
+  const consultationNotifications = notifications.filter((n) => n.type === "new_consultation")
+  const allNotifCount = inquiryNotifications.length + consultationNotifications.length
   const pendingCount = isAdmin ? pendingUsers.length : 0
-  const totalBadge = inquiryNotifications.length + pendingCount
+  const totalBadge = allNotifCount + pendingCount
 
   // Non-employee: disabled bell
   if (!employeeId) {
@@ -285,7 +295,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
               {totalBadge > 0 && (
                 <Badge variant="destructive">{totalBadge}</Badge>
               )}
-              {inquiryNotifications.length > 0 && (
+              {allNotifCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -306,46 +316,44 @@ export function NotificationBell({ user }: NotificationBellProps) {
                   상담 신청
                 </p>
                 {inquiryNotifications.map((notif) => (
-                  <div
+                  <NotificationItem
                     key={notif.id}
-                    className="border rounded-lg p-3 bg-orange-50 hover:bg-orange-100 cursor-pointer transition-colors"
-                    onClick={() => handleInquiryClick(notif)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-1 flex-1">
-                        <p className="text-sm font-medium flex items-center gap-1.5">
-                          <MessageSquare className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                          {notif.title}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {notif.content}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTimeAgo(notif.created_at)}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleMarkAsRead(notif.id)
-                        }}
-                        title="읽음 처리"
-                      >
-                        <CheckCheck className="w-3.5 h-3.5 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </div>
+                    notif={notif}
+                    icon={<MessageSquare className="w-3.5 h-3.5 text-orange-600 shrink-0" />}
+                    bgClass="bg-orange-50 hover:bg-orange-100"
+                    onClick={() => handleNotificationClick(notif)}
+                    onDismiss={() => handleMarkAsRead(notif.id)}
+                  />
                 ))}
               </div>
             )}
 
-            {/* Section 2: Pending Users (admin only) */}
-            {isAdmin && pendingUsers.length > 0 && (
+            {/* Section 2: Consultation Notifications */}
+            {consultationNotifications.length > 0 && (
               <div className="space-y-2">
                 {inquiryNotifications.length > 0 && (
+                  <div className="border-t pt-3" />
+                )}
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  상담 내역
+                </p>
+                {consultationNotifications.map((notif) => (
+                  <NotificationItem
+                    key={notif.id}
+                    notif={notif}
+                    icon={<PhoneCall className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                    bgClass="bg-blue-50 hover:bg-blue-100"
+                    onClick={() => handleNotificationClick(notif)}
+                    onDismiss={() => handleMarkAsRead(notif.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Section 3: Pending Users (admin only) */}
+            {isAdmin && pendingUsers.length > 0 && (
+              <div className="space-y-2">
+                {allNotifCount > 0 && (
                   <div className="border-t pt-3" />
                 )}
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -381,7 +389,7 @@ export function NotificationBell({ user }: NotificationBellProps) {
             )}
 
             {/* Empty state */}
-            {inquiryNotifications.length === 0 && pendingCount === 0 && (
+            {allNotifCount === 0 && pendingCount === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">새로운 알림이 없습니다</p>
@@ -391,6 +399,53 @@ export function NotificationBell({ user }: NotificationBellProps) {
         </Card>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/** Reusable notification item */
+function NotificationItem({
+  notif,
+  icon,
+  bgClass,
+  onClick,
+  onDismiss,
+}: {
+  notif: Notification
+  icon: React.ReactNode
+  bgClass: string
+  onClick: () => void
+  onDismiss: () => void
+}) {
+  return (
+    <div
+      className={`border rounded-lg p-3 ${bgClass} cursor-pointer transition-colors`}
+      onClick={onClick}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1 flex-1">
+          <p className="text-sm font-medium flex items-center gap-1.5">
+            {icon}
+            {notif.title}
+          </p>
+          <p className="text-sm text-muted-foreground">{notif.content}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatTimeAgo(notif.created_at)}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 shrink-0"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDismiss()
+          }}
+          title="읽음 처리"
+        >
+          <CheckCheck className="w-3.5 h-3.5 text-muted-foreground" />
+        </Button>
+      </div>
+    </div>
   )
 }
 
