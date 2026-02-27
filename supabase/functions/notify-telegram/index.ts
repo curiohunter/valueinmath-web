@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 function buildInquiryMessage(body: Record<string, string>): string {
-  const { student_name, parent_phone, notes, lead_source, created_at } = body;
+  const { student_name, parent_phone, notes, lead_source, grade, school_name, created_at } = body;
 
   const lines = [
     "\ud83d\udccb \uc0c8 \uc0c1\ub2f4 \uc2e0\uccad",
@@ -17,6 +17,15 @@ function buildInquiryMessage(body: Record<string, string>): string {
   if (parent_phone) {
     lines.push(`\ud83d\udcf1 \uc5f0\ub77d\ucc98: ${parent_phone}`);
   }
+
+  // Grade + School
+  if (grade) {
+    const schoolText = school_name ? `${school_name} ${grade}\ud559\ub144` : `${grade}\ud559\ub144`;
+    lines.push(`\ud83c\udfeb \ud559\uad50: ${schoolText}`);
+  } else if (school_name) {
+    lines.push(`\ud83c\udfeb \ud559\uad50: ${school_name}`);
+  }
+
   if (notes) {
     lines.push(`\ud83d\udcdd \ubb38\uc758: ${notes}`);
   }
