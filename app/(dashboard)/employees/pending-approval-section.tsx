@@ -27,14 +27,14 @@ export function PendingApprovalSection() {
   useEffect(() => {
     async function loadData() {
       try {
-        // 관리자 권한 확인
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
+        // 관리자 권한 확인 (getUser()로 서버 검증)
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) return
 
         const { data: employee } = await supabase
           .from("employees")
           .select("position")
-          .eq("auth_id", session.user.id)
+          .eq("auth_id", user.id)
           .single()
 
         const adminStatus = employee?.position === "원장" || employee?.position === "부원장"

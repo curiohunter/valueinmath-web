@@ -1,6 +1,7 @@
 "use server"
 
 import { createServerClient } from "@/lib/auth/server"
+import { getAuthenticatedUser } from "@/lib/auth/get-user"
 import { revalidatePath } from "next/cache"
 
 // Claude 인사이트 삭제
@@ -8,12 +9,9 @@ export async function deleteClaudeInsight(id: string) {
   try {
     const supabase = await createServerClient()
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session) {
-      return { success: false, error: "인증되지 않은 사용자입니다." }
+    const authResult = await getAuthenticatedUser()
+    if (authResult.error) {
+      return { success: false, error: authResult.error }
     }
 
     const { data, error } = await supabase

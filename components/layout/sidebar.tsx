@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, FolderOpen, Megaphone, ChevronDown, ChevronRight } from "lucide-react"
+import { Users, Calendar, BookOpen, BarChart3, Settings, Home, LogOut, UserCog, Crown, FolderOpen, Megaphone, ChevronDown, ChevronRight, MessageSquareText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -66,6 +66,11 @@ const sidebarItems: SidebarItem[] = [
     title: "수업 일정",
     href: "/schedule",
     icon: Calendar,
+  },
+  {
+    title: "회의 관리",
+    href: "/meetings",
+    icon: MessageSquareText,
   },
   {
     title: "자료실",
@@ -162,10 +167,11 @@ export function Sidebar() {
     async function checkAdminStatus() {
       try {
         const {
-          data: { session },
-        } = await supabase.auth.getSession()
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
 
-        if (!session) {
+        if (authError || !user) {
           setIsAdmin(false)
           setIsLoading(false)
           return
@@ -174,7 +180,7 @@ export function Sidebar() {
         const { data: employee, error } = await supabase
           .from("employees")
           .select("position")
-          .eq("auth_id", session.user.id)
+          .eq("auth_id", user.id)
           .maybeSingle()
 
         if (error) {

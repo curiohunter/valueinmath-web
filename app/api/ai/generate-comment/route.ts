@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       teacher_id: employee.id,
       year,
       month,
-      provider: 'openai',
+      provider: result.model.startsWith('claude-') ? 'anthropic' : 'openai',
       model: result.model,
       tokens_input: result.tokensInput,
       tokens_output: result.tokensOutput,

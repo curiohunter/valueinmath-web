@@ -31,12 +31,10 @@ export async function checkAdminAccess() {
   try {
     const supabase = await createServerClient()
 
-    // 현재 로그인한 사용자 가져오기
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    // getUser()로 서버 검증
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (authError || !user) {
       return { isAdmin: false, message: "로그인이 필요합니다." }
     }
 
@@ -45,7 +43,7 @@ export async function checkAdminAccess() {
       .from("employees")
       .select("position")
       // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
-      .eq("auth_id", session.user.id)
+      .eq("auth_id", user.id)
       .single()
 
     // 원장 또는 부원장인 경우에만 관리자 권한 부여

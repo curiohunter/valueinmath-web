@@ -20,13 +20,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/auth/error?error=missing_code", request.url))
     }
 
-    // 현재 사용자 인증 확인
+    // 현재 사용자 인증 확인 (getUser()로 서버 검증)
     const supabase = await createServerClient()
     const {
-      data: { session },
-    } = await supabase.auth.getSession()
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
-    if (!session) {
+    if (authError || !user) {
       return NextResponse.redirect(new URL("/auth/error?error=unauthorized", request.url))
     }
 
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
         updated_at: new Date().toISOString()
       } as any) // 데이터베이스 타입 복잡성으로 인한 타입 캐스팅
       // @ts-ignore - Supabase 타입 복잡성 해결을 위한 임시 처리
-      .eq("id", session.user.id)
+      .eq("id", user.id)
 
     if (updateError) {
       console.error("프로필 업데이트 실패:", updateError)
