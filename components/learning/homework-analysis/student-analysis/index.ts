@@ -12,5 +12,6 @@ export { default as WeakConceptList } from "./WeakConceptList";
 export { default as LearningPatternCard } from "./LearningPatternCard";
 export { default as GrowthTrendChart } from "./GrowthTrendChart";
 export { default as HomeworkProgressCard } from "./HomeworkProgressCard";
+export { default as TestPerformanceCard } from "./TestPerformanceCard";
 export { default as SavedRangesSelector } from "./SavedRangesSelector";
 export * from "./useStudentAnalysis";

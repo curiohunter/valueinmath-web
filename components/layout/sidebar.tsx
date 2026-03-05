@@ -50,6 +50,7 @@ const sidebarItems: SidebarItem[] = [
     href: "/learning",
     icon: BookOpen,
     children: [
+      { title: "출석부", href: "/learning/attendance" },
       { title: "학습 관리", href: "/learning" },
       { title: "테스트 관리", href: "/learning/test-logs" },
       { title: "보강 관리", href: "/learning/makeup-classes" },
@@ -59,7 +60,6 @@ const sidebarItems: SidebarItem[] = [
       { title: "테스트 이력", href: "/learning/test-history" },
       { title: "숙제 분석", href: "/learning/homework-analysis" },
       { title: "학습 코멘트", href: "/learning/comments" },
-      { title: "출석부", href: "/learning/attendance", beta: true },
     ],
   },
   {

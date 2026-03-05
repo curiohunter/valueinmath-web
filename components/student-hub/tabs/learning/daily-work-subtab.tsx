@@ -97,7 +97,8 @@ export function DailyWorkSubTab({ studentId }: { studentId: string }) {
     const totalProblems = records.reduce((sum, r) => sum + (r.assigned_count || 0), 0)
     const totalCorrect = records.reduce((sum, r) => sum + (r.correct_count || 0), 0)
     const avgAccuracy = totalProblems > 0 ? Math.round((totalCorrect / totalProblems) * 100) : 0
-    return { days: records.length, totalProblems, totalCorrect, avgAccuracy }
+    const uniqueDays = new Set(records.map((r) => r.work_date)).size
+    return { days: uniqueDays, totalProblems, totalCorrect, avgAccuracy }
   }, [records])
 
   const handlePrevMonth = () => {

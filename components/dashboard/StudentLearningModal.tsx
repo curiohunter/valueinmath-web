@@ -1,19 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { BookOpen, Target, CalendarDays, TrendingUp, Loader2 } from "lucide-react";
+import { BookOpen, Target, CalendarDays, TrendingUp, ClipboardCheck, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStudentAnalysis } from "@/components/learning/homework-analysis/student-analysis/useStudentAnalysis";
 import { PeriodSelector } from "@/components/learning/homework-analysis/student-analysis";
 import { MaterialPerformanceCard } from "@/components/learning/homework-analysis/student-analysis";
 import { SelfStudyAnalysisCard } from "@/components/learning/homework-analysis/student-analysis";
 import { HomeworkProgressCard } from "@/components/learning/homework-analysis/student-analysis";
+import { TestPerformanceCard } from "@/components/learning/homework-analysis/student-analysis";
 import type { PeriodSelection } from "@/components/learning/homework-analysis/types";
 
 interface StudentLearningModalProps {
@@ -21,6 +22,7 @@ interface StudentLearningModalProps {
   onClose: () => void;
   studentName: string;
   mathflatStudentId: string;
+  studentId: string;
 }
 
 const DEFAULT_PERIOD: PeriodSelection = {
@@ -50,6 +52,7 @@ export default function StudentLearningModal({
   onClose,
   studentName,
   mathflatStudentId,
+  studentId,
 }: StudentLearningModalProps) {
   const [period, setPeriod] = useState<PeriodSelection>(DEFAULT_PERIOD);
 
@@ -65,6 +68,13 @@ export default function StudentLearningModal({
     chapterSelection: EMPTY_CHAPTER_SELECTION,
     period,
   });
+
+  const homeworkCompletionRate = useMemo(() => {
+    if (homeworkProgress.length === 0) return 0;
+    const totalProblems = homeworkProgress.reduce((sum, hp) => sum + hp.totalProblems, 0);
+    const solvedProblems = homeworkProgress.reduce((sum, hp) => sum + hp.solvedProblems, 0);
+    return totalProblems > 0 ? Math.round((solvedProblems / totalProblems) * 100) : 0;
+  }, [homeworkProgress]);
 
   const periodLabel = getPeriodLabel(period);
 
@@ -153,11 +163,11 @@ export default function StudentLearningModal({
                     bgColor="bg-indigo-50"
                   />
                   <StatCell
-                    icon={BookOpen}
-                    label="숙제/자율"
-                    value={`${activitySummary.homeworkRatio}% / ${100 - activitySummary.homeworkRatio}%`}
-                    color="text-slate-600"
-                    bgColor="bg-slate-50"
+                    icon={ClipboardCheck}
+                    label="숙제 완료율"
+                    value={homeworkProgress.length > 0 ? `${homeworkCompletionRate}%` : "-"}
+                    color={homeworkCompletionRate >= 80 ? "text-emerald-600" : homeworkCompletionRate >= 50 ? "text-amber-600" : "text-red-600"}
+                    bgColor={homeworkCompletionRate >= 80 ? "bg-emerald-50" : homeworkCompletionRate >= 50 ? "bg-amber-50" : "bg-red-50"}
                   />
                 </div>
               </div>
@@ -165,6 +175,7 @@ export default function StudentLearningModal({
               <MaterialPerformanceCard data={materialPerformance} />
               <SelfStudyAnalysisCard data={selfStudyAnalysis} />
               <HomeworkProgressCard data={homeworkProgress} />
+              <TestPerformanceCard studentId={studentId} period={period} />
             </div>
           )}
         </div>

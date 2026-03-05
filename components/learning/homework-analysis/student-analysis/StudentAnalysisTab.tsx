@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
-import { BarChart3, Loader2, Layers, BookOpen, Target, TrendingUp, CalendarDays } from "lucide-react";
+import { BarChart3, Loader2, Layers, BookOpen, Target, TrendingUp, CalendarDays, ClipboardCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ChapterTreeSelector from "./ChapterTreeSelector";
 import StudentAnalysisSidebar from "./StudentAnalysisSidebar";
@@ -13,6 +13,7 @@ import DifficultyBreakdownChart from "./DifficultyBreakdownChart";
 import ChapterAnalysisChart from "./ChapterAnalysisChart";
 import WeakConceptList from "./WeakConceptList";
 import HomeworkProgressCard from "./HomeworkProgressCard";
+import TestPerformanceCard from "./TestPerformanceCard";
 import SavedRangesSelector from "./SavedRangesSelector";
 import { useStudentAnalysis } from "./useStudentAnalysis";
 import {
@@ -272,6 +273,14 @@ export default function StudentAnalysisTab() {
     period,
   });
 
+  // 숙제 완료율 (homeworkProgress 기반)
+  const homeworkCompletionRate = useMemo(() => {
+    if (homeworkProgress.length === 0) return 0;
+    const totalProblems = homeworkProgress.reduce((sum, hp) => sum + hp.totalProblems, 0);
+    const solvedProblems = homeworkProgress.reduce((sum, hp) => sum + hp.solvedProblems, 0);
+    return totalProblems > 0 ? Math.round((solvedProblems / totalProblems) * 100) : 0;
+  }, [homeworkProgress]);
+
   const periodLabel = useMemo(() => {
     if (period.type === "custom" && period.customStart && period.customEnd) {
       return `${period.customStart} ~ ${period.customEnd}`;
@@ -418,11 +427,11 @@ export default function StudentAnalysisTab() {
                       bgColor="bg-indigo-50"
                     />
                     <StatCell
-                      icon={BookOpen}
-                      label="숙제/자율"
-                      value={`${activitySummary.homeworkRatio}% / ${100 - activitySummary.homeworkRatio}%`}
-                      color="text-slate-600"
-                      bgColor="bg-slate-50"
+                      icon={ClipboardCheck}
+                      label="숙제 완료율"
+                      value={homeworkProgress.length > 0 ? `${homeworkCompletionRate}%` : "-"}
+                      color={homeworkCompletionRate >= 80 ? "text-emerald-600" : homeworkCompletionRate >= 50 ? "text-amber-600" : "text-red-600"}
+                      bgColor={homeworkCompletionRate >= 80 ? "bg-emerald-50" : homeworkCompletionRate >= 50 ? "bg-amber-50" : "bg-red-50"}
                     />
                   </div>
                 </div>
@@ -430,6 +439,10 @@ export default function StudentAnalysisTab() {
                 <MaterialPerformanceCard data={materialPerformance} />
                 <SelfStudyAnalysisCard data={selfStudyAnalysis} />
                 <HomeworkProgressCard data={homeworkProgress} />
+                <TestPerformanceCard
+                  studentId={selectedStudent!.student_id}
+                  period={period}
+                />
 
                 {hasChapterAnalysis && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

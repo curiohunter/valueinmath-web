@@ -221,6 +221,7 @@ export default function HomeworkAlertCard({
           onClose={() => setSelectedStudent(null)}
           studentName={selectedStudent.name}
           mathflatStudentId={selectedStudent.mathflat_student_id}
+          studentId={selectedStudent.id}
         />
       )}
     </>

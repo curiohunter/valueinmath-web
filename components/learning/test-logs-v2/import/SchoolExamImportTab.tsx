@@ -165,7 +165,7 @@ export function SchoolExamImportTab({ classes, teachers, onImported }: SchoolExa
     setImporting(true)
     try {
       const employeeId = await getCurrentEmployeeId(user.id)
-      const testName = `${selectedExam.schoolName} ${selectedExam.grade}학년 ${selectedExam.semester}학기 ${selectedExam.examType}`
+      const testName = `${selectedExam.schoolName} ${selectedExam.grade}학년 ${selectedExam.semester}학기 ${selectedExam.examType} (${selectedExam.examYear})`
 
       const logs: TestLogInsertData[] = studentsWithScores.map(s => ({
         class_id: selectedClassId,
