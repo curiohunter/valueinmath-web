@@ -54,15 +54,19 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('calendar_events')
       .select('*')
-    
-    // 날짜 범위 필터링
-    if (startDate && endDate) {
-      query = query
-        .gte('start_time', startDate)
-        .lte('start_time', endDate)
-    }
-    
-    const { data, error } = await query.order('start_time', { ascending: true })
+
+    // 날짜 범위 필터링 (기본: 과거 3개월 ~ 미래 3개월)
+    const now = new Date()
+    const defaultStart = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString()
+    const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 4, 0).toISOString()
+
+    query = query
+      .gte('start_time', startDate || defaultStart)
+      .lte('start_time', endDate || defaultEnd)
+
+    const { data, error } = await query
+      .order('start_time', { ascending: true })
+      .limit(3000)
     
     if (error) {
       console.error('Error fetching events:', error)

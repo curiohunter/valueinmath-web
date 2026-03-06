@@ -59,7 +59,8 @@ export async function getPortalData(studentId: string, isTeacher: boolean = fals
           )
         )
       `)
-      .eq("student_id", studentId),
+      .eq("student_id", studentId)
+      .eq("classes.is_active", true),
     // study_logs: note 필드는 선생님 전용 메모이므로 제외
     supabase
       .from("study_logs")
